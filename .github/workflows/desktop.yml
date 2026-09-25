@@ -1,6 +1,7 @@
 # Build and check the desktop app on Windows and Linux.
 # Runs only when started by hand (Actions → Desktop build → Run workflow, or `gh workflow run desktop.yml`)
-# or for a version tag (git tag v0.1.0 && git push --tags), so it doesn't use Actions minutes on every push.
+# or for a version tag. A tag (git tag v0.1.0 && git push origin v0.1.0) also publishes a GitHub release
+# with the Windows installer, the Linux build and their checksums; the tag must match app/__init__.py.
 name: Desktop build
 
 on:
@@ -37,6 +38,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt -r requirements-desktop.txt
+
+      - name: Version
+        id: version
+        run: |
+          version=$(python -c "import app; print(app.__version__)")
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME doesn't match app/__init__.py ($version)"; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Tests (the hosted services are local stand-ins; no models needed)
         run: python -m unittest discover -s tests -v
@@ -87,6 +97,7 @@ jobs:
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y; }
+          $env:TAFRIGH_VERSION = "${{ steps.version.outputs.version }}"
           & $iscc desktop\installer.iss
 
       - name: Self-test reports
@@ -108,3 +119,47 @@ jobs:
           name: Tafrigh-windows
           path: dist/Tafrigh
           retention-days: 7
+
+      - name: Linux archive (version tags)
+        if: runner.os == 'Linux' && github.ref_type == 'tag'
+        run: tar -czf "dist/Tafrigh-${{ steps.version.outputs.version }}-linux-x64.tar.gz" -C dist Tafrigh
+
+      - name: Upload the Linux archive
+        if: runner.os == 'Linux' && github.ref_type == 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tafrigh-linux
+          path: dist/Tafrigh-*-linux-x64.tar.gz
+          retention-days: 7
+
+  release:
+    # A version tag: publish the installer and the Linux build as a GitHub release.
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # by name: a tag without the Windows installer or the Linux archive must not be published
+      - uses: actions/download-artifact@v4
+        with:
+          name: Tafrigh-windows-setup
+          path: release
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: Tafrigh-linux
+          path: release
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd release
+          ls -la
+          sha256sum * > SHA256SUMS.txt
+          notes="../.github/release-notes/$GITHUB_REF_NAME.md"
+          if [ -f "$notes" ]; then set -- --notes-file "$notes"; else set -- --generate-notes; fi
+          gh release create "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --title "Tafrigh ${GITHUB_REF_NAME#v}" "$@"

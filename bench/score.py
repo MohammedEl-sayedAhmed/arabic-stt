@@ -158,7 +158,8 @@ def config_label(path, config):
     meta = path.with_suffix(".meta.json")
     label = json.loads(meta.read_text()).get("label") if meta.exists() else None
     base = {"ar": "Arabic forced", "auto": "auto-detect"}.get(config.split("-")[0], config)
-    return label or (base + (" + hint" if "-p" in config else ""))
+    gpu = ", GPU" if "gpu" in config.split("-") else ""
+    return (label or (base + (" + hint" if "-p" in config else ""))) + gpu
 
 
 def current_rows(summary):
