@@ -107,22 +107,24 @@ class FakeHub(BaseHTTPRequestHandler):
             if repo not in REPOS:  # what Hugging Face says for a missing or private repository
                 return self.send(401, {"error": "Invalid username or password."})
             extra, files, lfs = REPOS[repo]
+            sha = extra.get("sha", SHA)
             if parts[4] == "revision":
-                if parts[5] not in ("main", SHA):
+                if parts[5] not in ("main", sha):
                     return self.send(404, {"error": f"Invalid rev id: {parts[5]}"})
-                return self.send(200, {"id": repo, "sha": SHA, "private": False, "gated": False, **extra})
-            if parts[4] == "tree" and parts[5] == SHA:
+                return self.send(200, {"id": repo, "sha": sha, "private": False, "gated": False, **extra})
+            if parts[4] == "tree" and parts[5] == sha:
                 entries = [self.entry(p, data, p in lfs) for p, data in files.items()]
                 page, headers = urllib.parse.parse_qs(url.query).get("cursor", ["0"])[0], []
                 if page == "0" and len(entries) > 3:  # two pages, as Hugging Face sends long listings
-                    next_url = f"{hub.BASE}/api/models/{repo}/tree/{SHA}?recursive=true&cursor=1"
+                    next_url = f"{hub.BASE}/api/models/{repo}/tree/{sha}?recursive=true&cursor=1"
                     headers, entries = [("Link", f'<{next_url}>; rel="next"')], entries[:3]
                 elif page == "1":
                     entries = entries[3:]
                 return self.send(200, entries + [{"type": "directory", "path": "sub", "oid": "0" * 40, "size": 0}],
                                  headers=headers)
-        if len(parts) >= 5 and parts[2:4] == ["resolve", SHA]:
-            data = REPOS.get("/".join(parts[:2]), ({}, {}, ()))[1].get("/".join(parts[4:]))
+        repo = REPOS.get("/".join(parts[:2]))
+        if len(parts) >= 5 and repo and parts[2:4] == ["resolve", repo[0].get("sha", SHA)]:
+            data = repo[1].get("/".join(parts[4:]))
             if data is None:
                 return self.send(404, {"error": "Entry not found"})
             rng = self.headers.get("Range")
@@ -494,6 +496,79 @@ class DownloadTests(unittest.TestCase):
         WhisperModel(str(dst), device="cpu", compute_type="int8", local_files_only=True)  # loads
 
 
+def stand_in(c):
+    """A small copy of what a catalog entry's repository holds, at its pinned revision."""
+    if c["kind"] == "gguf":
+        files = {f["file"]: gguf_header(c["architecture"]) + b"\0" * 64 for f in c["files"]}
+        return {"sha": c["revision"]}, files, set(files)
+    if c["kind"] == "ct2":
+        files = {"config.json": CT2_CONFIG, "vocabulary.json": b"[]", "tokenizer.json": b"{}", "model.bin": b"M" * 100}
+        return {"sha": c["revision"]}, files, {"model.bin"}
+    files = {"config.json": json.dumps({"model_type": "whisper"}).encode(), "model.safetensors": b"W" * 100,
+             "vocab.json": b"{}", "merges.txt": b"#version: 0.2\n"}
+    return {"sha": c["revision"]}, files, {"model.safetensors"}
+
+
+class CatalogTests(unittest.TestCase):
+    """app/catalog.toml, the recommended models, each checked against a stand-in of its repository."""
+
+    def setUp(self):
+        self.cfg = temp_config(self.addCleanup)
+        self.entries = hub.recommended()
+
+    def test_entries_are_complete(self):
+        keys = [c.get("builtin") or c["repo"] for c in self.entries]
+        self.assertEqual(len(keys), len(set(keys)))
+        self.assertTrue({"cohere", "whisper-medium", "large-v3"} <= set(keys))
+        for c in self.entries:
+            for field in ("name", "good_for", "evidence", "licence"):
+                self.assertTrue(c.get(field), (c, field))
+                self.assertNotIn("—", c[field], "plain sentences, no em dashes")
+            self.assertTrue(c["evidence"].startswith("Measured here" if c.get("builtin") else "Not tested here"), c)
+            self.assertIn(c["gpu"], ("any", "nvidia"))
+            if c.get("builtin"):
+                self.assertIn(c["builtin"], self.cfg.models)
+                continue
+            hub.check_repo(c["repo"])
+            self.assertRegex(c["revision"], r"^[0-9a-f]{40}$")
+            self.assertIn(c["kind"], ("ct2", "gguf", "transformers"))
+            self.assertIn(c["architecture"], hub.FAMILIES)
+            self.assertEqual(c["gpu"], "any" if c["kind"] == "gguf" else "nvidia")
+            if c["kind"] == "gguf":
+                self.assertTrue(c["files"])
+                for f in c["files"]:
+                    self.assertTrue(hub.check_path(f["file"]) and hub.is_gguf(f["file"]) and f["size"] > 0, f)
+            else:
+                self.assertGreater(c["size"], 0)
+
+    def test_each_entry_resolves_to_a_model(self):
+        hubbed = [c for c in self.entries if not c.get("builtin")]
+        with mock.patch.dict(REPOS, {c["repo"]: stand_in(c) for c in hubbed}), \
+                mock.patch.object(hub, "can_convert", return_value=True):
+            for c in hubbed:
+                for file in [f["file"] for f in c.get("files", [])] or [None]:
+                    found = hub.find(self.cfg, c["repo"], file=file, revision=c["revision"])
+                    self.assertEqual((found["kind"], found["architecture"], found["revision"], found["file"]),
+                                     (c["kind"], c["architecture"], c["revision"], file), c["repo"])
+                    m = hub.entry(found)
+                    self.assertEqual(m["engine"], "gguf" if c["kind"] == "gguf" else "whisper")
+                    self.assertTrue(m["files"] and all(f["path"].startswith("models/hf/") for f in m["files"]))
+                    self.assertTrue(m["id"].startswith("hf-") and m["rtf"] > 0)
+
+    def test_what_this_installation_has(self):
+        cohere = next(c for c in self.entries if c.get("repo", "").endswith("cohere-transcribe-arabic-07-2026-gguf"))
+        added = {"id": "hf-x", "kind": "local", "title": "x", "hub": {"repo": cohere["repo"].upper(), "file": cohere["files"][1]["file"]}}
+        self.cfg.models = {k: v for k, v in self.cfg.models.items() if k != "large-v3"} | {"hf-x": added}
+        with mock.patch.object(hub, "can_convert", return_value=False):
+            items = {c["key"]: c for c in hub.catalog(self.cfg)}
+        self.assertNotIn("large-v3", items, "a model hidden in the config isn't recommended either")
+        self.assertEqual(items["cohere"]["builtin"], "cohere")
+        self.assertEqual((items[cohere["repo"]]["added"], items[cohere["repo"]]["added_file"]), ("hf-x", cohere["files"][1]["file"]))
+        converts = [c for c in items.values() if c.get("kind") == "transformers"]
+        self.assertTrue(converts and all(c["problem"] == hub.NEEDS_SOURCE for c in converts))
+        self.assertTrue(all(c["problem"] is None for c in items.values() if c.get("kind") != "transformers"))
+
+
 class LanguageRetryTests(unittest.TestCase):
     """transcribe.py's GGUF engine: a family that refuses the language option runs without one."""
 
@@ -621,6 +696,11 @@ class ApiTests(unittest.TestCase):
         self.assertIn(self.app.runs_on(self.cfg.models[mid]), ("cpu", "gpu"))
         self.assertTrue(self.cfg.path("models/hf/org--asr-gguf/asr-Q4_K_M.gguf").exists())
         self.assertEqual(self.call("DELETE", f"/api/models/{mid}")[0], 200)
+
+    def test_status_lists_the_recommended_models(self):
+        catalog = self.call("GET", "/api/status")[1]["catalog"]
+        self.assertEqual([c["key"] for c in catalog][:3], ["cohere", "whisper-medium", "large-v3"])
+        self.assertTrue(all("added" in c and "problem" in c for c in catalog))
 
     def test_bad_requests(self):
         self.assertEqual(self.call("POST", "/api/hub/add", {"url": "https://example.com/org/name"})[0], 400)

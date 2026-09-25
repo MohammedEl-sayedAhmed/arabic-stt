@@ -65,6 +65,45 @@ overrides go in `app_data/config.toml` with the same layout, so `app/config.toml
 shipped. A `[[models]]` entry there with the same `id` changes only the fields it lists, and
 `disabled = true` hides a model.
 
+### Models from Hugging Face
+
+*Settings → Models on this computer* can also add a model from Hugging Face. Paste the link to the
+model's page or to one of its files, or its name (`org/name`), and choose *Check*. Tafrigh reads the
+model's file list from the Hugging Face API, without logging in, and shows the kind of model, its
+family, the file, the size, the licence and the revision. *Add and download* saves it and downloads
+it like the built-in models. It then has a card of its own, marked *From Hugging Face*, and *Remove
+from the app* deletes it and its files.
+
+Above that field, *Recommended models* lists the models worth trying for these meetings, from
+[`app/catalog.toml`](../app/catalog.toml): the three built-in ones, Cohere at higher precision,
+the Egyptian code-switching whisper-small, and Whisper large-v3 and large-v3-turbo, in GGUF for any
+graphics card and for faster-whisper. Each entry gives what it is good for, the evidence (the
+figures measured here, or *Not tested here*), the download size, the licence and which graphics
+cards it can use, and adds the model in one click, pinned to the revision in the file. The GGUF
+Whisper models run without the Egyptian style hint for now.
+
+| Kind | What the repository has | How it runs |
+|---|---|---|
+| faster-whisper | `model.bin`, `config.json` and `vocabulary.json` (or `.txt`): Whisper converted to CTranslate2 | like whisper-medium; the pinned Whisper tokenizer is added if the model has none, so it runs offline |
+| GGUF | `.gguf` files of a family transcribe.cpp runs: whisper, cohere_asr, parakeet, canary, moonshine, qwen3_asr, granite_speech, voxtral, sensevoice and a few more | like Cohere (`engine = "gguf"`); the family is read from the file's header before anything is downloaded |
+| Transformers | a Whisper checkpoint: `config.json` with `"model_type": "whisper"`, and `.safetensors` or `pytorch_model.bin` | converted to CTranslate2 (float16) after the download, then like faster-whisper |
+
+When a repository has several GGUF files, Tafrigh picks Q4_K_M (else Q5_K_M, Q8_0 or the smallest),
+and the others can be chosen from a list. A GGUF family that doesn't take a language setting runs
+without one. Converting a Transformers checkpoint needs the `transformers` and `torch` packages. A
+source installation can have them (`pip install transformers torch`), but the desktop build
+doesn't, and Tafrigh then says so; a faster-whisper version of the same model avoids the conversion.
+Gated and private repositories, language models in GGUF, adapters (LoRA) and other model types are
+refused with the reason.
+
+Each file is pinned to the commit that was checked, and verified after the download: large files by
+the SHA-256 that Hugging Face lists, small ones by their git blob id. The entries are saved in
+`app_data/models.json`, and the files go to `models/hf/<org>--<name>/`. The speed shown at first is
+estimated from the file size; after the first run on a recording of a minute or more, the measured
+speed is used. For scripts: `POST /api/hub/inspect` with `{"url", "file"}` shows what a link holds
+without saving anything, `POST /api/hub/add` with the same fields adds the model and starts the
+download, and `DELETE /api/models/<id>` removes an added model.
+
 ### API keys
 
 Enter them in *Settings*, where they are saved to `app_data/secrets.json` (file mode 600, ignored by
@@ -96,6 +135,8 @@ against the real services, because no keys were available and no audio was to be
   changes that don't carry the app's own header, so other websites open in the same browser can't
   use it.
 - With local models, nothing leaves the computer.
+- Checking or adding a model from Hugging Face asks huggingface.co for that model's details and
+  files, and nothing else.
 - With hosted models, the recording is uploaded only when you pick one and also tick "Upload this
   recording to …". The server checks this again, including for re-runs. Keys go only to their own
   service.
@@ -120,6 +161,7 @@ Local jobs run one at a time. Hosted jobs have their own queue and don't wait fo
 | `app/jobs.py` | job folders; the prepare (PyAV conversion), queue and run steps; cancel; re-run |
 | `app/engines.py` | local runs (`app/worker.py` running `transcribe.py --progress-file`), and the ElevenLabs and Speechmatics clients |
 | `app/downloads.py` | model downloads, resumable and checked against the pinned size and SHA-256 |
+| `app/hub.py` | models added from Hugging Face: links, the API, GGUF headers, conversion, `models.json` |
 | `app/desktop.py`, `app/selftest.py` | the desktop window and the installation check ([desktop app](10-desktop.md)) |
 | `app/transcript.py` | lines from words, and the exports |
 | `app/static/` | the interface (HTML, CSS and JavaScript, no build step) |

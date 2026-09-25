@@ -158,7 +158,8 @@ function downloadBlock(id, d, compact = false) {
   const left = Math.max(0, d.missing - d.partial);
   const error = d.state === "error" ? `<div class="mc-missing">${esc(d.error || "The download failed")}</div>` : "";
   if (d.installed) return compact ? "" : `<span class="pill ok">Downloaded · ${bytes(d.size)}</span>`;
-  return `${error}<button type="button" class="btn btn-sm btn-primary" data-dl="${esc(id)}">${ICON.download} ${d.partial ? "Resume" : "Download"} (${bytes(left)})</button>`;
+  const convert = !left && model(id)?.hub?.kind === "transformers";  // downloaded, not converted yet
+  return `${error}<button type="button" class="btn btn-sm btn-primary" data-dl="${esc(id)}">${ICON.download} ${convert ? "Convert" : `${d.partial ? "Resume" : "Download"} (${bytes(left)})`}</button>`;
 }
 
 async function startDownload(id) {
@@ -1103,12 +1104,42 @@ function renderSettings(focus) {
 
 // Adding models from Hugging Face (Settings → Models). The state lives here, not in the dialog, which is
 // rebuilt on every status poll while a download runs; the caret in the link field is put back too.
-const HUB = { url: "", busy: false, found: null, error: "", caret: null };
+const HUB = { url: "", busy: false, found: null, error: "", caret: null, catalogOpen: true, pick: {} };
+const GPU_USE = { any: "Can use any graphics card (Vulkan)", nvidia: "Can use NVIDIA graphics cards only (CUDA)" };
+const quant = (file) => (String(file).match(/[-_.]((?:I?Q\d\w*?)|BF16|F16|F32)\.gguf$/i) || [null, file])[1];
+
+// Recommended models (app/catalog.toml): built in, added, or added here in one click through the importer.
+function catalogBlock() {
+  const list = S.status?.catalog || [];
+  if (!list.length) return "";
+  return `<details id="catalog"${HUB.catalogOpen ? " open" : ""}>
+    <summary class="hint" style="margin:0 0 8px;cursor:pointer"><b>Recommended models</b> for Egyptian Arabic–English meetings and calls</summary>
+    ${list.map(catalogRow).join("")}
+  </details>`;
+}
+
+function catalogRow(c) {
+  const builtin = c.builtin ? model(c.builtin) : null;
+  const file = (c.added && c.added_file) || HUB.pick[c.key] || c.files?.[0]?.file;
+  const size = builtin ? builtin.download?.size : c.files ? c.files.find((f) => f.file === file)?.size : c.size;
+  const pick = c.files?.length > 1 && !c.added && !builtin
+    ? `<select data-catalog-file="${esc(c.key)}" aria-label="File for ${esc(c.name)}">${c.files.map((f) => `<option value="${esc(f.file)}"${f.file === file ? " selected" : ""}>${esc(quant(f.file))} (${bytes(f.size)})</option>`).join("")}</select>` : "";
+  const action = builtin ? `<span class="pill">Built in</span>`
+    : c.added ? `<span class="pill ok">Added${c.added_file && c.files?.length > 1 ? `: ${esc(quant(c.added_file))}` : ""}</span>`
+    : c.problem ? "" : `<button type="button" class="btn btn-sm btn-primary" data-catalog-add="${esc(c.key)}" ${HUB.busy ? "disabled" : ""}>${ICON.download} Add (${bytes(size)})</button>`;
+  const facts = [size ? bytes(size) : "", `Licence: ${esc(c.licence)}`, esc(GPU_USE[c.gpu] || c.gpu)];
+  return `<div class="key-row"><div class="top"><b>${esc(c.name)}</b>${pick}${action}</div>
+    <p style="margin-top:0">${esc(c.good_for)}</p>
+    <p>${esc(c.evidence)}</p>
+    <p>${facts.filter(Boolean).join(" · ")}</p>
+    ${c.problem ? `<p class="mc-missing">${esc(c.problem)}</p>` : ""}
+  </div>`;
+}
 
 function hubBlock() {
   const h = HUB, input = $("#hubUrl");
   h.caret = input && document.activeElement === input ? [input.selectionStart, input.selectionEnd] : null;
-  return `<div class="hub">
+  return `${catalogBlock()}<div class="hub">
     <p class="hint" style="margin:0 0 8px"><b>Add a model from Hugging Face.</b> Paste the link to its page, or its name (org/name). Whisper models for faster-whisper or in Transformers format, and GGUF speech models for transcribe.cpp, can be added.</p>
     <form class="row" id="hubForm"><input type="text" id="hubUrl" value="${esc(h.url)}" placeholder="https://huggingface.co/org/name" spellcheck="false" autocomplete="off" aria-label="Hugging Face link or model name">
       <button class="btn" type="submit" ${h.busy ? "disabled" : ""}>${h.busy ? "Checking…" : "Check"}</button></form>
@@ -1145,6 +1176,10 @@ function bindHub() {
   if (file) file.onchange = () => hubCheck(file.value);
   const add = $("#hubAdd");
   if (add) add.onclick = hubAdd;
+  const list = $("#catalog");
+  if (list) list.ontoggle = () => (HUB.catalogOpen = list.open);
+  $$("[data-catalog-file]").forEach((sel) => (sel.onchange = () => { HUB.pick[sel.dataset.catalogFile] = sel.value; rerenderHub(); }));
+  $$("[data-catalog-add]").forEach((b) => (b.onclick = () => catalogAdd(b.dataset.catalogAdd)));
 }
 
 const rerenderHub = () => $("#settings").open && renderSettings();
@@ -1160,19 +1195,34 @@ async function hubCheck(file) {
   rerenderHub();
 }
 
-async function hubAdd() {
-  const f = HUB.found;
-  if (!f || HUB.busy) return;
+// Adds a model and starts its download; returns the error message, if any.
+async function addModel(body, name) {
   Object.assign(HUB, { busy: true, error: "" });
   rerenderHub();
   try {
-    S.status = await api.post("/api/hub/add", { url: HUB.url.trim(), file: f.file || undefined, revision: f.revision });
-    Object.assign(HUB, { url: "", found: null });
-    toast(`Added ${f.repo}. The download has started.`);
+    S.status = await api.post("/api/hub/add", body);
+    toast(`Added ${name}. The download has started.`);
     renderTop(); scheduleStatus();
     if (S.route.name === "new") renderNew();
-  } catch (e) { HUB.error = e.message; }
-  HUB.busy = false;
+    return null;
+  } catch (e) { return e.message; }
+  finally { HUB.busy = false; }
+}
+
+async function hubAdd() {
+  const f = HUB.found;
+  if (!f || HUB.busy) return;
+  const error = await addModel({ url: HUB.url.trim(), file: f.file || undefined, revision: f.revision }, f.repo);
+  Object.assign(HUB, error ? { error } : { url: "", found: null });
+  rerenderHub();
+}
+
+async function catalogAdd(key) {
+  const c = (S.status?.catalog || []).find((x) => x.key === key);
+  if (!c || HUB.busy) return;
+  const file = c.files ? HUB.pick[key] || c.files[0].file : undefined;
+  const error = await addModel({ url: c.repo, file, revision: c.revision }, c.name);
+  if (error) toast(error, "error");
   rerenderHub();
 }
 

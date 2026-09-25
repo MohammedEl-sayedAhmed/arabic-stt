@@ -32,6 +32,7 @@ def main():
         # the interface and the default settings, read at run time
         "--add-data", f"{ROOT / 'app' / 'static'}{sep}app/static",
         "--add-data", f"{ROOT / 'app' / 'config.toml'}{sep}app",
+        "--add-data", f"{ROOT / 'app' / 'catalog.toml'}{sep}app",  # the recommended models
         # modules only imported inside functions or by the worker process
         "--hidden-import", "transcribe", "--hidden-import", "speakers",
         "--hidden-import", "app.worker", "--hidden-import", "app.desktop", "--hidden-import", "app.selftest",

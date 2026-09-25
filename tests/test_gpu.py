@@ -48,6 +48,10 @@ class InvalidArgument(TranscribeError):
     pass
 
 
+class UnsupportedRequest(TranscribeError):
+    pass
+
+
 def device(name, kind="vulkan", dtype="gpu", memory=4 << 30):
     return types.SimpleNamespace(description=name, kind=kind, device_type=dtype, memory_total=memory)
 
@@ -57,7 +61,7 @@ def fake_transcribe_cpp(devices, fail_load=(), fail_run=()):
     their first (warm-up) run."""
     tc = types.SimpleNamespace()  # stands in for the module in sys.modules
     tc.errors = types.SimpleNamespace(TranscribeError=TranscribeError, OutputTruncated=OutputTruncated,
-                                      InvalidArgument=InvalidArgument)
+                                      InvalidArgument=InvalidArgument, UnsupportedRequest=UnsupportedRequest)
     tc.loaded = []
 
     class Session:

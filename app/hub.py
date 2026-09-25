@@ -11,8 +11,10 @@ What a repository can hold, read from the Hugging Face API without a login:
 
 Every file is pinned to the commit (<repo>/resolve/<sha>/<path>) and checked by its SHA-256 (LFS files)
 or its git blob SHA-1 (small files). Added models are saved in <storage>/models.json with ids "hf-...",
-and their files go under models/hf/<org>--<name>/.
+and their files go under models/hf/<org>--<name>/. app/catalog.toml lists recommended models, which are
+added the same way from a pinned revision.
 """
+import functools
 import hashlib
 import importlib.util
 import json
@@ -25,6 +27,7 @@ import subprocess
 import sys
 import threading
 import time
+import tomllib
 import urllib.parse
 
 import requests
@@ -447,12 +450,17 @@ def transformers(cfg, info, here, folder, dest, config):
 
 def can_convert(cfg):
     """Whether the model worker can convert Transformers checkpoints: it needs transformers and torch, which a
-    source install can have and the desktop build doesn't. Checked without importing them."""
-    if FROZEN or cfg.python() == sys.executable:
+    source install can have and the desktop build doesn't. Checked without importing them, once per start."""
+    return _can_convert(cfg.python())
+
+
+@functools.lru_cache(maxsize=None)
+def _can_convert(python):
+    if FROZEN or python == sys.executable:
         return all(importlib.util.find_spec(m) for m in CONVERT_NEEDS)
     code = f"import importlib.util as u, sys; sys.exit(0 if all(u.find_spec(m) for m in {CONVERT_NEEDS!r}) else 1)"
     try:
-        return subprocess.run([cfg.python(), "-c", code], capture_output=True, timeout=30).returncode == 0
+        return subprocess.run([python, "-c", code], capture_output=True, timeout=30).returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False
 
@@ -559,6 +567,34 @@ def forget(cfg, model_id):
 
 
 # ---------------------------------------------------------------------------------------------
+# Recommended models (app/catalog.toml)
+# ---------------------------------------------------------------------------------------------
+
+CATALOG = ROOT / "app" / "catalog.toml"
+NEEDS_SOURCE = "Needs Tafrigh run from source with transformers and torch, to convert it."
+
+
+@functools.lru_cache(maxsize=None)
+def recommended(path=CATALOG):
+    return tomllib.loads(path.read_text(encoding="utf-8"))["models"]
+
+
+def catalog(cfg):
+    """The recommended models for the interface, each with what this installation has of it: "added" (the
+    id and file of the model added from that repository) or a "problem" that keeps it from being added."""
+    added = {str(m["hub"].get("repo", "")).lower(): m for m in cfg.models.values() if isinstance(m.get("hub"), dict)}
+    out = []
+    for c in recommended():
+        if c.get("builtin") and c["builtin"] not in cfg.models:
+            continue  # hidden in the config
+        m = added.get(c.get("repo", "").lower()) or {}
+        problem = NEEDS_SOURCE if c.get("kind") == "transformers" and not m and not can_convert(cfg) else None
+        out.append({**c, "key": c.get("builtin") or c["repo"], "added": m.get("id"),
+                    "added_file": m.get("hub", {}).get("file"), "problem": problem})
+    return out
+
+
+# ---------------------------------------------------------------------------------------------
 # Conversion of a Transformers checkpoint, for downloads.py
 # ---------------------------------------------------------------------------------------------
 
@@ -577,6 +613,8 @@ def convert(cfg, spec, cancelled):
                 engines.stop(proc)
                 raise Cancelled()
             time.sleep(0.5)
+    if proc.returncode < 0:
+        raise RuntimeError(f"the conversion was stopped (signal {-proc.returncode}; out of memory?)")
     if proc.returncode != 0 or not (dst / "model.bin").exists():
         lines = [x.strip() for x in log_path.read_text(encoding="utf-8", errors="replace").splitlines() if x.strip()]
         raise RuntimeError("the conversion failed: " + (lines[-1] if lines else f"exit code {proc.returncode}"))

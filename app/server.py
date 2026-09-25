@@ -121,6 +121,7 @@ class App:
             "app": "tafrigh", "version": __version__,
             "desktop": self.desktop, "frozen": FROZEN, "home": str(self.cfg.home),
             "models": [self.model_info(m, jobs) for m in self.cfg.models.values()],
+            "catalog": hub.catalog(self.cfg),  # recommended models (app/catalog.toml)
             "voiceprints": self.downloads.status("voiceprints") if "voiceprints" in items else None,
             "cuda": self.downloads.status("cuda") if "cuda" in items else None,
             "gpu": self.gpu, "gpu_probing": self.gpu_probing,
