@@ -3,336 +3,456 @@
   "set": "arzen",
   "audio": "phone",
   "model": "Qwen3-ASR-1.7B-Q8_0",
-  "language": "ar",
+  "config": "ar",
+  "label": "Arabic forced",
   "clips": 40,
   "wer": 0.4584221748400853,
+  "wer_ci": [
+   0.4093725313712468,
+   0.513278663695177
+  ],
   "cer": 0.27879197656073923,
-  "ar_err": 0.37407407407407406,
-  "en_err": 0.8671875,
+  "ar_err": 0.35173299101412064,
+  "en_err": 0.8805031446540881,
   "en_kept": 0.1328125,
   "latin_share": 0.02937720329024677,
-  "rtf": 0.5915731163292318
+  "rtf": 0.6220681478426723
  },
  {
   "set": "arzen",
   "audio": "phone",
   "model": "whisper-large-v3",
-  "language": "ar-prompt",
+  "config": "ar-prompt",
+  "label": "Arabic + hint",
   "clips": 40,
   "wer": 0.3795309168443497,
+  "wer_ci": [
+   0.3342486857349114,
+   0.4284386190992945
+  ],
   "cer": 0.22763128239801667,
-  "ar_err": 0.345679012345679,
-  "en_err": 0.4375,
+  "ar_err": 0.3363286264441592,
+  "en_err": 0.46540880503144655,
   "en_kept": 0.5625,
   "latin_share": 0.1023142509135201,
-  "rtf": 1.082013824207069
+  "rtf": 1.1377906077632867
  },
  {
   "set": "arzen",
   "audio": "wav16k",
   "model": "Audar-ASR-V1-Turbo-Q4_K_M",
-  "language": "ar-prompt",
+  "config": "ar-prompt",
+  "label": "Arabic + official instruction",
   "clips": 40,
   "wer": 0.1886993603411514,
+  "wer_ci": [
+   0.1500950292397661,
+   0.2295119954078101
+  ],
   "cer": 0.10164525580347081,
-  "ar_err": 0.1506172839506173,
-  "en_err": 0.2421875,
+  "ar_err": 0.14505776636713735,
+  "en_err": 0.25157232704402516,
   "en_kept": 0.7578125,
   "latin_share": 0.12008733624454149,
-  "rtf": 0.5247806265012991
+  "rtf": 0.5518325686891077
  },
  {
   "set": "arzen",
   "audio": "wav16k",
   "model": "Confucius4-R2T2-Q8_0",
-  "language": "ar-prompt",
+  "config": "ar-prompt",
+  "label": "Arabic + hint",
   "clips": 40,
   "wer": 0.464818763326226,
+  "wer_ci": [
+   0.39570124664743234,
+   0.5478177430371788
+  ],
   "cer": 0.2657200811359026,
-  "ar_err": 0.3950617283950617,
-  "en_err": 0.59375,
+  "ar_err": 0.38382541720154045,
+  "en_err": 0.610062893081761,
   "en_kept": 0.421875,
   "latin_share": 0.09101516919486581,
-  "rtf": 0.7289818128339625
+  "rtf": 0.7665601319655653
  },
  {
   "set": "arzen",
   "audio": "wav16k",
   "model": "Confucius4-R2T2-Q8_0",
-  "language": "ar",
+  "config": "ar",
+  "label": "Arabic forced",
   "clips": 40,
   "wer": 0.43923240938166314,
+  "wer_ci": [
+   0.38871649484536086,
+   0.4913839164500989
+  ],
   "cer": 0.2476898805499211,
-  "ar_err": 0.3962962962962963,
-  "en_err": 0.625,
+  "ar_err": 0.37997432605905007,
+  "en_err": 0.660377358490566,
   "en_kept": 0.375,
   "latin_share": 0.06996381182147166,
-  "rtf": 0.7646208147458208
+  "rtf": 0.8040362905304397
  },
  {
   "set": "arzen",
   "audio": "wav16k",
   "model": "Confucius4-R2T2-Q8_0",
-  "language": "auto",
+  "config": "auto",
+  "label": "auto-detect",
   "clips": 40,
   "wer": 0.6012793176972282,
+  "wer_ci": [
+   0.48913748623065473,
+   0.724795938720741
+  ],
   "cer": 0.42528735632183906,
-  "ar_err": 0.5580246913580247,
-  "en_err": 0.4765625,
+  "ar_err": 0.5455712451861361,
+  "en_err": 0.5534591194968553,
   "en_kept": 0.546875,
   "latin_share": 0.35877862595419846,
-  "rtf": 0.32977106720917687
+  "rtf": 0.346770452085159
  },
  {
   "set": "arzen",
   "audio": "wav16k",
   "model": "Qwen3-ASR-1.7B-Q8_0",
-  "language": "ar-prompt",
+  "config": "ar-prompt",
+  "label": "Arabic + hint",
   "clips": 40,
   "wer": 0.43923240938166314,
+  "wer_ci": [
+   0.38218470780258795,
+   0.5079733009194749
+  ],
   "cer": 0.2681992337164751,
-  "ar_err": 0.3567901234567901,
-  "en_err": 0.7734375,
+  "ar_err": 0.33889602053915274,
+  "en_err": 0.779874213836478,
   "en_kept": 0.234375,
   "latin_share": 0.04513888888888889,
-  "rtf": 0.7812637874405608
+  "rtf": 0.8215371926387958
  },
  {
   "set": "arzen",
   "audio": "wav16k",
   "model": "Qwen3-ASR-1.7B-Q8_0",
-  "language": "ar",
+  "config": "ar",
+  "label": "Arabic forced",
   "clips": 40,
   "wer": 0.43283582089552236,
+  "wer_ci": [
+   0.38041920699468873,
+   0.4925062418069046
+  ],
   "cer": 0.2645931935992788,
-  "ar_err": 0.3530864197530864,
-  "en_err": 0.8359375,
+  "ar_err": 0.33119383825417203,
+  "en_err": 0.8490566037735849,
   "en_kept": 0.1640625,
   "latin_share": 0.03391812865497076,
-  "rtf": 0.7581989313201627
+  "rtf": 0.7972833651219134
  },
  {
   "set": "arzen",
   "audio": "wav16k",
   "model": "Qwen3-ASR-1.7B-Q8_0",
-  "language": "auto",
+  "config": "auto",
+  "label": "auto-detect",
   "clips": 40,
   "wer": 0.43176972281449894,
+  "wer_ci": [
+   0.37877109315545066,
+   0.4924685697827849
+  ],
   "cer": 0.2627901735406806,
-  "ar_err": 0.36666666666666664,
-  "en_err": 0.71875,
+  "ar_err": 0.3453145057766367,
+  "en_err": 0.7547169811320755,
   "en_kept": 0.296875,
   "latin_share": 0.10942956926658906,
-  "rtf": 0.6414775234080101
+  "rtf": 0.6745450796432805
  },
  {
   "set": "arzen",
   "audio": "wav16k",
   "model": "cohere-transcribe-arabic-07-2026-Q4_K_M",
-  "language": "ar",
+  "config": "ar",
+  "label": "Arabic forced",
   "clips": 40,
   "wer": 0.06183368869936034,
+  "wer_ci": [
+   0.03805659161025925,
+   0.08830912678960802
+  ],
   "cer": 0.024566148298399818,
-  "ar_err": 0.04691358024691358,
-  "en_err": 0.0390625,
+  "ar_err": 0.04749679075738126,
+  "en_err": 0.03773584905660377,
   "en_kept": 0.9609375,
   "latin_share": 0.13968253968253969,
-  "rtf": 0.34763959017598905
+  "rtf": 0.36556008041651633
  },
  {
   "set": "arzen",
   "audio": "wav16k",
   "model": "whisper-large-v3",
-  "language": "ar-prompt",
+  "config": "ar-prompt",
+  "label": "Arabic + hint",
   "clips": 40,
   "wer": 0.3368869936034115,
+  "wer_ci": [
+   0.29175351600795674,
+   0.3854866063383363
+  ],
   "cer": 0.18278115844038764,
-  "ar_err": 0.28888888888888886,
-  "en_err": 0.4609375,
+  "ar_err": 0.2785622593068036,
+  "en_err": 0.4779874213836478,
   "en_kept": 0.5390625,
   "latin_share": 0.09175377468060394,
-  "rtf": 1.7389332810431883
+  "rtf": 1.8285736378163824
  },
  {
   "set": "arzen",
   "audio": "wav16k",
   "model": "whisper-large-v3",
-  "language": "ar",
+  "config": "ar",
+  "label": "Arabic forced",
   "clips": 40,
   "wer": 0.4744136460554371,
+  "wer_ci": [
+   0.4092396065614194,
+   0.547001148796499
+  ],
   "cer": 0.32319134550371875,
-  "ar_err": 0.39753086419753086,
-  "en_err": 0.875,
+  "ar_err": 0.3761232349165597,
+  "en_err": 0.8867924528301887,
   "en_kept": 0.125,
   "latin_share": 0.02038216560509554,
-  "rtf": 1.6291239766655228
+  "rtf": 1.713103768235476
  },
  {
   "set": "arzen",
   "audio": "wav16k",
   "model": "whisper-whisper-medium-arabic-codeswitched-ct2",
-  "language": "ar-prompt",
+  "config": "ar-prompt",
+  "label": "Arabic + hint",
   "clips": 40,
   "wer": 0.09914712153518124,
+  "wer_ci": [
+   0.0747638629283489,
+   0.12455270363795022
+  ],
   "cer": 0.041244083840432724,
-  "ar_err": 0.08148148148148149,
-  "en_err": 0.0703125,
+  "ar_err": 0.0821566110397946,
+  "en_err": 0.06918238993710692,
   "en_kept": 0.9296875,
   "latin_share": 0.1351063829787234,
-  "rtf": 0.8254816412569242
+  "rtf": 0.8680344347646785
  },
  {
   "set": "arzen",
   "audio": "wav16k",
   "model": "whisper-whisper-medium-arabic-codeswitched-ct2",
-  "language": "ar",
+  "config": "ar",
+  "label": "Arabic forced",
   "clips": 40,
   "wer": 0.10127931769722814,
+  "wer_ci": [
+   0.07648900575326173,
+   0.12764459009490667
+  ],
   "cer": 0.04372323642100518,
-  "ar_err": 0.08271604938271605,
-  "en_err": 0.0703125,
+  "ar_err": 0.0834403080872914,
+  "en_err": 0.06918238993710692,
   "en_kept": 0.9296875,
   "latin_share": 0.1351063829787234,
-  "rtf": 0.780896122358939
+  "rtf": 0.8211505747718953
  },
  {
   "set": "perle",
   "audio": "phone",
   "model": "cohere-transcribe-arabic-07-2026-Q4_K_M",
-  "language": "ar",
+  "config": "ar",
+  "label": "Arabic forced",
   "clips": 40,
   "wer": 0.1697530864197531,
+  "wer_ci": [
+   0.12370932352419212,
+   0.2193889546414177
+  ],
   "cer": 0.11784799316823227,
-  "ar_err": 0.09594882729211088,
-  "en_err": 0.33519553072625696,
+  "ar_err": 0.050761421319796954,
+  "en_err": 0.33203125,
   "en_kept": 0.664804469273743,
   "latin_share": 0.208,
-  "rtf": 0.521731379470175
+  "rtf": 0.5617921449687104
  },
  {
   "set": "perle",
   "audio": "phone",
   "model": "whisper-whisper-medium-arabic-codeswitched-ct2",
-  "language": "ar",
+  "config": "ar",
+  "label": "Arabic forced",
   "clips": 40,
   "wer": 0.2037037037037037,
+  "wer_ci": [
+   0.16559141353095733,
+   0.24386351842241827
+  ],
   "cer": 0.07742670082550526,
-  "ar_err": 0.1812366737739872,
-  "en_err": 0.11173184357541899,
+  "ar_err": 0.19035532994923857,
+  "en_err": 0.1171875,
   "en_kept": 0.888268156424581,
   "latin_share": 0.2661654135338346,
-  "rtf": 0.9670196455948943
+  "rtf": 1.0412715475870542
  },
  {
   "set": "perle",
   "audio": "wav16k",
   "model": "Audar-ASR-V1-Turbo-Q4_K_M",
-  "language": "ar-prompt",
+  "config": "ar-prompt",
+  "label": "Arabic + official instruction",
   "clips": 40,
   "wer": 0.4351851851851852,
+  "wer_ci": [
+   0.38655076455395304,
+   0.4850863422291994
+  ],
   "cer": 0.33219470538001705,
-  "ar_err": 0.24520255863539445,
-  "en_err": 0.8770949720670391,
+  "ar_err": 0.12944162436548223,
+  "en_err": 0.86328125,
   "en_kept": 0.12290502793296089,
   "latin_share": 0.04310344827586207,
-  "rtf": 0.5827004670731272
+  "rtf": 0.6274426997350943
  },
  {
   "set": "perle",
   "audio": "wav16k",
   "model": "Confucius4-R2T2-Q8_0",
-  "language": "ar",
+  "config": "ar",
+  "label": "Arabic forced",
   "clips": 40,
   "wer": 0.470679012345679,
+  "wer_ci": [
+   0.4140085742283195,
+   0.5248594153879997
+  ],
   "cer": 0.30116709365214916,
-  "ar_err": 0.34541577825159914,
-  "en_err": 0.7541899441340782,
+  "ar_err": 0.2512690355329949,
+  "en_err": 0.7734375,
   "en_kept": 0.24581005586592178,
   "latin_share": 0.10481099656357389,
-  "rtf": 0.7608656897350875
+  "rtf": 0.8192882097746381
  },
  {
   "set": "perle",
   "audio": "wav16k",
   "model": "Qwen3-ASR-1.7B-Q8_0",
-  "language": "ar",
+  "config": "ar",
+  "label": "Arabic forced",
   "clips": 40,
   "wer": 0.5061728395061729,
+  "wer_ci": [
+   0.4585936671902252,
+   0.5532949733267337
+  ],
   "cer": 0.34984343865641904,
-  "ar_err": 0.3304904051172708,
-  "en_err": 0.9162011173184358,
+  "ar_err": 0.2182741116751269,
+  "en_err": 0.91015625,
   "en_kept": 0.08379888268156424,
   "latin_share": 0.04288164665523156,
-  "rtf": 0.6983634613327628
+  "rtf": 0.7519867931047721
  },
  {
   "set": "perle",
   "audio": "wav16k",
   "model": "cohere-transcribe-arabic-07-2026-Q4_K_M",
-  "language": "ar",
+  "config": "ar",
+  "label": "Arabic forced",
   "clips": 40,
   "wer": 0.1574074074074074,
+  "wer_ci": [
+   0.10831803758088601,
+   0.2117474453381112
+  ],
   "cer": 0.10873896954170224,
-  "ar_err": 0.10021321961620469,
-  "en_err": 0.2849162011173184,
+  "ar_err": 0.048223350253807105,
+  "en_err": 0.30859375,
   "en_kept": 0.7150837988826816,
   "latin_share": 0.21669341894060995,
-  "rtf": 0.3510535886191036
+  "rtf": 0.37800898376012587
  },
  {
   "set": "perle",
   "audio": "wav16k",
   "model": "whisper-large-v3",
-  "language": "ar-prompt",
+  "config": "ar-prompt",
+  "label": "Arabic + hint",
   "clips": 40,
   "wer": 0.22376543209876543,
+  "wer_ci": [
+   0.1846295283679885,
+   0.2653397901991972
+  ],
   "cer": 0.09564474807856532,
-  "ar_err": 0.208955223880597,
-  "en_err": 0.13966480446927373,
+  "ar_err": 0.19035532994923857,
+  "en_err": 0.1875,
   "en_kept": 0.8603351955307262,
   "latin_share": 0.25505443234836706,
-  "rtf": 1.3805754626163227
+  "rtf": 1.4865819480170461
  },
  {
   "set": "perle",
   "audio": "wav16k",
   "model": "whisper-large-v3",
-  "language": "ar",
+  "config": "ar",
+  "label": "Arabic forced",
   "clips": 40,
   "wer": 0.3966049382716049,
+  "wer_ci": [
+   0.34048659212349097,
+   0.45333540372670805
+  ],
   "cer": 0.2900654711073157,
-  "ar_err": 0.255863539445629,
-  "en_err": 0.7486033519553073,
+  "ar_err": 0.15228426395939088,
+  "en_err": 0.7578125,
   "en_kept": 0.25139664804469275,
   "latin_share": 0.08205128205128205,
-  "rtf": 1.4081363425678324
+  "rtf": 1.5162590701424348
  },
  {
   "set": "perle",
   "audio": "wav16k",
   "model": "whisper-whisper-medium-arabic-codeswitched-ct2",
-  "language": "ar-prompt",
+  "config": "ar-prompt",
+  "label": "Arabic + hint",
   "clips": 40,
   "wer": 0.18364197530864199,
+  "wer_ci": [
+   0.15266916122783147,
+   0.21519772348150326
+  ],
   "cer": 0.06290919442072303,
-  "ar_err": 0.16417910447761194,
-  "en_err": 0.061452513966480445,
+  "ar_err": 0.17766497461928935,
+  "en_err": 0.0703125,
   "en_kept": 0.9385474860335196,
   "latin_share": 0.27299703264094954,
-  "rtf": 1.0603986166078365
+  "rtf": 1.141820555150305
  },
  {
   "set": "perle",
   "audio": "wav16k",
   "model": "whisper-whisper-medium-arabic-codeswitched-ct2",
-  "language": "ar",
+  "config": "ar",
+  "label": "Arabic forced",
   "clips": 40,
   "wer": 0.17592592592592593,
+  "wer_ci": [
+   0.14580031695721077,
+   0.2071537924054394
+  ],
   "cer": 0.06575576430401367,
-  "ar_err": 0.16204690831556504,
-  "en_err": 0.0893854748603352,
+  "ar_err": 0.1700507614213198,
+  "en_err": 0.09765625,
   "en_kept": 0.9106145251396648,
   "latin_share": 0.26777609682299547,
-  "rtf": 1.0051698933932327
+  "rtf": 1.0823511344876569
  }
 ]

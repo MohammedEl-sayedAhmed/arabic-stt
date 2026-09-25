@@ -29,6 +29,8 @@ import base64
 import io
 import json
 import re
+import resource
+import sys
 import time
 from pathlib import Path
 
@@ -68,10 +70,34 @@ def split_at_pauses(audio):
     return chunks
 
 
-def speaker_lines(engine, audio, timeline):
-    """Transcribe and attribute the text to speakers: word by word when the engine has
-    word timestamps, otherwise one speaker turn at a time."""
-    lines = []
+def snap_to_pause(audio, t, radius=int(0.3 * SR), frame=SR // 50):
+    """Move sample index t to the quietest 20 ms frame within +-radius."""
+    lo, hi = max(0, t - radius), min(len(audio), t + radius)
+    if hi - lo < 2 * frame:
+        return t
+    energy = [float(np.mean(audio[k:k + frame] ** 2)) for k in range(lo, hi - frame + 1, frame)]
+    return lo + int(np.argmin(energy)) * frame + frame // 2
+
+
+def speaker_pieces(audio, a, b, timeline, min_len=int(0.3 * SR)):
+    """Split chunk [a, b) where the speaker changes; pieces shorter than min_len join a neighbour."""
+    cuts = sorted({min(max(snap_to_pause(audio, int(t * SR)), a + 1), b - 1) for t in timeline.changes(a / SR, b / SR)})
+    pieces = []
+    for x, y in zip([a] + cuts, cuts + [b]):
+        if pieces and (y - x < min_len or pieces[-1][1] - pieces[-1][0] < min_len):
+            pieces[-1][1] = y
+        else:
+            pieces.append([x, y])
+    return pieces
+
+
+def speaker_lines(engine, audio, timeline, on_chunk=None):
+    """Transcribe and attribute the text to speakers. Engines with word timestamps (Whisper)
+    get each word labelled with the voice active at that moment; the others transcribe each
+    pause-delimited chunk in pieces cut where the speaker changes, so no speech is skipped.
+    Returns (lines, words); words is [start, end, word, speaker] per word, or [] for engines
+    without word timestamps. on_chunk(i, n, lines) is called after every chunk."""
+    lines, words = [], []
 
     def add(start, end, speaker, text):
         last = lines[-1] if lines else None
@@ -80,21 +106,22 @@ def speaker_lines(engine, audio, timeline):
         else:
             lines.append({"start": round(start, 2), "end": round(end, 2), "speaker": speaker, "text": text})
 
-    if hasattr(engine, "words"):
-        chunks = split_at_pauses(audio)
-        for i, (a, b) in enumerate(chunks, 1):
+    chunks = split_at_pauses(audio)
+    for i, (a, b) in enumerate(chunks, 1):
+        if hasattr(engine, "words"):
             for ws, we, word in engine.words(np.concatenate([audio[a:b], TAIL])):
                 s, e = a / SR + ws, a / SR + we
-                add(s, e, timeline.speaker_at((s + e) / 2), word)
-            print(f"  chunk {i}/{len(chunks)} done", flush=True)
-    else:
-        for s, e, speaker in timeline.turns():
-            a = int(s * SR)
-            for x, y in split_at_pauses(audio[a:int(e * SR)]) or [(0, int(e * SR) - a)]:
-                text = engine(np.concatenate([audio[a + x:a + y], TAIL]))
+                speaker = timeline.speaker_at((s + e) / 2)
+                add(s, e, speaker, word)
+                words.append([round(s, 2), round(e, 2), word, speaker])
+        else:
+            for x, y in speaker_pieces(audio, a, b, timeline):
+                text = engine(np.concatenate([audio[x:y], TAIL]))
                 if text:
-                    add((a + x) / SR, (a + y) / SR, speaker, text)
-    return lines
+                    add(x / SR, y / SR, timeline.speaker_at((x + y) / 2 / SR), text)
+        if on_chunk:
+            on_chunk(i, len(chunks), lines)
+    return lines, words
 
 
 class Whisper:
@@ -103,29 +130,28 @@ class Whisper:
         self.model = WhisperModel(args.whisper_model, device="cpu", compute_type="int8",
                                   cpu_threads=args.threads, local_files_only=True)
         self.language = None if args.language == "auto" else args.language
-        default_prompt = STYLE_PROMPT if args.whisper_model == "large-v3" else None
+        default_prompt = STYLE_PROMPT if Path(args.whisper_model).name == "large-v3" else None
         self.prompt = default_prompt if args.prompt is None else (args.prompt or None)
 
     def __call__(self, audio):
-        segments, _ = self.model.transcribe(audio, language=self.language, beam_size=5, initial_prompt=self.prompt,
-                                            condition_on_previous_text=False, without_timestamps=True)
-        return " ".join(s.text.strip() for s in segments)
+        return " ".join(w for _, _, w in self.words(audio))
 
     def words(self, audio):
-        """(start, end, word) with times in seconds from the start of `audio` (under 30 s)."""
+        """(start, end, word) with times in seconds from the start of `audio` (under 30 s,
+        ending with the TAIL silence)."""
         segments, _ = self.model.transcribe(audio, language=self.language, beam_size=5, initial_prompt=self.prompt,
                                             condition_on_previous_text=False, without_timestamps=True,
                                             word_timestamps=True)
-        words = []
-        for s in segments:
-            # With word timestamps, faster-whisper decodes again from the last word's end. On a
-            # chunk under 30 s that remainder is silence, where Whisper invents "شكراً لكم".
-            if s.seek > 0:
-                break
-            words += [(w.start, w.end, w.word.strip()) for w in s.words if w.word.strip()]
+        # Keep only the first decoding window. With word timestamps faster-whisper would go on to
+        # decode from the last word's end; on a chunk under 30 s that remainder is silence, where
+        # Whisper invents "شكراً لكم". Not advancing the generator also skips that extra work.
+        s = next(iter(segments), None)
+        words = [(w.start, w.end, w.word.strip()) for w in (s.words or [])] if s is not None and s.seek == 0 else []
+        words = [w for w in words if w[2]]
         # Whisper sometimes stops early and skips the end of a chunk; transcribe what's left.
+        # Only recurse when that makes progress (the remainder starts well after the beginning).
         speech_end = len(audio) / SR - len(TAIL) / SR
-        if words and speech_end - words[-1][1] > 2:
+        if words and words[-1][1] > 0.5 and speech_end - words[-1][1] > 2:
             start = words[-1][1] - 0.2
             words += [(a + start, b + start, w) for a, b, w in self.words(audio[int(start * SR):])]
         return words
@@ -172,9 +198,39 @@ class Cohere:
         self.language = "ar" if args.language == "auto" else args.language
 
     def __call__(self, audio):
-        text = self.session.run(np.asarray(audio, dtype=np.float32), language=self.language).text
+        import transcribe_cpp
+
+        try:
+            text = self.session.run(np.asarray(audio, dtype=np.float32), language=self.language).text
+        except transcribe_cpp.errors.OutputTruncated as e:
+            # The decoder hit its length cap, usually stuck repeating itself. Transcribe the halves
+            # separately; if the audio is already short, keep what it said before the loop.
+            if len(audio) > 4 * SR:
+                cut = quietest_point(audio)
+                return f"{self(audio[:cut])} {self(audio[cut:])}".strip()
+            partial = getattr(e, "partial_result", None)
+            text = trim_loop(partial.text if partial else "")
         # On hesitant phone speech it adds notes such as (تأتأة) "stutter" or (غير مفهوم) "unclear".
         return re.sub(r"\s*\([^()]*\)", "", text).strip()
+
+
+def quietest_point(audio, frame=SR // 10):
+    """Sample index of the quietest 100 ms frame in the middle third of `audio`."""
+    lo, hi = len(audio) // 3 // frame, 2 * len(audio) // 3 // frame
+    energy = [float(np.mean(audio[i * frame:(i + 1) * frame] ** 2)) for i in range(lo, hi)]
+    return (lo + int(np.argmin(energy))) * frame
+
+
+def trim_loop(text, max_n=8, min_repeats=3):
+    """Cut a trailing loop: an n-gram repeated min_repeats+ times at the end is kept once."""
+    words = text.split()
+    for n in range(1, max_n + 1):
+        gram, k = words[-n:], 1
+        while len(words) >= n * (k + 1) and words[-n * (k + 1):-n * k] == gram:
+            k += 1
+        if k >= min_repeats:
+            return " ".join(words[:len(words) - n * (k - 1)])
+    return text
 
 
 ENGINES = {"whisper": Whisper, "llama": Llama, "cohere": Cohere}
@@ -204,39 +260,75 @@ def main():
     ap.add_argument("--cohere-model", default=COHERE_MODEL, help="Cohere Transcribe GGUF for --engine cohere")
     ap.add_argument("--speakers", type=int, metavar="N",
                     help="label speakers: the number of speakers, or 0 to estimate it")
+    ap.add_argument("--voiceprint-model", default=str(speakers.MODEL),
+                    help="speaker-embedding ONNX model for --speakers (default: WeSpeaker ResNet34)")
+    ap.add_argument("--out", default=str(Path(__file__).resolve().parent / "results" / "poc"),
+                    help="output folder (default: results/poc)")
     ap.add_argument("--threads", type=int, default=10)
     args = ap.parse_args()
+    if args.speakers is not None and args.speakers < 0:
+        ap.error("--speakers must be 0 (estimate) or the number of speakers")
+    if args.engine == "cohere" and args.prompt:
+        print("note: --prompt has no effect with --engine cohere", file=sys.stderr)
 
-    engine = ENGINES[args.engine](args)
     audio = decode_audio(args.audio, sampling_rate=SR)
+    if not len(audio):
+        sys.exit(f"{args.audio}: no audio")
+    engine = ENGINES[args.engine](args)
     print(f"{args.audio}: {len(audio) / SR / 60:.1f} min, engine {engine.name}\n")
     t0 = time.time()
-    lines = []
-    if args.speakers is None:
-        for a, b in split_at_pauses(audio):
+    timeline = None
+    if args.speakers is not None:
+        timeline = speakers.diarize(audio, args.speakers or None, min(args.threads, 4), args.voiceprint_model)
+        if not len(timeline.centers):
+            print("not enough speech for voiceprints; transcribing without speaker labels", flush=True)
+            timeline = None
+        else:
+            talk, sims = timeline.summary()
+            print("voices: " + ", ".join(f"Speaker {s} talks {t:.0f} s" for s, t in talk.items())
+                  + f" (voiceprint similarity between speakers: {', '.join(f'{x:.2f}' for x in sims) or '-'})",
+                  flush=True)
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    stem = f"{Path(args.audio).stem}.{engine.name}" + ("" if timeline is None else ".speakers")
+
+    def save(lines, words=()):
+        (out / f"{stem}.txt").write_text("".join(line(x) + "\n" for x in lines))
+        (out / f"{stem}.json").write_text(json.dumps(lines, ensure_ascii=False, indent=1))
+        if words:  # word-level timings, so speaker models can be compared without re-transcribing
+            (out / f"{stem}.words.json").write_text(json.dumps(words, ensure_ascii=False))
+
+    def progress(i, n, lines):
+        save(lines)  # a crash or kill hours in keeps everything transcribed so far
+        print(f"  chunk {i}/{n} ({time.time() - t0:.0f} s)", flush=True)
+
+    lines, words = [], []
+    if timeline is None:
+        chunks = split_at_pauses(audio)
+        for i, (a, b) in enumerate(chunks, 1):
             text = engine(np.concatenate([audio[a:b], TAIL]))
             if text:
                 lines.append({"start": round(a / SR, 2), "end": round(b / SR, 2), "speaker": None, "text": text})
                 print(line(lines[-1]), flush=True)
+            if i % 10 == 0:
+                save(lines)
     else:
-        timeline = speakers.diarize(audio, args.speakers or None, min(args.threads, 4))
-        talk, sims = timeline.summary()
-        print("voices: " + ", ".join(f"Speaker {s} talks {t:.0f} s" for s, t in talk.items())
-              + f" (voiceprint similarity between speakers: {', '.join(f'{x:.2f}' for x in sims) or '-'})",
-              flush=True)
-        lines = speaker_lines(engine, audio, timeline)
+        lines, words = speaker_lines(engine, audio, timeline, progress)
         print()
         for x in lines:
             print(line(x))
     took = time.time() - t0
-
-    out = Path(__file__).resolve().parent / "results" / "poc"
-    out.mkdir(parents=True, exist_ok=True)
-    stem = f"{Path(args.audio).stem}.{engine.name}" + ("" if args.speakers is None else ".speakers")
-    (out / f"{stem}.txt").write_text("".join(line(x) + "\n" for x in lines))
-    (out / f"{stem}.json").write_text(json.dumps(lines, ensure_ascii=False, indent=1))
+    save(lines, words)
+    (out / f"{stem}.meta.json").write_text(json.dumps({
+        "audio": str(args.audio), "audio_s": round(len(audio) / SR, 2), "engine": engine.name,
+        "language": args.language, "prompt": getattr(engine, "prompt", None) or getattr(engine, "context", None),
+        "speakers": args.speakers, "voiceprint_model": Path(args.voiceprint_model).name if timeline else None,
+        "seconds": round(took, 1), "rtf": round(took / (len(audio) / SR), 3),
+        "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024),
+    }, ensure_ascii=False, indent=1))
     print(f"\n{took:.0f} s to transcribe {len(audio) / SR:.0f} s of audio "
-          f"({took / (len(audio) / SR):.2f}x real time). Saved results/poc/{stem}.txt")
+          f"({took / (len(audio) / SR):.2f}x real time). Saved {out / stem}.txt")
 
 
 if __name__ == "__main__":

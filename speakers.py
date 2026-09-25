@@ -1,16 +1,18 @@
 """Tell speakers apart by their voice.
 
 1. Silero VAD finds the speech.
-2. A 1.5 s window slides over the speech in 0.75 s steps, and WeSpeaker
-   (ResNet34 trained on VoxCeleb) turns each window into a 256-number
-   voiceprint that captures timbre and pitch, not words.
+2. A 1.5 s window slides over the speech in 0.75 s steps (longer steps on very long
+   recordings, so there are at most MAX_WINDOWS windows), and a speaker-embedding model
+   (default WeSpeaker ResNet34, trained on VoxCeleb) turns each window into a voiceprint
+   that captures timbre and pitch, not words.
 3. Spectral clustering groups the voiceprints by similarity into N speakers
    (N given, or estimated from the eigengap). The neighbour count is
    auto-tuned per recording (NME-SC, Park et al. 2019), so a few odd windows
    (noise, crosstalk) can't form a "speaker" of their own.
-4. A 3-window majority filter removes single-window flips.
+4. A 3-window majority filter removes single-window flips inside a speech segment.
 
-Timeline.speaker_at(t) then gives who is talking at time t.
+Timeline.speaker_at(t) then gives who is talking at time t, and Timeline.changes(a, b)
+the times where the speaker changes.
 """
 from pathlib import Path
 
@@ -20,58 +22,64 @@ from faster_whisper.vad import VadOptions, get_speech_timestamps
 
 SR = 16000
 WIN_S, HOP_S = 1.5, 0.75
-MAX_WINDOWS = 2000  # longer recordings use a longer hop to keep clustering fast
+MAX_WINDOWS = 2000  # longer recordings use a longer step to keep clustering fast
+MAX_HOP_S = 5.0
 MODEL = Path(__file__).resolve().parent / "models" / "diarization" / "wespeaker_en_voxceleb_resnet34_LM.onnx"
 
 
 class Timeline:
-    def __init__(self, centers, labels, embeddings):
+    def __init__(self, centers, labels, embeddings, segments, hop_s):
         self.centers = centers  # window centres in seconds, ascending
         self.labels = labels  # speaker number per window, 1-based by first appearance
         self.embeddings = embeddings
+        self.segments = segments  # VAD speech segments as (start, end) in seconds
+        self.hop_s = hop_s  # the window step actually used
 
     def speaker_at(self, t):
-        i = int(np.clip(np.searchsorted(self.centers, t), 1, len(self.centers) - 1))
+        """Speaker of the voiceprint window nearest to time t, or None without any windows."""
+        if not len(self.centers):
+            return None
+        i = int(np.searchsorted(self.centers, t))
+        if i == 0 or i == len(self.centers):
+            return int(self.labels[min(i, len(self.centers) - 1)])
         return int(self.labels[i - 1 if t - self.centers[i - 1] < self.centers[i] - t else i])
 
-    def turns(self, max_gap=0.5):
-        """Runs of one speaker as [start, end, speaker] in seconds."""
-        out = []
-        for c, s in zip(self.centers, self.labels):
-            a, b = c - HOP_S / 2, c + HOP_S / 2
-            if out and out[-1][2] == s and a - out[-1][1] <= max_gap:
-                out[-1][1] = b
-            else:
-                out.append([max(0.0, a), b, int(s)])
-        return out
+    def changes(self, a, b):
+        """Times strictly between a and b (seconds) where the speaker changes: the midpoint
+        between two consecutive windows with different speakers."""
+        i, j = np.searchsorted(self.centers, [a, b])
+        c, s = self.centers[max(0, i - 1):j + 1], self.labels[max(0, i - 1):j + 1]
+        mids = [(c[k] + c[k + 1]) / 2 for k in range(len(c) - 1) if s[k] != s[k + 1]]
+        return [float(m) for m in mids if a < m < b]
 
     def summary(self):
-        """Talk time per speaker and how alike the speakers' average voiceprints are."""
-        speakers = sorted(set(self.labels))
-        talk = {s: float(np.sum(self.labels == s) * HOP_S) for s in speakers}
+        """Approximate talk time per speaker and how alike the speakers' average voiceprints are."""
+        speakers = sorted({int(s) for s in self.labels})
+        talk = {s: float(np.sum(self.labels == s) * self.hop_s) for s in speakers}
         cents = [self.embeddings[self.labels == s].mean(0) for s in speakers]
         cents = [c / np.linalg.norm(c) for c in cents]
         sims = [float(cents[i] @ cents[j]) for i in range(len(cents)) for j in range(i + 1, len(cents))]
         return talk, sims
 
 
-def windows(audio):
+def speech_segments(audio):
     vad = VadOptions(min_silence_duration_ms=300, speech_pad_ms=100)
-    speech = get_speech_timestamps(audio, vad)
-    total = sum(s["end"] - s["start"] for s in speech) / SR
-    hop = int(max(HOP_S, total / MAX_WINDOWS) * SR)
+    return [(s["start"], s["end"]) for s in get_speech_timestamps(audio, vad)]
+
+
+def windows(segments, hop):
+    """(start, end, segment index) sample ranges: windows of WIN_S every `hop` samples."""
     win = int(WIN_S * SR)
-    for s in speech:
-        a, b = s["start"], s["end"]
+    for n, (a, b) in enumerate(segments):
         if b - a < win:
             if b - a >= SR // 2:
-                yield a, b
+                yield a, b, n
             continue
         starts = list(range(a, b - win + 1, hop))
         if starts[-1] + win < b:
             starts.append(b - win)
         for x in starts:
-            yield x, x + win
+            yield x, x + win, n
 
 
 def kmeans(x, k, restarts=10, iters=100):
@@ -99,14 +107,17 @@ def kmeans(x, k, restarts=10, iters=100):
 def spectral_cluster(emb, n_speakers=None, max_speakers=8):
     """NME-SC: binarized p-nearest-neighbour affinity, p chosen to maximize the normalized eigengap."""
     n = len(emb)
-    if n < 4:
-        return np.zeros(n, dtype=int)
+    if n == 0:
+        return np.zeros(0, dtype=int)
     x = emb / np.linalg.norm(emb, axis=1, keepdims=True)
+    if n < 4 or (n_speakers and n <= n_speakers + 1):  # too few windows for a graph: cluster directly
+        return kmeans(x, min(n_speakers, n)) if n_speakers and n > 1 else np.zeros(n, dtype=int)
     sim = x @ x.T
     order = np.argsort(-sim, axis=1)
-    max_k = min(max_speakers, n - 1)
+    max_k = min(max(max_speakers, n_speakers or 0), n - 1)
     best_score, best_k, best_vecs = np.inf, 1, None
-    for p in np.unique(np.linspace(2, max(3, n // 4), 20).astype(int)):
+    # Each candidate p costs a full n x n eigendecomposition, so try fewer on long recordings.
+    for p in np.unique(np.linspace(2, max(3, n // 4), 20 if n <= 1000 else 8).astype(int)):
         a = np.zeros_like(sim)
         np.put_along_axis(a, order[:, :p], 1.0, axis=1)
         a = (a + a.T) / 2
@@ -118,25 +129,47 @@ def spectral_cluster(emb, n_speakers=None, max_speakers=8):
     return kmeans(best_vecs[:, :best_k], best_k)
 
 
-def diarize(audio, n_speakers=None, threads=4):
-    """Build a Timeline for 16 kHz float32 audio; n_speakers=None estimates the count."""
+def cluster_capped(emb, n_speakers=None):
+    """spectral_cluster on at most MAX_WINDOWS voiceprints. With more (many short speech segments,
+    each needing its own window), cluster an evenly spaced subset and give every voiceprint the
+    speaker whose average voiceprint it is closest to."""
+    if len(emb) <= MAX_WINDOWS:
+        return spectral_cluster(emb, n_speakers)
+    x = emb / np.linalg.norm(emb, axis=1, keepdims=True)
+    idx = np.linspace(0, len(emb) - 1, MAX_WINDOWS).astype(int)
+    sub = spectral_cluster(emb[idx], n_speakers)
+    cents = np.array([x[idx][sub == k].mean(0) for k in sorted(set(sub.tolist()))])
+    return np.argmax(x @ cents.T, axis=1)
+
+
+def diarize(audio, n_speakers=None, threads=4, model=MODEL):
+    """Build a Timeline for 16 kHz float32 audio; n_speakers=None estimates the count.
+    `model` is any sherpa-onnx speaker-embedding ONNX file (WeSpeaker, TitaNet, CAM++, ...)."""
     extractor = sherpa_onnx.SpeakerEmbeddingExtractor(
-        sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(MODEL), num_threads=threads))
-    spans, embs = [], []
-    for a, b in windows(audio):
+        sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(model), num_threads=threads))
+    segments = speech_segments(audio)
+    hop = HOP_S
+    spans = list(windows(segments, int(hop * SR)))
+    while len(spans) > MAX_WINDOWS and hop < MAX_HOP_S:  # a longer step thins out long segments only
+        hop = min(MAX_HOP_S, hop * 1.05 * len(spans) / MAX_WINDOWS)
+        spans = list(windows(segments, int(hop * SR)))
+    embs = []
+    for a, b, _ in spans:
         stream = extractor.create_stream()
         stream.accept_waveform(SR, audio[a:b])
         stream.input_finished()
-        spans.append((a + b) / 2 / SR)
         embs.append(extractor.compute(stream))
-    embs = np.array(embs)
-    labels = spectral_cluster(embs, n_speakers)
-    # Majority of each window and its two neighbours, only across windows less than 2 s apart.
+    embs = np.array(embs).reshape(len(spans), extractor.dim)
+    labels = cluster_capped(embs, n_speakers)
+    # Majority of each window and its two neighbours, within one speech segment.
     smooth = labels.copy()
     for i in range(1, len(labels) - 1):
-        if spans[i + 1] - spans[i - 1] < 2 * WIN_S and labels[i - 1] == labels[i + 1] != labels[i]:
+        same_segment = spans[i - 1][2] == spans[i][2] == spans[i + 1][2]
+        if same_segment and labels[i - 1] == labels[i + 1] != labels[i]:
             smooth[i] = labels[i - 1]
     first = {}
     for s in smooth:
         first.setdefault(int(s), len(first) + 1)
-    return Timeline(np.array(spans), np.array([first[int(s)] for s in smooth]), embs)
+    centers = np.array([(a + b) / 2 / SR for a, b, _ in spans])
+    return Timeline(centers, np.array([first[int(s)] for s in smooth], dtype=int), embs,
+                    [(a / SR, b / SR) for a, b in segments], hop)

@@ -48,6 +48,8 @@ def fetch_range(url, part, start, end):
         try:
             headers = {"Range": f"bytes={start + have}-{end}"}
             with requests.get(url, headers=headers, stream=True, timeout=(20, 60)) as r:
+                if 400 <= r.status_code < 500 and r.status_code not in (408, 429):
+                    raise PermissionError(f"HTTP {r.status_code} for {url} (gated, private or wrong path?)")
                 if r.status_code != 206:
                     raise RuntimeError(f"HTTP {r.status_code}")
                 with open(part, "ab") as f:
@@ -58,8 +60,10 @@ def fetch_range(url, part, start, end):
                             downloaded += len(chunk)
                         if f.tell() >= want:
                             break
+        except PermissionError:
+            raise  # retrying cannot fix a refused request
         except Exception as e:  # network drop, timeout, CDN cancel: resume from where we are
-            print(f"  retry {part.name}: {type(e).__name__}", flush=True)
+            print(f"  retry {part.name}: {type(e).__name__} {e}", flush=True)
             time.sleep(3)
 
 
@@ -70,8 +74,13 @@ def fetch_file(repo, name, size, sha256, folder=MODELS):
         print(f"have {name}", flush=True)
         return
     url = f"https://huggingface.co/{repo}/resolve/main/{name}"
+    if size == 0:
+        dest.write_bytes(b"")
+        print(f"done {name} (empty file)", flush=True)
+        return
     chunk = -(-size // PARTS)
-    parts = [folder / f"{name}.part{i}" for i in range(PARTS)]
+    ranges = [(s, min(s + chunk, size) - 1) for s in range(0, size, chunk)]  # small files get fewer parts
+    parts = [folder / f"{name}.part{i}" for i in range(len(ranges))]
     # Carve an earlier partial download into the parts it already covers.
     if dest.exists() and not any(p.exists() for p in parts):
         with open(dest, "rb") as src:
@@ -83,8 +92,9 @@ def fetch_file(repo, name, size, sha256, folder=MODELS):
                 part.write_bytes(data)
         dest.unlink()
     with ThreadPoolExecutor(PARTS) as pool:
-        for i, part in enumerate(parts):
-            pool.submit(fetch_range, url, part, i * chunk, min((i + 1) * chunk, size) - 1)
+        futures = [pool.submit(fetch_range, url, part, a, b) for part, (a, b) in zip(parts, ranges)]
+        for fut in futures:
+            fut.result()  # re-raise a failed range here instead of failing later at the join
     h = hashlib.sha256()
     tmp = folder / f"{name}.joining"
     with open(tmp, "wb") as out:
@@ -98,7 +108,7 @@ def fetch_file(repo, name, size, sha256, folder=MODELS):
     tmp.rename(dest)
     for part in parts:
         part.unlink()
-    print(f"done {name} (sha256 ok)", flush=True)
+    print(f"done {name} ({'sha256 ok' if sha256 else 'size ok; no checksum published'})", flush=True)
 
 
 def report():

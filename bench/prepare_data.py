@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
 """Build the test sets as 16 kHz mono WAV files plus JSONL manifests.
 
-mixat: a fixed random sample of Arabic-English code-switched clips from the
-Mixat test split (Emirati Arabic), with reference transcripts. Each clip also
-gets a "phone" copy, resampled to 8 kHz and back, to match the bandwidth of
-the local recordings.
+perle:    Egyptian Arabic-English rows of Perle-ai/ASR_Code_Switch (tech, work and daily-life
+          sentences). The closest public match to the use case. Taken from its only split,
+          "train", so models released after May 2026 may have trained on it.
+arzen:    Egyptian Arabic-English conversational clips from the ArzEn validation split. Several
+          Arabic fine-tunes were trained on ArzEn, so it overstates them.
+mixat:    Emirati Arabic-English clips from the Mixat test split (prepared, not scored).
+meetings: 2-minute excerpts of the local recordings in audio-test/, split at pauses into
+          chunks of at most 25 s. No reference transcripts; never leaves this machine.
 
-meetings: 2-minute excerpts of the local recordings in audio-test/, split at
-pauses into chunks of at most 25 s. They have no reference transcripts and
-never leave this machine.
+Every clip is written in three conditions, each ending with 0.5 s of silence (R2T2 drops
+trailing words without it) so all models get identical input:
+  wav16k  the original resampled to 16 kHz
+  phone   resampled through 8 kHz (removes everything above 4 kHz, like the local recordings)
+  g711    a telephone channel: 300-3400 Hz band-pass and G.711 mu-law coding at 8 kHz
 
-Every prepared file ends with 0.5 s of silence (R2T2 drops trailing words
-without it) so all models get identical input.
+The clips used are pinned in bench/samples/<set>.txt, so results stay reproducible; delete a
+pin file to draw a new random sample (seed 42).
 
-arzen: Egyptian Arabic-English code-switched clips from the ArzEn validation
-split, the closest public match to the local recordings' dialect.
-
-Usage: .venv/bin/python bench/prepare_data.py [mixat] [arzen] [perle] [meetings]
+Usage: .venv/bin/python bench/prepare_data.py [perle] [arzen] [mixat] [meetings]
 """
 import json
+import os
 import random
 import re
 import subprocess
@@ -32,12 +36,13 @@ from faster_whisper import decode_audio
 from faster_whisper.vad import VadOptions, get_speech_timestamps
 
 ROOT = Path(__file__).resolve().parent.parent
-MIXAT = ROOT / "data" / "mixat"
+SAMPLES = Path(__file__).resolve().parent / "samples"
 MEETINGS = ROOT / "data" / "meetings"
 SR = 16000
-N_CLIPS = 60
 SEED = 42
 TAIL = np.zeros(SR // 2, dtype=np.float32)
+CONDITIONS = ("wav16k", "phone", "g711")
+EVENT_TAGS = re.compile(r"\[(?:HES|LAUGHTER|HUM|NOISE)\]")
 # Hugging Face datasets: (repo, split, cached row index under data/, fields kept per row or None to skip)
 DATASETS = {
     "mixat": ("sqrk/mixat-tri", "test", "mixat/test_meta.json",
@@ -47,25 +52,31 @@ DATASETS = {
     "perle": ("Perle-ai/ASR_Code_Switch", "train", "perle_egyptian_meta.json",
               lambda r: {"text": r["transcript"]} if r["language_pair"] == "Egyptian Arabic–English" else None),
 }
-
-# (file, excerpt start in seconds or None to pick the 2-minute window with the most speech)
-RECORDINGS = [
-    ("record1_test_2min.wav", 0),
-    ("record2.wav", None),
-    ("rec3.wav", None),
-]
 EXCERPT_S = 120
 MAX_CHUNK_S = 25
 
 
-def ffmpeg(src, dst, filters):
+def run_ffmpeg(src, dst, filters, codec="pcm_s16le", rate=SR):
     subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-i", str(src), "-ac", "1",
-                    "-af", filters, "-ar", str(SR), "-c:a", "pcm_s16le", str(dst)], check=True)
+                    "-af", filters, "-ar", str(rate), "-c:a", codec, "-f", "wav", str(dst)], check=True)
 
 
-def pad_tail(path):
-    audio, sr = sf.read(path, dtype="float32")
-    sf.write(path, np.concatenate([audio, TAIL]), sr, subtype="PCM_16")
+def convert(raw, dst, condition):
+    """Write one condition of a clip, padded with TAIL, atomically (an interrupted run leaves no
+    half-written file behind that later runs would trust)."""
+    tmp = dst.with_name(dst.stem + ".tmp.wav")
+    if condition == "wav16k":
+        run_ffmpeg(raw, tmp, "aresample=16000")
+    elif condition == "phone":
+        run_ffmpeg(raw, tmp, "aresample=8000,aresample=16000")
+    else:  # g711: telephone band and mu-law coding at 8 kHz, then back to 16 kHz
+        coded = dst.with_name(dst.stem + ".tmp8k.wav")
+        run_ffmpeg(raw, coded, "highpass=f=300,lowpass=f=3400,aresample=8000", codec="pcm_mulaw", rate=8000)
+        run_ffmpeg(coded, tmp, "aresample=16000")
+        coded.unlink()
+    audio, sr = sf.read(tmp, dtype="float32")
+    sf.write(tmp, np.concatenate([audio, TAIL]), sr, subtype="PCM_16", format="WAV")
+    os.replace(tmp, dst)
 
 
 def rows_api(name, offset, length):
@@ -101,67 +112,77 @@ def load_index(name):
 
 
 def fetch_clip(name, row, dst):
+    part = dst.with_name(dst.name + ".part")
     try:
-        urllib.request.urlretrieve(row["audio_src"], dst)
+        urllib.request.urlretrieve(row["audio_src"], part)
     except Exception:  # signed asset URLs expire; ask the rows API for a fresh one
-        urllib.request.urlretrieve(audio_src(rows_api(name, row["idx"], 1)["rows"][0]["row"]), dst)
+        urllib.request.urlretrieve(audio_src(rows_api(name, row["idx"], 1)["rows"][0]["row"]), part)
+    os.replace(part, dst)
 
 
-def prepare_mixat():
-    rows = load_index("mixat")
-    pool = [r for r in rows if r["language"] == "CS" and 3000 <= r["duration_ms"] <= 30000]
-    sample = sorted(random.Random(SEED).sample(pool, N_CLIPS), key=lambda r: r["idx"])
-    for d in ("raw", "wav16k", "phone"):
-        (MIXAT / d).mkdir(exist_ok=True)
-    with open(MIXAT / "manifest.jsonl", "w") as out:
-        for r in sample:
-            cid = f"mixat{r['idx']:04d}"
-            raw = MIXAT / "raw" / f"{cid}.wav"
-            if not raw.exists():
-                fetch_clip("mixat", r, raw)
-            for d, filters in (("wav16k", "aresample=16000"), ("phone", "aresample=8000,aresample=16000")):
-                dst = MIXAT / d / f"{cid}.wav"
+def write_set(name, clips):
+    """clips: [(clip id, raw path, duration, reference)] -> converted audio + manifest + pin file."""
+    out_dir = ROOT / "data" / name
+    for d in CONDITIONS:
+        (out_dir / d).mkdir(parents=True, exist_ok=True)
+    with open(out_dir / "manifest.jsonl", "w") as out:
+        for cid, raw, duration, text in clips:
+            entry = {"id": cid, "duration": round(duration, 2), "reference": text}
+            for d in CONDITIONS:
+                dst = out_dir / d / f"{cid}.wav"
                 if not dst.exists():
-                    ffmpeg(raw, dst, filters)
-                    pad_tail(dst)
-            out.write(json.dumps({"id": cid, "duration": r["duration_ms"] / 1000,
-                                  "wav16k": str((MIXAT / "wav16k" / f"{cid}.wav").relative_to(ROOT)),
-                                  "phone": str((MIXAT / "phone" / f"{cid}.wav").relative_to(ROOT)),
-                                  "reference": r["transcript"]}, ensure_ascii=False) + "\n")
-    total = sum(r["duration_ms"] for r in sample) / 60000
-    print(f"mixat: {len(sample)} clips, {total:.1f} min")
+                    convert(raw, dst, d)
+                entry[d] = str(dst.relative_to(ROOT))
+            out.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    SAMPLES.mkdir(exist_ok=True)
+    (SAMPLES / f"{name}.txt").write_text("".join(c[0] + "\n" for c in clips))
+    print(f"{name}: {len(clips)} clips, {sum(c[2] for c in clips) / 60:.1f} min")
+
+
+def pinned(name):
+    path = SAMPLES / f"{name}.txt"
+    return path.read_text().split() if path.exists() else None
+
+
+def prepare_mixat(n_clips=60):
+    rows = {f"mixat{r['idx']:04d}": r for r in load_index("mixat")}
+    ids = pinned("mixat")
+    if ids is None:
+        pool = [k for k, r in rows.items() if r["language"] == "CS" and 3000 <= r["duration_ms"] <= 30000]
+        ids = sorted(random.Random(SEED).sample(pool, n_clips))
+    (ROOT / "data" / "mixat" / "raw").mkdir(parents=True, exist_ok=True)
+    clips = []
+    for cid in ids:
+        raw = ROOT / "data" / "mixat" / "raw" / f"{cid}.wav"
+        if not raw.exists():
+            fetch_clip("mixat", rows[cid], raw)
+        clips.append((cid, raw, rows[cid]["duration_ms"] / 1000, rows[cid]["transcript"]))
+    write_set("mixat", clips)
 
 
 def prepare_arzen(n_clips=40, name="arzen"):
-    """Egyptian Arabic-English code-switched clips from the ArzEn validation split."""
-    out_dir = ROOT / "data" / name
-    for d in ("raw", "wav16k", "phone"):
-        (out_dir / d).mkdir(parents=True, exist_ok=True)
-    rows = load_index(name)
-    mixed = [r for r in rows if re.search(r"[A-Za-z]", r["text"]) and re.search(r"[؀-ۿ]", r["text"])]
-    kept = []
-    for r in random.Random(SEED).sample(mixed, min(len(mixed), 3 * n_clips)):
-        cid = f"{name}{r['idx']:04d}"
-        raw = out_dir / "raw" / f"{cid}.wav"
+    """Egyptian Arabic-English clips (3-25 s) whose reference has both Arabic and English words."""
+    rows = {f"{name}{r['idx']:04d}": r for r in load_index(name)}
+    (ROOT / "data" / name / "raw").mkdir(parents=True, exist_ok=True)
+
+    def raw_clip(cid):
+        raw = ROOT / "data" / name / "raw" / f"{cid}.wav"
         if not raw.exists():
-            fetch_clip(name, r, raw)
-        duration = sf.info(raw).duration
-        if 3 <= duration <= 25:
-            kept.append((cid, raw, duration, r["text"]))
-        if len(kept) == n_clips:
-            break
-    with open(out_dir / "manifest.jsonl", "w") as out:
-        for cid, raw, duration, text in sorted(kept):
-            for d, filters in (("wav16k", "aresample=16000"), ("phone", "aresample=8000,aresample=16000")):
-                dst = out_dir / d / f"{cid}.wav"
-                if not dst.exists():
-                    ffmpeg(raw, dst, filters)
-                    pad_tail(dst)
-            out.write(json.dumps({"id": cid, "duration": round(duration, 2),
-                                  "wav16k": str((out_dir / "wav16k" / f"{cid}.wav").relative_to(ROOT)),
-                                  "phone": str((out_dir / "phone" / f"{cid}.wav").relative_to(ROOT)),
-                                  "reference": text}, ensure_ascii=False) + "\n")
-    print(f"{name}: {len(kept)} clips, {sum(k[2] for k in kept) / 60:.1f} min")
+            fetch_clip(name, rows[cid], raw)
+        return raw
+
+    ids = pinned(name)
+    if ids is None:  # draw a new sample; event tags like [HES] don't count as English
+        mixed = [k for k, r in rows.items() if re.search(r"[A-Za-z]", EVENT_TAGS.sub(" ", r["text"]))
+                 and re.search(r"[؀-ۿ]", r["text"])]
+        ids = []
+        for cid in random.Random(SEED).sample(mixed, min(len(mixed), 3 * n_clips)):
+            if 3 <= sf.info(raw_clip(cid)).duration <= 25:
+                ids.append(cid)
+            if len(ids) == n_clips:
+                break
+        ids.sort()
+    write_set(name, [(cid, raw_clip(cid), sf.info(raw_clip(cid)).duration, rows[cid]["text"]) for cid in ids])
 
 
 def prepare_perle(n_clips=40):
@@ -190,33 +211,39 @@ def chunk_speech(speech, max_len):
 
 
 def prepare_meetings():
-    MEETINGS.mkdir(exist_ok=True)
+    """2-minute excerpts of every recording in audio-test/ (the whole file if it is short; else the
+    window with the most speech), named rec1, rec2, ... because the file names carry call times."""
+    MEETINGS.mkdir(parents=True, exist_ok=True)
     vad = VadOptions(min_silence_duration_ms=500, speech_pad_ms=200, max_speech_duration_s=MAX_CHUNK_S)
     excerpt = EXCERPT_S * SR
+    seen = set()
     with open(MEETINGS / "manifest.jsonl", "w") as out:
-        for name, start_s in RECORDINGS:
-            audio = decode_audio(str(ROOT / "audio-test" / name), sampling_rate=SR)
-            if start_s is None:
+        for path in sorted((ROOT / "audio-test").glob("*.wav")):
+            if path.stat().st_size in seen:  # a byte-identical copy of an earlier file
+                continue
+            seen.add(path.stat().st_size)
+            rec = f"rec{len(seen)}"
+            audio = decode_audio(str(path), sampling_rate=SR)
+            if len(audio) <= excerpt + 30 * SR:
+                start = 0
+            else:
                 speech = get_speech_timestamps(audio, vad)
                 start, _ = max(speech_windows(speech, len(audio), excerpt, 30 * SR), key=lambda w: w[1])
-            else:
-                start = int(start_s * SR)
             clip = audio[start:start + excerpt]
             speech = get_speech_timestamps(clip, vad)
-            stem = Path(name).stem
             chunks = chunk_speech(speech, MAX_CHUNK_S * SR)
             for i, (a, b) in enumerate(chunks):
-                path = MEETINGS / f"{stem}_{i:02d}.wav"
-                sf.write(path, np.concatenate([clip[a:b], TAIL]), SR, subtype="PCM_16")
-                out.write(json.dumps({"id": f"{stem}_{i:02d}", "source": name,
+                wav = MEETINGS / f"{rec}_{i:02d}.wav"
+                sf.write(wav, np.concatenate([clip[a:b], TAIL]), SR, subtype="PCM_16")
+                out.write(json.dumps({"id": f"{rec}_{i:02d}", "source": path.name,
                                       "start": round((start + a) / SR, 2), "end": round((start + b) / SR, 2),
-                                      "wav16k": str(path.relative_to(ROOT))}) + "\n")
+                                      "wav16k": str(wav.relative_to(ROOT))}) + "\n")
             voiced = sum(s["end"] - s["start"] for s in speech) / SR
-            print(f"{name}: excerpt {start / SR:.0f}-{start / SR + EXCERPT_S:.0f} s, "
+            print(f"{rec}: excerpt {start / SR:.0f}-{start / SR + EXCERPT_S:.0f} s, "
                   f"{voiced:.0f} s of speech, {len(chunks)} chunks")
 
 
 if __name__ == "__main__":
     steps = {"mixat": prepare_mixat, "arzen": prepare_arzen, "perle": prepare_perle, "meetings": prepare_meetings}
-    for name in sys.argv[1:] or steps:
+    for name in sys.argv[1:] or ["perle", "arzen"]:
         steps[name]()
