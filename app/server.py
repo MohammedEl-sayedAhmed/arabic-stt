@@ -18,7 +18,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import __version__, engines
+from . import __version__, compare, engines
 from . import transcript as T
 from .config import FROZEN, power_profile, set_power_profile
 from .downloads import Downloads
@@ -223,7 +223,7 @@ class Handler(BaseHTTPRequestHandler):
                 if m and verb == ("GET" if method == "HEAD" else method):
                     return fn(self, params, *m.groups())
             raise ApiError(404, "not found")
-        except ApiError as e:
+        except (ApiError, compare.Invalid) as e:
             self.drain()
             self.json({"error": str(e)}, e.status)
         except ConnectionError:  # the browser went away (e.g. seeking the player); Windows: ConnectionAbortedError
@@ -277,7 +277,10 @@ class Handler(BaseHTTPRequestHandler):
         self.json(self.app.status())
 
     def list_jobs(self, _params):
-        self.json({"jobs": [summary(j) for j in self.app.store.list()]})
+        jobs = self.app.store.list()
+        compare.fill_later(self.app.store, jobs)  # fingerprints of older jobs, for the groups
+        groups = compare.group_ids(jobs)
+        self.json({"jobs": [{**summary(j), "group": groups[j["id"]]} for j in jobs]})
 
     def create_job(self, params):
         cfg, runner = self.app.cfg, self.app.runner
@@ -459,6 +462,19 @@ class Handler(BaseHTTPRequestHandler):
         disposition = f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{urllib.parse.quote(name)}'
         self.reply(200, body, ctype, {"Content-Disposition": disposition})
 
+    # transcripts of one recording: grouping, comparing and combining them (app/compare.py)
+    def job_group(self, _params, jid):
+        self.job(jid)
+        gid, jobs = compare.group_of(self.app.store, jid)
+        self.json({"group": gid, "jobs": [{**summary(j), "group": gid} for j in jobs]})
+
+    def compare_jobs(self, params):
+        ids = [x for x in str(params.get("ids") or "").split(",") if x]
+        self.json(compare.view(self.app.store, ids, params.get("base")))
+
+    def combine_jobs(self, _params):
+        self.json(summary(compare.create_combined(self.app.store, self.body_json())), 201)
+
     def save_key(self, _params):
         p = self.body_json()
         model = self.app.cfg.models.get(p.get("model"))
@@ -569,6 +585,9 @@ ROUTES = [
     ("POST", rf"/api/jobs/{ID}/rerun", Handler.rerun_job),
     ("GET", rf"/api/jobs/{ID}/audio", Handler.audio),
     ("GET", rf"/api/jobs/{ID}/export/(\w+)", Handler.export),
+    ("GET", rf"/api/jobs/{ID}/group", Handler.job_group),
+    ("GET", r"/api/compare", Handler.compare_jobs),
+    ("POST", r"/api/combine", Handler.combine_jobs),
     ("POST", r"/api/keys", Handler.save_key),
     ("POST", r"/api/power", Handler.power),
     ("POST", r"/api/settings", Handler.settings),

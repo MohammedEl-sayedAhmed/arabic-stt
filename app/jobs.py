@@ -227,7 +227,9 @@ class Runner:
         model = self.cfg.models.get(job["model"])
         if model is None:
             raise engines.EngineError(f"unknown model {job['model']}")
-        self.store.update(jid, status="queued", stage=None, done=None, total=None, audio_s=round(info.duration, 2))
+        from .compare import try_fingerprint  # the same recording added again joins this one's group
+        self.store.update(jid, status="queued", stage=None, done=None, total=None, audio_s=round(info.duration, 2),
+                          fingerprint=job.get("fingerprint") or try_fingerprint(audio))
         self.queues[model["kind"]].put(jid)
 
     def work(self, jid, kind):
@@ -289,7 +291,7 @@ class Runner:
         """A new job on the same audio with another model or other options."""
         old = self.store.get(jid)
         new = self.new_job(title=old["title"], source_name=old.get("source_name"), model_id=model_id,
-                           options=options, rerun_of=jid)
+                           options=options, rerun_of=jid, fingerprint=old.get("fingerprint"))
         src, dst = self.store.dir(jid) / "audio.flac", self.store.dir(new["id"]) / "audio.flac"
         try:
             os.link(src, dst)  # same file on disk, no extra space
