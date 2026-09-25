@@ -7,20 +7,8 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-from .config import ROOT, Config
+from .config import Config
 from .server import make_server
-
-LAUNCHER = """[Desktop Entry]
-Type=Application
-Name=Tafrigh
-GenericName=Meeting transcription
-Comment=Transcribe recordings with speaker labels, locally or with ElevenLabs / Speechmatics
-Exec={exec}
-Icon={root}/app/static/icon.svg
-Terminal=false
-Categories=AudioVideo;Office;
-"""
-
 
 def running_here(port):
     """True if this app already answers on the port."""
@@ -44,11 +32,9 @@ def main():
                     help="add Tafrigh to the desktop's application menu (~/.local/share/applications)")
     args = ap.parse_args()
     if args.install_launcher:
-        dest = Path.home() / ".local" / "share" / "applications" / "tafrigh.desktop"
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        command = f"sh -c 'cd \"{ROOT}\" && .venv/bin/python -m app.desktop'"  # the desktop window
-        dest.write_text(LAUNCHER.format(root=ROOT, exec=command), encoding="utf-8")
-        print(f"added {dest}; remove that file to undo")
+        from .desktop import install_launcher  # the desktop app also keeps it current when it starts
+        dest = install_launcher()
+        print(f"added {dest}; remove that file to undo" if dest else "only on Linux desktops")
         return
     cfg = Config(args.config) if args.config else Config()
     port = args.port or cfg.server["port"]

@@ -33,6 +33,10 @@ Tafrigh picks the first of these that works:
 4. If no window of any kind can be opened, the server keeps running and Tafrigh shows its address
    (in a message box on Windows), so any browser can use it.
 
+On Linux the desktop app keeps `~/.local/share/applications/tafrigh.desktop` current, so Tafrigh is
+in the application menu and its window shows the Tafrigh icon: the browser window gets the window class
+`Tafrigh` (`--class`), which the entry names. On Windows the built `Tafrigh.exe` carries the icon.
+
 Closing the window quits the app, and so does *Settings → Quit*. `--browser` skips the native window,
 `--server` (or `--no-window`) runs only the server, and `--port N` picks the port (the default is
 8765, or any free one). The Windows installer also adds a *Tafrigh (browser window)* shortcut, which
