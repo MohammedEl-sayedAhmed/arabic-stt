@@ -554,6 +554,25 @@
   "set": "perle",
   "audio": "wav16k",
   "model": "cohere-transcribe-arabic-07-2026-Q4_K_M",
+  "config": "ar-gpu",
+  "label": "Arabic forced, GPU",
+  "clips": 40,
+  "wer": 0.13425925925925927,
+  "wer_ci": [
+   0.09346584190446441,
+   0.18138854468664722
+  ],
+  "cer": 0.08169655565044122,
+  "ar_err": 0.050761421319796954,
+  "en_err": 0.23828125,
+  "en_kept": 0.770949720670391,
+  "latin_share": 0.2302839116719243,
+  "rtf": 0.1506507467270703
+ },
+ {
+  "set": "perle",
+  "audio": "wav16k",
+  "model": "cohere-transcribe-arabic-07-2026-Q4_K_M",
   "config": "ar",
   "label": "Arabic forced",
   "clips": 40,

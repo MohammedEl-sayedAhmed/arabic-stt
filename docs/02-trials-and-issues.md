@@ -172,6 +172,15 @@ were measured.
     non-commercial (CC-BY-NC-4.0). It stays an experimental option (`transcribe.py --align`), not the
     default.
 
+38. The graphics card. transcribe.cpp ships a Vulkan backend, and it found the laptop's integrated Iris
+    Xe. Cohere ran there at 0.15 times real time instead of 0.36 on the Perle clips, with the same text
+    for all 40 clips. The app now uses a graphics card when one works: Cohere through Vulkan on any GPU,
+    a discrete one first; Whisper on NVIDIA GPUs through CUDA, after a download of NVIDIA's cuBLAS
+    (about 600 MB, unpacked from NVIDIA's pip packages). Each is checked on a second of silence, any GPU
+    error sends the rest of the recording to the CPU, and speed estimates now come from earlier runs on
+    the same computer. In a first live test with the app, the 80-minute recording took 29.6 minutes
+    with Cohere on the CPU (0.37 times real time).
+
 ## Tooling notes for whoever continues
 
 - `pkill -f <pattern>` also matched the shell running the command and killed it. Use

@@ -6,6 +6,7 @@ WER with a 95% bootstrap confidence interval over clips. Speed = processing time
 
 | Model | Setting | WER (95% CI) | CER | Arabic-word errors | English-word errors | English kept | Speed |
 |---|---|---|---|---|---|---|---|
+| Cohere Transcribe Arabic (Q4) | Arabic forced, GPU | 13.4% (9%–18%) | 8.2% | 5.1% | 24% | 77% | 0.15 |
 | Cohere Transcribe Arabic (Q4) | Arabic forced | 13.4% (9%–18%) | 8.2% | 5.1% | 24% | 77% | 0.36 |
 | whisper-medium code-switching fine-tune | Arabic forced + hint *(whole clip)* | 18.4% (15%–22%) | 6.3% | 17.8% | 7% | 94% | 1.14 |
 | whisper-medium code-switching fine-tune | Arabic forced | 18.5% (15%–22%) | 7.1% | 17.8% | 11% | 90% | 1.08 |

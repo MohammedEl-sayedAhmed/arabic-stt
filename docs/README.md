@@ -63,7 +63,7 @@ weighs more there.
 | Document | What's in it |
 |---|---|
 | [Use case](01-use-case.md) | what the transcripts are for, the test audio, the original question |
-| [Trials and issues](02-trials-and-issues.md) | every experiment in order (37 of them, in two rounds): what broke and how it was fixed |
+| [Trials and issues](02-trials-and-issues.md) | every experiment in order (38 of them, in two rounds): what broke and how it was fixed |
 | [Results](03-results.md) | method, public benchmark, phone audio, real meetings, the test call, long recordings, caveats |
 | [Speaker labels](04-speaker-labels.md) | how voices are told apart, the bugs found, five voiceprint models compared, forced alignment |
 | [Command line](05-command-line.md) | setup, options, what happens inside, speed and memory |
