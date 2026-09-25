@@ -483,7 +483,7 @@ class Handler(BaseHTTPRequestHandler):
         if fmt not in T.EXPORTS:
             raise ApiError(404, "unknown format")
         fn, ctype = T.EXPORTS[fmt]
-        n = params.get("version")  # a version from the history; the current one by default
+        n = params.get("version")  # text: "0" is the model's output; without it, the current version
         shown, lines, edited = self.at_version(job, n)
         details = None if params.get("details") == "0" else report.details(shown, lines, edited)
         body = fn(shown, lines, details).encode()

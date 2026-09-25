@@ -1,5 +1,5 @@
 """Tests for the version history of transcripts (app/history.py) and its part of the API: the model's
-output kept as version 1, a new version with a message and a summary for every change, going back to
+output kept as version 0, a new version with a message and a summary for every change, going back to
 an earlier version, jobs from before the history, exports of a version, several changes at once, and
 edits that are still there after the app restarts. The job folders are written the way the app writes
 them, so no model runs.
@@ -91,22 +91,23 @@ class HistoryInStore(unittest.TestCase):
     def numbers(self, jid):
         return [v["n"] for v in history.ensure(self.store, jid)]
 
-    def test_model_output_is_version_1_and_never_changes(self):
+    def test_model_output_is_version_0_and_never_changes(self):
         jid, lines = make_job(self.store)
-        v1_file = self.store.dir(jid) / "history" / "v0001.json"
-        v1_bytes = v1_file.read_bytes()
+        v0_file = self.store.dir(jid) / "history" / "v0000.json"
+        v0_bytes = v0_file.read_bytes()
         edited = changed(lines, 0, "تمام، نبدأ الـ meeting دلوقتي؟")
-        history.save(self.store, jid, {"lines": edited}, "edit", "Fixed the first line")
+        self.assertEqual(history.save(self.store, jid, {"lines": edited}, "edit", "Fixed the first line")["n"], 1,
+                         "the first saved edit is version 1")
         history.save(self.store, jid, {"speaker_names": {"1": "Mona"}}, "rename")
         history.save(self.store, jid, {"title": "Sprint planning"}, "rename", "A better title")
         merged = [{**x, "speaker": "1" if x["speaker"] == "3" else x["speaker"]} for x in edited]
         history.save(self.store, jid, {"lines": merged}, "merge")
-        history.restore(self.store, jid, 2)
-        self.assertEqual(v1_file.read_bytes(), v1_bytes)
-        v1 = history.version(self.store, jid, 1)
-        self.assertEqual(v1["version"]["kind"], "model output")
-        self.assertEqual((v1["lines"], v1["speaker_names"], v1["changes"]), (lines, {}, None))
-        self.assertEqual(self.numbers(jid), [1, 2, 3, 4, 5, 6])
+        history.restore(self.store, jid, 1)
+        self.assertEqual(v0_file.read_bytes(), v0_bytes)
+        v0 = history.version(self.store, jid, 0)
+        self.assertEqual((v0["version"]["n"], v0["version"]["kind"], v0["version"]["parent"]), (0, "model output", None))
+        self.assertEqual((v0["lines"], v0["speaker_names"], v0["changes"]), (lines, {}, None))
+        self.assertEqual(self.numbers(jid), [0, 1, 2, 3, 4, 5])
         self.assertEqual(self.store.transcript(jid)["lines"], edited, "the current version is what the app reads")
 
     def test_messages_including_empty(self):
@@ -117,8 +118,8 @@ class HistoryInStore(unittest.TestCase):
                          message)
         self.assertEqual([v["message"] for v in history.ensure(self.store, jid)],
                          ["", "Fixed the Jira line", "", "", "two lines", "x" * 500])
-        history.set_message(self.store, jid, 1, "Straight from the model")
-        history.set_message(self.store, jid, 2, "")
+        history.set_message(self.store, jid, 0, "Straight from the model")
+        history.set_message(self.store, jid, 1, "")
         versions = history.ensure(self.store, jid)
         self.assertEqual((versions[0]["message"], versions[1]["message"]), ("Straight from the model", ""))
         self.assertEqual(versions[0]["kind"], "model output", "a message doesn't change the version")
@@ -128,7 +129,7 @@ class HistoryInStore(unittest.TestCase):
     def test_automatic_summaries(self):
         jid, lines = make_job(self.store)
         save = lambda change, message="": history.save(self.store, jid, change, "edit", message)["summary"]  # noqa: E731
-        self.assertEqual(history.version(self.store, jid, 1)["version"]["summary"],
+        self.assertEqual(history.version(self.store, jid, 0)["version"]["summary"],
                          "4 lines from whisper-medium code-switching")
         three = [{**x, "text": x["text"] + " ok"} if i < 3 else x for i, x in enumerate(lines)]
         added = {"start": 20.0, "end": 21.0, "speaker": "2", "text": "Bye"}
@@ -140,68 +141,68 @@ class HistoryInStore(unittest.TestCase):
         self.assertEqual(save({"title": "Sprint planning"}), "Title changed to “Sprint planning”")
         self.assertEqual(save({"lines": three[:3] + [added], "speaker_names": {"1": "Mona Ali", "2": "Ali"}}),
                          "1 line changed, Mona renamed to Mona Ali, Speaker 2 renamed to Ali")
-        state = history.version(self.store, jid, 2)
+        state = history.version(self.store, jid, 1)
         self.assertEqual(history.describe(state, state), "No changes")
 
     def test_nothing_changed_makes_no_version(self):
         jid, lines = make_job(self.store)
         self.assertIsNone(history.save(self.store, jid, {"lines": lines}, "edit", "Nothing really"))
         self.assertIsNone(history.save(self.store, jid, {"title": "Weekly sync"}, "rename"))
-        self.assertEqual(self.numbers(jid), [1])
+        self.assertEqual(self.numbers(jid), [0])
 
     def test_restore_makes_a_new_version(self):
         jid, lines = make_job(self.store)
         edited = changed(lines, 1, "Yes, let's start with the sprint review.")
         history.save(self.store, jid, {"lines": edited}, "edit", "Fixed a word")
         history.save(self.store, jid, {"speaker_names": {"2": "Ali"}}, "rename")
-        entry = history.restore(self.store, jid, 1, "Back to the model")
+        entry = history.restore(self.store, jid, 0, "Back to the model")
         self.assertEqual((entry["n"], entry["kind"], entry["restored_from"], entry["parent"], entry["message"]),
-                         (4, "restore", 1, 3, "Back to the model"))
-        self.assertEqual(entry["summary"], "Restored version 1 (1 line changed, Ali renamed to Speaker 2)")
-        v1, v4 = history.version(self.store, jid, 1), history.version(self.store, jid, 4)
-        self.assertEqual({k: v4[k] for k in ("title", "speaker_names", "lines")},
-                         {k: v1[k] for k in ("title", "speaker_names", "lines")})
-        self.assertEqual(history.version(self.store, jid, 2)["lines"], edited, "the versions in between stay")
+                         (3, "restore", 0, 2, "Back to the model"))
+        self.assertEqual(entry["summary"], "Restored version 0 (1 line changed, Ali renamed to Speaker 2)")
+        v0, v3 = history.version(self.store, jid, 0), history.version(self.store, jid, 3)
+        self.assertEqual({k: v3[k] for k in ("title", "speaker_names", "lines")},
+                         {k: v0[k] for k in ("title", "speaker_names", "lines")})
+        self.assertEqual(history.version(self.store, jid, 1)["lines"], edited, "the versions in between stay")
         self.assertEqual(self.store.transcript(jid)["lines"], lines)
         self.assertFalse(self.store.transcript(jid)["edited"], "back to the model's lines")
         self.assertEqual(self.store.get(jid)["speaker_names"], {})
-        self.assertIsNone(history.restore(self.store, jid, 1), "already the same: no new version")
-        self.assertEqual(history.restore(self.store, jid, 2)["n"], 5)
+        self.assertIsNone(history.restore(self.store, jid, 0), "already the same: no new version")
+        self.assertEqual(history.restore(self.store, jid, 1)["n"], 4)
         self.assertTrue(self.store.transcript(jid)["edited"])
         with self.assertRaises(KeyError):
             history.restore(self.store, jid, 99)
-        self.assertEqual(self.numbers(jid), [1, 2, 3, 4, 5])
+        self.assertEqual(self.numbers(jid), [0, 1, 2, 3, 4])
 
     def test_quick_changes_close_together_are_one_version(self):
         jid, lines = make_job(self.store)
 
         def quick(change, kind="rename", message="", merge=None):
             return history.save(self.store, jid, change, kind, message, merge=merge)
-        self.assertEqual(quick({"speaker_names": {"1": "Mona"}})["n"], 2)
-        self.assertEqual(quick({"speaker_names": {"1": "Mona", "2": "Ali"}})["n"], 2)
-        self.assertEqual(quick({"title": "Sprint planning"})["n"], 2)
+        self.assertEqual(quick({"speaker_names": {"1": "Mona"}})["n"], 1)
+        self.assertEqual(quick({"speaker_names": {"1": "Mona", "2": "Ali"}})["n"], 1)
+        self.assertEqual(quick({"title": "Sprint planning"})["n"], 1)
         merged = [{**x, "speaker": "2" if x["speaker"] == "3" else x["speaker"]} for x in lines]
         folded = quick({"lines": merged}, "merge", merge={"from": "3", "note": "Speaker 3 merged into Ali (1 line)"})
-        self.assertEqual((folded["n"], folded["kind"]), (2, "merge"))
+        self.assertEqual((folded["n"], folded["kind"]), (1, "merge"))
         self.assertEqual(folded["summary"], "Speaker 3 merged into Ali (1 line), Speaker 1 renamed to Mona, "
                                             "Speaker 2 renamed to Ali, title changed to “Sprint planning”")
-        v2 = history.version(self.store, jid, 2)
-        self.assertEqual((v2["speaker_names"], v2["title"], v2["lines"]),
+        v1 = history.version(self.store, jid, 1)
+        self.assertEqual((v1["speaker_names"], v1["title"], v1["lines"]),
                          ({"1": "Mona", "2": "Ali"}, "Sprint planning", merged))
-        self.assertEqual(quick({"speaker_names": {"1": "Mona", "2": "Ali", "3": "Omar"}}, message="From the invite")["n"], 3)
-        self.assertEqual(quick({"speaker_names": {"1": "Mona", "2": "Ali"}})["n"], 4, "after a message: its own version")
-        back = quick({"speaker_names": {"1": "Mona", "2": "Ali", "3": "Omar"}})  # back to version 3: its own step too
-        self.assertEqual((back["n"], back["summary"]), (5, "Speaker 3 renamed to Omar"))
+        self.assertEqual(quick({"speaker_names": {"1": "Mona", "2": "Ali", "3": "Omar"}}, message="From the invite")["n"], 2)
+        self.assertEqual(quick({"speaker_names": {"1": "Mona", "2": "Ali"}})["n"], 3, "after a message: its own version")
+        back = quick({"speaker_names": {"1": "Mona", "2": "Ali", "3": "Omar"}})  # back to version 2: its own step too
+        self.assertEqual((back["n"], back["summary"]), (4, "Speaker 3 renamed to Omar"))
         with mock.patch.object(history, "FOLD_SECONDS", 0):
-            self.assertEqual(quick({"title": "Planning"})["n"], 6)
-        self.assertEqual(history.save(self.store, jid, {"lines": lines}, "edit")["n"], 7, "an edit session is not folded")
-        self.assertEqual(quick({"title": "Planning, week 40"})["n"], 8, "and nothing is folded into one")
+            self.assertEqual(quick({"title": "Planning"})["n"], 5)
+        self.assertEqual(history.save(self.store, jid, {"lines": lines}, "edit")["n"], 6, "an edit session is not folded")
+        self.assertEqual(quick({"title": "Planning, week 40"})["n"], 7, "and nothing is folded into one")
 
     def test_one_edit_session_is_one_version(self):
         jid, lines = make_job(self.store)
         change = {"lines": changed(lines, 0, "تمام، نبدأ"), "speaker_names": {"1": "Mona"}, "title": "Sprint planning"}
         entry = history.save(self.store, jid, change, "edit", "Checked against the recording")
-        self.assertEqual((entry["n"], entry["kind"], entry["message"]), (2, "edit", "Checked against the recording"))
+        self.assertEqual((entry["n"], entry["kind"], entry["message"]), (1, "edit", "Checked against the recording"))
         self.assertEqual(entry["summary"], "1 line changed, Speaker 1 renamed to Mona, title changed to “Sprint planning”")
 
     def test_review_before_saving(self):
@@ -210,7 +211,7 @@ class HistoryInStore(unittest.TestCase):
         change = {"lines": changed(lines, 1, "Yes, let's start with the sprint review."), "speaker_names": {"2": "Ali"},
                   "title": "Sprint planning"}
         found = history.preview(self.store, jid, change)
-        self.assertEqual(found["version"], 1)
+        self.assertEqual(found["version"], 0, "compared with the model's output")
         self.assertEqual(found["summary"], "1 line changed, Speaker 2 renamed to Ali, title changed to “Sprint planning”")
         ch = found["changes"]
         self.assertEqual(ch["stat"], "1 line changed, 1 speaker renamed, title changed")
@@ -219,45 +220,46 @@ class HistoryInStore(unittest.TestCase):
         self.assertEqual((ch["names_before"], ch["names_after"]), ({}, {"2": "Ali"}))
         self.assertEqual([r["op"] for r in ch["lines"]], ["same", "changed", "same", "same"])
         self.assertEqual(ch["lines"][1]["words"], [["=", "Yes, let's start with the"], ["-", "sprint."], ["+", "sprint review."]])
-        self.assertEqual(self.numbers(jid), [1], "nothing saved")
+        self.assertEqual(self.numbers(jid), [0], "nothing saved")
         self.assertEqual(self.store.transcript(jid)["lines"], lines)
 
     def test_compare_any_two_versions(self):
         jid, lines = make_job(self.store)
         history.save(self.store, jid, {"lines": changed(lines, 0, "one")}, "edit")
         history.save(self.store, jid, {"lines": changed(changed(lines, 0, "one"), 3, "two")}, "edit")
-        self.assertEqual(history.version(self.store, jid, 3)["changes"]["stat"], "1 line changed")
-        three_to_one = history.version(self.store, jid, 3, against=1)
-        self.assertEqual((three_to_one["against"], three_to_one["changes"]["stat"]), (1, "2 lines changed"))
-        self.assertEqual(history.version(self.store, jid, 1, against=3)["changes"]["stat"], "2 lines changed")
-        self.assertIsNone(history.version(self.store, jid, 1)["changes"], "the first has nothing before it")
-        self.assertIsNone(history.version(self.store, jid, 3, against=9))
+        self.assertEqual(history.version(self.store, jid, 2)["changes"]["stat"], "1 line changed")
+        two_to_zero = history.version(self.store, jid, 2, against=0)
+        self.assertEqual((two_to_zero["against"], two_to_zero["changes"]["stat"]), (0, "2 lines changed"))
+        self.assertEqual(history.version(self.store, jid, 0, against=2)["changes"]["stat"], "2 lines changed")
+        self.assertEqual(history.version(self.store, jid, 1)["against"], 0, "the one before version 1 is version 0")
+        self.assertIsNone(history.version(self.store, jid, 0)["changes"], "the original has nothing before it")
+        self.assertIsNone(history.version(self.store, jid, 2, against=9))
 
     def test_old_job_with_the_model_output(self):
         jid, lines = make_job(self.store, start=False, names={"1": "Mona"},
                               edited=changed(T.from_transcribe_py(MODEL_LINES), 2, "الـ deadline يوم الأربع"))
         self.assertFalse((self.store.dir(jid) / "history").exists())
         versions = history.ensure(self.store, jid)
-        self.assertEqual([(v["n"], v["kind"]) for v in versions], [(1, "model output"), (2, "edit")])
-        v1, v2 = history.version(self.store, jid, 1), history.version(self.store, jid, 2)
-        self.assertEqual((v1["lines"], v1["speaker_names"]), (lines, {}))
-        self.assertEqual(v2["version"]["summary"],
+        self.assertEqual([(v["n"], v["kind"]) for v in versions], [(0, "model output"), (1, "edit")])
+        v0, v1 = history.version(self.store, jid, 0), history.version(self.store, jid, 1)
+        self.assertEqual((v0["lines"], v0["speaker_names"]), (lines, {}))
+        self.assertEqual(v1["version"]["summary"],
                          "Changes made before the history began: 1 line changed, Speaker 1 renamed to Mona")
-        self.assertEqual((v2["lines"], v2["speaker_names"]), (self.store.transcript(jid)["lines"], {"1": "Mona"}))
-        self.assertEqual(self.numbers(jid), [1, 2], "started once")
+        self.assertEqual((v1["lines"], v1["speaker_names"]), (self.store.transcript(jid)["lines"], {"1": "Mona"}))
+        self.assertEqual(self.numbers(jid), [0, 1], "started once")
 
     def test_old_hosted_job_with_the_model_output(self):
         jid, lines = make_job(self.store, kind="hosted", start=False,
                               edited=changed(engines.elevenlabs_lines(HOSTED_REPLY), 1, "Yes, go on"))
-        self.assertEqual(history.version(self.store, jid, 1)["lines"], lines)
-        self.assertEqual(history.version(self.store, jid, 1)["version"]["kind"], "model output")
-        self.assertEqual(history.version(self.store, jid, 2)["lines"][1]["text"], "Yes, go on")
+        self.assertEqual(history.version(self.store, jid, 0)["lines"], lines)
+        self.assertEqual(history.version(self.store, jid, 0)["version"]["kind"], "model output")
+        self.assertEqual(history.version(self.store, jid, 1)["lines"][1]["text"], "Yes, go on")
 
     def test_old_job_never_edited(self):
         jid, lines = make_job(self.store, start=False, names={"2": "Ali"})
-        v1, v2 = history.version(self.store, jid, 1), history.version(self.store, jid, 2)
-        self.assertEqual((v1["lines"], v1["speaker_names"]), (lines, {}))
-        self.assertEqual(v2["version"]["summary"], "Changes made before the history began: Speaker 2 renamed to Ali")
+        v0, v1 = history.version(self.store, jid, 0), history.version(self.store, jid, 1)
+        self.assertEqual((v0["lines"], v0["speaker_names"]), (lines, {}))
+        self.assertEqual(v1["version"]["summary"], "Changes made before the history began: Speaker 2 renamed to Ali")
 
     def test_old_job_without_the_model_output(self):
         edited = changed(T.from_transcribe_py(MODEL_LINES), 0, "تمام")
@@ -266,14 +268,14 @@ class HistoryInStore(unittest.TestCase):
         self.assertEqual(len(versions), 1)
         self.assertEqual(versions[0]["kind"], "edit")
         self.assertIn("original output was not kept", versions[0]["summary"])
-        self.assertEqual(history.version(self.store, jid, 1)["lines"], edited)
+        self.assertEqual((versions[0]["n"], history.version(self.store, jid, 0)["lines"]), (0, edited))
 
     def test_changes_made_outside_the_app_are_kept(self):
         jid, lines = make_job(self.store)
         self.store.save_transcript(jid, {"lines": lines[1:], "edited": True, "model": "whisper-medium"})
         versions = history.ensure(self.store, jid)
         self.assertEqual(versions[-1]["summary"], "Changes made outside the history: 1 line removed")
-        self.assertEqual(history.version(self.store, jid, 2)["lines"], lines[1:])
+        self.assertEqual(history.version(self.store, jid, 1)["lines"], lines[1:])
 
     def test_a_running_job_has_no_history_yet(self):
         jid, _ = make_job(self.store, status="running", start=False)
@@ -291,7 +293,7 @@ class HistoryInStore(unittest.TestCase):
         self.assertEqual([v["kind"] for v in versions], ["model output", "edit"])
         aside = list(self.store.dir(jid).glob("history-unreadable-*"))
         self.assertEqual(len(aside), 1)
-        self.assertTrue((aside[0] / "v0002.json").exists(), "nothing is deleted")
+        self.assertTrue((aside[0] / "v0001.json").exists(), "nothing is deleted")
 
     def test_line_differences(self):
         old = T.from_transcribe_py(MODEL_LINES)
@@ -335,61 +337,65 @@ class HistoryApi(unittest.TestCase):
     def test_routes(self):
         jid, lines = make_job(self.app.store)
         base = f"/api/jobs/{jid}"
-        self.assertEqual(self.call("GET", base)[1]["version"], 1)
+        self.assertEqual(self.call("GET", base)[1]["version"], 0, "the model's output is version 0")
         fixed = changed(lines, 3, "I'll update the Jira board today.")
         status, r, _ = self.call("PATCH", base, {"lines": fixed, "message": "Fixed the Jira line"})
-        self.assertEqual((status, r["version"], r["lines"][3]["text"]), (200, 2, "I'll update the Jira board today."))
+        self.assertEqual((status, r["version"], r["lines"][3]["text"]), (200, 1, "I'll update the Jira board today."))
         versions = self.call("GET", f"{base}/versions")[1]["versions"]
         self.assertEqual([(v["n"], v["kind"], v["message"]) for v in versions],
-                         [(1, "model output", ""), (2, "edit", "Fixed the Jira line")])
-        v2 = self.call("GET", f"{base}/versions/2")[1]
-        self.assertEqual([row["op"] for row in v2["changes"]["lines"]], ["same", "same", "same", "changed"])
-        self.assertEqual(v2["changes"]["lines"][3]["words"][-1], ["+", "board today."])
-        self.assertIsNone(self.call("GET", f"{base}/versions/1")[1]["changes"])
+                         [(0, "model output", ""), (1, "edit", "Fixed the Jira line")])
+        v1 = self.call("GET", f"{base}/versions/1")[1]
+        self.assertEqual([row["op"] for row in v1["changes"]["lines"]], ["same", "same", "same", "changed"])
+        self.assertEqual((v1["against"], v1["changes"]["lines"][3]["words"][-1]), (0, ["+", "board today."]))
+        self.assertIsNone(self.call("GET", f"{base}/versions/0")[1]["changes"])
         self.assertEqual(self.call("GET", f"{base}/versions/9")[0], 404)
-        status, r, _ = self.call("PATCH", f"{base}/versions/2", {"message": "Fixed one line"})
+        status, r, _ = self.call("PATCH", f"{base}/versions/1", {"message": "Fixed one line"})
         self.assertEqual(r["versions"][1]["message"], "Fixed one line")
         self.assertEqual(self.call("PATCH", f"{base}/versions/9", {"message": "x"})[0], 404)
 
-        self.assertEqual(self.call("PATCH", base, {"speaker_names": {"1": "Mona"}})[1]["version"], 3)
+        self.assertEqual(self.call("PATCH", base, {"speaker_names": {"1": "Mona"}})[1]["version"], 2)
         r = self.call("PATCH", base, {"merge": {"from": "3", "into": "1"}})[1]  # right after the rename: the same version
-        self.assertEqual((r["version"], {x["speaker"] for x in r["lines"]}), (3, {"1", "2"}))
+        self.assertEqual((r["version"], {x["speaker"] for x in r["lines"]}), (2, {"1", "2"}))
         r = self.call("PATCH", base, {"title": "Sprint planning", "message": "A clearer title"})[1]
-        self.assertEqual(r["version"], 4)
+        self.assertEqual(r["version"], 3)
         versions = self.call("GET", f"{base}/versions")[1]["versions"]
-        self.assertEqual([(v["kind"], v["summary"]) for v in versions[2:]],
-                         [("merge", "Speaker 3 merged into Mona (1 line), Speaker 1 renamed to Mona"),
-                          ("rename", "Title changed to “Sprint planning”")])
+        self.assertEqual([(v["n"], v["kind"], v["summary"]) for v in versions[2:]],
+                         [(2, "merge", "Speaker 3 merged into Mona (1 line), Speaker 1 renamed to Mona"),
+                          (3, "rename", "Title changed to “Sprint planning”")])
 
         # reviewing edits before they are saved: the diff against the current version, nothing saved
         proposal = {"lines": changed(r["lines"], 0, "تمام"), "speaker_names": {"1": "Mona", "2": "Ali"}}
         status, d, _ = self.call("POST", f"{base}/diff", proposal)
-        self.assertEqual((status, d["version"], d["changes"]["stat"]), (200, 4, "1 line changed, 1 speaker renamed"))
-        self.assertEqual(self.call("GET", base)[1]["version"], 4)
+        self.assertEqual((status, d["version"], d["changes"]["stat"]), (200, 3, "1 line changed, 1 speaker renamed"))
+        self.assertEqual(self.call("GET", base)[1]["version"], 3)
         self.assertEqual(self.call("POST", f"{base}/diff", {"lines": [{"start": "x"}]})[0], 400)
-        # comparing any two versions
-        v4 = self.call("GET", f"{base}/versions/4?against=1")[1]
-        self.assertEqual((v4["against"], v4["changes"]["stat"]), (1, "1 line changed, 1 speaker renamed, title changed"))
-        self.assertEqual(self.call("GET", f"{base}/versions/4?against=77")[0], 404)
-        self.assertEqual(self.call("GET", f"{base}/versions/4?against=x")[0], 404)
+        # comparing any two versions, the original too
+        v3 = self.call("GET", f"{base}/versions/3?against=0")[1]
+        self.assertEqual((v3["against"], v3["changes"]["stat"]), (0, "1 line changed, 1 speaker renamed, title changed"))
+        self.assertEqual(self.call("GET", f"{base}/versions/3?against=77")[0], 404)
+        self.assertEqual(self.call("GET", f"{base}/versions/3?against=x")[0], 404)
 
-        status, r, _ = self.call("POST", f"{base}/versions/1/restore", {"message": "Back to the model's text"})
+        status, r, _ = self.call("POST", f"{base}/versions/0/restore", {"message": "Back to the model's text"})
         self.assertEqual((status, r["version"], r["lines"], r["job"]["speaker_names"], r["job"]["title"]),
-                         (200, 5, lines, {}, "Weekly sync"))
+                         (200, 4, lines, {}, "Weekly sync"))
         self.assertFalse(r["edited"])
         self.assertEqual(self.call("POST", f"{base}/versions/9/restore", {})[0], 404)
 
         job = self.app.store.get(jid)
-        status, txt, headers = self.call("GET", f"{base}/export/txt?version=2&details=0")
+        status, txt, headers = self.call("GET", f"{base}/export/txt?version=1&details=0")
         self.assertEqual(txt.decode(), T.to_txt({**job, "title": "Weekly sync", "speaker_names": {}}, fixed))
-        self.assertIn("Weekly-sync-v2.txt", headers["Content-Disposition"])
+        self.assertIn("Weekly-sync-v1.txt", headers["Content-Disposition"])
+        status, txt, headers = self.call("GET", f"{base}/export/txt?version=0&details=0")
+        self.assertEqual(txt.decode(), T.to_txt(job, lines), "version 0: the model's output")
+        self.assertIn("Weekly-sync-v0.txt", headers["Content-Disposition"])
         self.assertEqual(self.call("GET", f"{base}/export/txt?details=0")[1].decode(), T.to_txt(job, lines),
                          "the current version")
         # the details that come with an export say whether that version was corrected by hand
-        self.assertTrue(self.call("GET", f"{base}/export/json?version=2")[1]["details"]["run"]["edited"])
+        self.assertTrue(self.call("GET", f"{base}/export/json?version=1")[1]["details"]["run"]["edited"])
+        self.assertFalse(self.call("GET", f"{base}/export/json?version=0")[1]["details"]["run"]["edited"])
         self.assertFalse(self.call("GET", f"{base}/export/json")[1]["details"]["run"]["edited"])
-        self.assertTrue(self.call("GET", f"{base}/export/md?version=4")[1].decode().startswith("# Sprint planning"))
-        data = self.call("GET", f"{base}/export/json?version=3")[1]  # (parsed: it is JSON)
+        self.assertTrue(self.call("GET", f"{base}/export/md?version=3")[1].decode().startswith("# Sprint planning"))
+        data = self.call("GET", f"{base}/export/json?version=2")[1]  # (parsed: it is JSON)
         self.assertEqual(data["speakers"], {"1": "Mona", "2": "Speaker 2"})
         self.assertEqual(self.call("GET", f"{base}/export/txt?version=99")[0], 404)
         self.assertEqual(self.call("GET", f"{base}/export/txt?version=abc")[0], 404)
@@ -411,11 +417,11 @@ class HistoryApi(unittest.TestCase):
             [t.join() for t in threads]
             self.assertEqual([r[0] for r in replies], [200, 200])
         versions = self.call("GET", f"{base}/versions")[1]["versions"]
-        self.assertEqual([v["n"] for v in versions], list(range(1, 10)))
-        self.assertEqual([v["parent"] for v in versions], [None] + list(range(1, 9)))
+        self.assertEqual([v["n"] for v in versions], list(range(0, 9)))
+        self.assertEqual([v["parent"] for v in versions], [None] + list(range(0, 8)))
         self.assertEqual({v["message"] for v in versions[1:]}, {f"{k} {i}" for k in ("edit", "title") for i in range(4)})
         now_ = self.call("GET", base)[1]
-        latest = self.call("GET", f"{base}/versions/9")[1]
+        latest = self.call("GET", f"{base}/versions/8")[1]
         self.assertEqual((latest["lines"], latest["title"]), (now_["lines"], now_["job"]["title"]))
         self.assertEqual((now_["job"]["title"], now_["lines"][1]["text"]), ("Sprint planning 3", "Yes, let's start (3)."))
 
@@ -438,8 +444,8 @@ class HistoryApi(unittest.TestCase):
                 time.sleep(0.1)
         self.assertEqual([j["status"] for j in self.call("GET", "/api/jobs")[1]["jobs"] if j["id"] == job["id"]], ["done"])
         versions = json.loads(index.read_text(encoding="utf-8"))["versions"]
-        self.assertEqual([(v["n"], v["kind"]) for v in versions], [(1, "model output")])
-        self.assertEqual(self.call("GET", f"/api/jobs/{job['id']}/versions/1")[1]["lines"],
+        self.assertEqual([(v["n"], v["kind"]) for v in versions], [(0, "model output")])
+        self.assertEqual(self.call("GET", f"/api/jobs/{job['id']}/versions/0")[1]["lines"],
                          engines.elevenlabs_lines(HOSTED_REPLY))
 
 
@@ -471,37 +477,41 @@ class EditsAreSaved(unittest.TestCase):
         server, app = self.start()
         jid, model_lines = make_job(app.store)
         base, folder = f"/api/jobs/{jid}", self.tmp / "data" / "jobs" / jid
+        self.assertEqual(self.call("GET", base)[1]["version"], 0, "the model's output is version 0")
         fixed = changed(model_lines, 2, "الـ deadline يوم الأربع")
         merged = [{**x, "speaker": "1" if x["speaker"] == "3" else x["speaker"]} for x in fixed]
-        steps = [("PATCH", base, {"lines": fixed, "message": "Fixed the deadline"}),
-                 ("PATCH", base, {"speaker_names": {"1": "Mona"}}),
+        self.assertEqual(self.call("PATCH", base, {"lines": fixed, "message": "Fixed the deadline"})[1]["version"], 1,
+                         "the first saved edit is version 1")
+        steps = [("PATCH", base, {"speaker_names": {"1": "Mona"}}),
                  ("PATCH", base, {"speaker_names": {"1": "Mona", "2": "Ali"}}),  # quick changes close together:
                  ("PATCH", base, {"merge": {"from": "3", "into": "1"}}),           # one version with the rename
                  ("PATCH", base, {"title": "Sprint planning", "message": "New title"}),
                  ("PATCH", base, {"lines": changed(merged, 0, "تمام، نبدأ"), "message": ""}),
-                 ("POST", f"{base}/versions/2/restore", {"message": "Back to the fixed text"}),
-                 ("PATCH", f"{base}/versions/1", {"message": "Straight from the model"})]
+                 ("POST", f"{base}/versions/1/restore", {"message": "Back to the fixed text"}),
+                 ("PATCH", f"{base}/versions/0", {"message": "Straight from the model"})]
         for method, path, body in steps:
             self.assertEqual(self.call(method, path, body)[0], 200, (method, path, body))
         before = self.call("GET", base)[1]
         versions = self.call("GET", f"{base}/versions")[1]["versions"]
         exports = {fmt: self.call("GET", f"{base}/export/{fmt}")[1] for fmt in T.EXPORTS}
-        self.assertEqual(before["version"], 6)
-        self.assertEqual([(v["n"], v["kind"], v["message"]) for v in versions],
-                         [(1, "model output", "Straight from the model"), (2, "edit", "Fixed the deadline"),
-                          (3, "merge", ""), (4, "rename", "New title"), (5, "edit", ""),
-                          (6, "restore", "Back to the fixed text")])
+        numbered = [(0, "model output", "Straight from the model"), (1, "edit", "Fixed the deadline"),
+                    (2, "merge", ""), (3, "rename", "New title"), (4, "edit", ""), (5, "restore", "Back to the fixed text")]
+        self.assertEqual(before["version"], 5)
+        self.assertEqual([(v["n"], v["kind"], v["message"]) for v in versions], numbered)
+        self.assertEqual([v["parent"] for v in versions], [None, 0, 1, 2, 3, 4])
 
         # on disk: the index, one snapshot per version, and the current version where the app reads it
         index = json.loads((folder / "history" / "index.json").read_text(encoding="utf-8"))
         self.assertEqual(index["versions"], versions)
+        self.assertEqual(sorted(p.name for p in (folder / "history").glob("v*.json")),
+                         [f"v{n:04d}.json" for n in range(6)])
         snapshots = {v["n"]: json.loads((folder / "history" / f"v{v['n']:04d}.json").read_text(encoding="utf-8"))
                      for v in versions}
-        self.assertEqual(snapshots[1], {"title": "Weekly sync", "speaker_names": {}, "lines": model_lines})
-        self.assertEqual(snapshots[6], snapshots[2])
-        self.assertEqual(snapshots[6]["lines"], fixed)
-        self.assertEqual((snapshots[3]["speaker_names"], snapshots[3]["lines"]), ({"1": "Mona", "2": "Ali"}, merged))
-        self.assertEqual(snapshots[5]["lines"][0]["text"], "تمام، نبدأ")
+        self.assertEqual(snapshots[0], {"title": "Weekly sync", "speaker_names": {}, "lines": model_lines})
+        self.assertEqual(snapshots[5], snapshots[1])
+        self.assertEqual(snapshots[5]["lines"], fixed)
+        self.assertEqual((snapshots[2]["speaker_names"], snapshots[2]["lines"]), ({"1": "Mona", "2": "Ali"}, merged))
+        self.assertEqual(snapshots[4]["lines"][0]["text"], "تمام، نبدأ")
         self.assertEqual(json.loads((folder / "transcript.json").read_text(encoding="utf-8"))["lines"], fixed)
         job_file = json.loads((folder / "job.json").read_text(encoding="utf-8"))
         self.assertEqual((job_file["title"], job_file["speaker_names"]), ("Weekly sync", {}))
@@ -513,21 +523,25 @@ class EditsAreSaved(unittest.TestCase):
             self.assertEqual({k: after[k] for k in ("lines", "edited", "version")},
                              {k: before[k] for k in ("lines", "edited", "version")})
             self.assertEqual((after["job"]["title"], after["job"]["speaker_names"]), ("Weekly sync", {}))
-            self.assertEqual(self.call("GET", f"{base}/versions")[1]["versions"], versions)
-            original = self.call("GET", f"{base}/versions/1")[1]
+            versions_after = self.call("GET", f"{base}/versions")[1]["versions"]
+            self.assertEqual(versions_after, versions)
+            self.assertEqual([(v["n"], v["kind"], v["message"]) for v in versions_after], numbered,
+                             "still version 0 for the original and 1 for the first edit")
+            original = self.call("GET", f"{base}/versions/0")[1]
             self.assertEqual((original["lines"], original["speaker_names"], original["version"]["kind"]),
                              (T.from_transcribe_py(MODEL_LINES), {}, "model output"))
+            self.assertEqual(self.call("GET", f"{base}/versions/1")[1]["against"], 0)
             for fmt, body in exports.items():
                 self.assertEqual(self.call("GET", f"{base}/export/{fmt}")[1], body, fmt)
-                self.assertEqual(self.call("GET", f"{base}/export/{fmt}?version=6")[1], body, fmt)
-            restored, source = self.call("GET", f"{base}/versions/6")[1], self.call("GET", f"{base}/versions/2")[1]
+                self.assertEqual(self.call("GET", f"{base}/export/{fmt}?version=5")[1], body, fmt)
+            restored, source = self.call("GET", f"{base}/versions/5")[1], self.call("GET", f"{base}/versions/1")[1]
             self.assertEqual({k: restored[k] for k in ("title", "speaker_names", "lines")},
                              {k: source[k] for k in ("title", "speaker_names", "lines")})
-            v3 = self.call("GET", f"{base}/versions/3")[1]
-            self.assertEqual({x["speaker"] for x in v3["lines"]}, {"1", "2"})
-            self.assertEqual(v3["speaker_names"], {"1": "Mona", "2": "Ali"})
-            r = self.call("POST", f"{base}/versions/4/restore", {})[1]  # and it goes on after the restart
-            self.assertEqual((r["version"], r["job"]["title"]), (7, "Sprint planning"))
+            v2 = self.call("GET", f"{base}/versions/2")[1]
+            self.assertEqual({x["speaker"] for x in v2["lines"]}, {"1", "2"})
+            self.assertEqual(v2["speaker_names"], {"1": "Mona", "2": "Ali"})
+            r = self.call("POST", f"{base}/versions/3/restore", {})[1]  # and it goes on after the restart
+            self.assertEqual((r["version"], r["job"]["title"]), (6, "Sprint planning"))
         finally:
             self.stop(server, app)
 

@@ -649,6 +649,8 @@ label.set-row { cursor: pointer; }
 .ver-against { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--muted); }
 .ver-against select { font-size: 13px; padding: 3px 26px 3px 8px; }
 .diff-stat { margin-top: 12px; font-weight: 620; }
+.diff-base { margin: 0; }
+.diff-base + .diff-stat { margin-top: 4px; }
 .diff-facts { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
 .diff-only { margin-top: 10px; }
 .diff { margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }

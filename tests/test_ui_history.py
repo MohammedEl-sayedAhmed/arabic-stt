@@ -45,7 +45,7 @@ class History(UiTestCase):
 
     def test_an_edit_session_is_reviewed_as_a_diff_and_saved_as_one_version(self):
         self.job_page(SESSION)
-        self.assertEqual(self.page.inner_text("#versionPill"), "v1")
+        self.assertEqual(self.page.inner_text("#versionPill"), "v0", "the model's output is version 0")
         self.page.click("#editBtn")
         self.edit_line(0, "order ال promo code عشان أعمل checkout بسرعة")
         self.edit_line(4, "Let's start the sprint review now.")
@@ -58,6 +58,7 @@ class History(UiTestCase):
 
         self.page.click("#editBtn")  # Done editing: the review comes first
         review = self.page.wait_for_selector("#review[open] .diff")
+        self.assertEqual(self.page.inner_text("#review .diff-base"), "Compared with version 0, the current one")
         self.assertEqual(self.page.inner_text("#review .diff-stat"), "3 lines changed, 1 speaker renamed")
         self.assertEqual(self.page.inner_text("#review .diff-facts"), "Speaker 2 → Sara")
         removed = self.page.eval_on_selector_all("#review .drow.d-del del", "els => els.map(e => e.innerText)")
@@ -72,16 +73,16 @@ class History(UiTestCase):
 
         self.page.fill("#reviewMsg", "Checked against the recording")
         self.page.press("#reviewMsg", "Enter")  # Enter saves
-        self.page.wait_for_selector(".toast >> text=Saved as version 2")
-        self.assertEqual(self.page.inner_text("#versionPill"), "v2")
+        self.page.wait_for_selector(".toast >> text=Saved as version 1")
+        self.assertEqual(self.page.inner_text("#versionPill"), "v1", "the first saved edit is version 1")
         self.assertFalse(self.page.is_visible(".editbar"))
         v = self.versions(SESSION)[-1]
         self.assertEqual((v["n"], v["kind"], v["message"], v["summary"]),
-                         (2, "edit", "Checked against the recording", "3 lines changed, Speaker 2 renamed to Sara"))
+                         (1, "edit", "Checked against the recording", "3 lines changed, Speaker 2 renamed to Sara"))
 
         self.page.reload()
         self.page.wait_for_selector("#transcript .line .text")
-        self.assertEqual(self.page.inner_text("#versionPill"), "v2")
+        self.assertEqual(self.page.inner_text("#versionPill"), "v1")
         self.assertEqual(self.texts()[0], "order ال promo code عشان أعمل checkout بسرعة")
         self.assertEqual(self.texts()[4], "Let's start the sprint review now.")
         self.assertEqual(self.page.input_value("input[data-name='2']"), "Sara")
@@ -99,8 +100,8 @@ class History(UiTestCase):
         self.page.wait_for_selector("#review[open] .diff")
         self.assertEqual(self.page.input_value("#reviewMsg"), "")
         self.page.click("#reviewForm button[type='submit']")
-        self.page.wait_for_selector(".toast >> text=Saved as version 2")
-        self.assertEqual([(v["n"], v["message"]) for v in self.versions(EMPTY)], [(1, ""), (2, "")])
+        self.page.wait_for_selector(".toast >> text=Saved as version 1")
+        self.assertEqual([(v["n"], v["message"]) for v in self.versions(EMPTY)], [(0, ""), (1, "")])
 
         self.page.click("#editBtn")  # a session that ends where it began saves nothing
         self.edit_line(2, "We need to finish the whole task tomorrow يعني")
@@ -132,7 +133,7 @@ class History(UiTestCase):
         self.job_page(QUICK)
         self.page.fill("input[data-name='1']", "Mona")
         self.page.press("input[data-name='1']", "Enter")
-        self.page.wait_for_selector("#versionPill >> text=v2")
+        self.page.wait_for_selector("#versionPill >> text=v1")
         self.page.click("[data-menu='merge-2']")
         self.page.once("dialog", lambda d: d.accept())
         self.page.click("[data-merge-from='2'][data-merge-into='1']")
@@ -142,17 +143,17 @@ class History(UiTestCase):
         self.page.keyboard.type("Planning, week 40")
         self.page.keyboard.press("Enter")
         self.page.wait_for_function("() => S.job.title === 'Planning, week 40'")
-        self.assertEqual(self.page.inner_text("#versionPill"), "v2")
+        self.assertEqual(self.page.inner_text("#versionPill"), "v1")
         v = self.versions(QUICK)[-1]
         self.assertEqual((v["n"], v["kind"], v["summary"]),
-                         (2, "merge", "Speaker 2 merged into Mona (3 lines), Speaker 1 renamed to Mona, "
+                         (1, "merge", "Speaker 2 merged into Mona (3 lines), Speaker 1 renamed to Mona, "
                                       "title changed to “Planning, week 40”"))
 
         self.page.click("#historyBtn")  # a message can be added afterwards
-        self.page.click("#history [data-ver-msg='2']")
-        self.page.fill("#history [data-ver-form='2'] input", "Names from the meeting invite")
-        self.page.press("#history [data-ver-form='2'] input", "Enter")
-        self.page.wait_for_selector("#history .ver[data-n='2'] .ver-msg >> text=Names from the meeting invite")
+        self.page.click("#history [data-ver-msg='1']")
+        self.page.fill("#history [data-ver-form='1'] input", "Names from the meeting invite")
+        self.page.press("#history [data-ver-form='1'] input", "Enter")
+        self.page.wait_for_selector("#history .ver[data-n='1'] .ver-msg >> text=Names from the meeting invite")
         self.assertEqual(self.versions(QUICK)[-1]["message"], "Names from the meeting invite")
 
     def test_history_shows_the_changes_compares_versions_and_restores_the_original(self):
@@ -162,33 +163,33 @@ class History(UiTestCase):
                                                   "message": "First pass"})["status"], 200)
         second = changed(0, "order ال discount code بسرعة")
         second[4] = {**second[4], "text": "Let's start the sprint review now."}
-        self.assertEqual(self.api("PATCH", base, {"lines": second, "message": ""})["json"]["version"], 3)
+        self.assertEqual(self.api("PATCH", base, {"lines": second, "message": ""})["json"]["version"], 2)
         self.job_page(BACK)
-        self.page.click("#versionPill")  # the "v3" next to the title opens the history too
+        self.page.click("#versionPill")  # the "v2" next to the title opens the history too
         self.page.wait_for_selector("#history[open] .ver")
         rows = self.page.eval_on_selector_all("#history .ver", """els => els.map(e => [e.querySelector('.ver-n').innerText,
             [...e.querySelectorAll('.pill')].map(p => p.innerText).join(' '), e.querySelector('.ver-msg')?.innerText || ''])""")
-        self.assertEqual(rows, [["v3", "Edit Current", ""], ["v2", "Edit", "First pass"], ["v1", "Original", ""]])
-        self.assertFalse(self.page.is_visible("#history [data-ver-restore='3']"), "no restoring the current one")
+        self.assertEqual(rows, [["v2", "Edit Current", ""], ["v1", "Edit", "First pass"], ["v0", "Original", ""]])
+        self.assertFalse(self.page.is_visible("#history [data-ver-restore='2']"), "no restoring the current one")
 
-        self.page.click("#history [data-ver-view='3']")
+        self.page.click("#history [data-ver-view='2']")
         self.page.wait_for_selector("#history .diff")
         self.assertEqual(self.page.inner_text("#history .diff-stat"), "1 line changed")
         self.assertEqual(self.page.inner_text("#history .drow.d-del del"), "planning")
-        self.page.select_option("#verAgainst", "1")  # compare with any other version
+        self.page.select_option("#verAgainst", "0")  # compare with any other version, the original too
         self.page.wait_for_selector("#history .diff-stat >> text=2 lines changed")
         self.page.click("#verBack")
         self.page.once("dialog", lambda d: d.accept())
-        self.page.click("#history [data-ver-restore='1']")
-        self.page.wait_for_selector(".toast >> text=Version 1 restored as version 4")
-        self.assertEqual(self.page.inner_text("#versionPill"), "v4")
+        self.page.click("#history [data-ver-restore='0']")
+        self.page.wait_for_selector(".toast >> text=Version 0 restored as version 3")
+        self.assertEqual(self.page.inner_text("#versionPill"), "v3")
         self.assertEqual(self.texts(), [x["text"] for x in LINES])
 
         self.page.reload()
         self.page.wait_for_selector("#transcript .line .text")
-        self.assertEqual((self.page.inner_text("#versionPill"), self.texts()), ("v4", [x["text"] for x in LINES]))
+        self.assertEqual((self.page.inner_text("#versionPill"), self.texts()), ("v3", [x["text"] for x in LINES]))
         v = self.versions(BACK)[-1]
-        self.assertEqual((v["n"], v["kind"], v["restored_from"]), (4, "restore", 1))
+        self.assertEqual((v["n"], v["kind"], v["restored_from"]), (3, "restore", 0))
 
     def test_exports_and_copy_of_a_version(self):
         self.page.add_init_script(SAVE_PICKER)
@@ -197,16 +198,18 @@ class History(UiTestCase):
         self.api("PATCH", f"/api/jobs/{EXPORT}", {"lines": changed(1, "the project ده محتاج وقت"), "message": "Shorter"})
         self.job_page(EXPORT)
         self.page.click("#historyBtn")
-        self.page.click("#history [data-menu='verExport1']")
-        self.page.click("#verExport1 a[data-fmt='txt']")
+        self.page.click("#history [data-menu='verExport0']")
+        self.page.click("#verExport0 a[data-fmt='txt']")
         saved = self.page.wait_for_function("() => window.__saved").json_value()
-        self.assertEqual(saved["name"], "Exports-v1.txt")
-        self.assertIn(LINES[1]["text"], saved["text"], "version 1 as the model wrote it")
+        self.assertEqual(saved["name"], "Exports-v0.txt")
+        self.assertIn(LINES[1]["text"], saved["text"], "version 0 as the model wrote it")
         self.assertNotIn("محتاج وقت", saved["text"])
 
-        self.page.click("#history [data-ver-view='1']")
+        self.page.click("#history [data-ver-view='0']")
+        self.assertEqual(self.page.inner_text("#history .ver-title"), "Version 0")
+        self.assertEqual(self.page.inner_text("#history .ver-view-head + .ver-head .pill"), "Original")
         self.page.click("#verCopy")
-        self.page.wait_for_selector(".toast >> text=Version 1 copied")
+        self.page.wait_for_selector(".toast >> text=Version 0 copied")
         copied = self.page.evaluate("() => navigator.clipboard.readText()")
         self.assertIn(LINES[1]["text"], copied)
         self.assertNotIn("Recording:", copied, "the text only, as Copy text")

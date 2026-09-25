@@ -269,7 +269,7 @@ class Runner:
                               seconds=round(took, 1), rtf=round(took / max(1e-6, job.get("audio_s") or 1), 3),
                               **result.get("meta", {}))
             from . import history  # imported here because it uses this module's helpers
-            history.current(self.store, jid, self.cfg)  # starts the history: version 1 is the model's output
+            history.current(self.store, jid, self.cfg)  # starts the history: version 0 is the model's output
         except engines.Cancelled:
             self.store.update(jid, status="cancelled", stage=None, finished=now())
         except Exception as e:

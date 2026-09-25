@@ -59,10 +59,10 @@ left even when it begins with an English word.
 
 ## Version history
 
-Every transcript keeps its versions, as version control does. Version 1 is what the model wrote and
-never changes. Each saved change after that is a new version, and *History* (or the `v3` next to the
-title) lists them, newest first, with the time, the kind of change, your message if you gave one,
-and an automatic summary such as "3 lines changed, Speaker 1 renamed to Mona".
+Every transcript keeps its versions, as version control does. Version 0 is what the model wrote and
+never changes. Each saved change after that is a new version (1, 2, and so on), and *History* (or the
+`v3` next to the title) lists them, newest first, with the time, the kind of change, your message if
+you gave one, and an automatic summary such as "3 lines changed, Speaker 1 renamed to Mona".
 
 - **Edit mode.** Everything done between *Edit* and *Done editing* (the text of lines, a line's
   speaker, names, merges, the title) becomes one version. Before it is saved, *Review your changes*
@@ -77,9 +77,9 @@ and an automatic summary such as "3 lines changed, Speaker 1 renamed to Mona".
   **Export** and **Copy text** there give that version; the rest of the app uses the newest one. A
   message can be added to any version, or changed, later.
 
-A transcription made before the history existed gets one the first time it is opened. Version 1 is
+A transcription made before the history existed gets one the first time it is opened. Version 0 is
 rebuilt from the model's own output (`engine/` for a local model, `hosted.json` for a hosted one)
-and version 2 holds the edits made until then. If the model's output is gone, version 1 says so and
+and version 1 holds the edits made until then. If the model's output is gone, version 0 says so and
 starts from the transcript as it was. Changes made to the files outside the app are saved as a
 version of their own the next time the transcript is opened.
 

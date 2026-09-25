@@ -612,7 +612,7 @@ function renderJob() {
   <div class="job-head">
     <div class="title-row">
       <h1 class="job-title" id="jobTitle" contenteditable="plaintext-only" spellcheck="false" dir="${mixDir(j.title || "Untitled")}" data-mixdir title="Click to rename">${esc(j.title || "Untitled")}</h1>
-      ${S.version ? `<button class="pill accent ver-pill" id="versionPill" title="The current version. Show the history">v${S.version}</button>` : ""}
+      ${S.version != null ? `<button class="pill accent ver-pill" id="versionPill" title="The current version. Show the history">v${S.version}</button>` : ""}
     </div>
     <div class="meta">${meta}</div>
     <div class="actions">
@@ -620,7 +620,7 @@ function renderJob() {
       <button class="btn" id="copyBtn" ${hasLines ? "" : "disabled"}>${ICON.copy} Copy text</button>
       <div class="menu-wrap"><button class="btn" data-menu="rerunMenu" ${S.hasAudio ? "" : "disabled"}>${ICON.redo} Run again with ${ICON.chevron}</button><div class="menu" id="rerunMenu">${rerunMenu || '<button disabled>No other model is ready</button>'}</div></div>
       <button class="btn${S.editing ? " btn-primary" : ""}" id="editBtn" ${hasLines && !active ? "" : "disabled"}>${ICON.edit} ${S.editing ? "Done editing" : "Edit"}</button>
-      <button class="btn" id="historyBtn" ${S.version ? "" : "disabled"}>${HISTORY_ICON} History</button>
+      <button class="btn" id="historyBtn" ${S.version != null ? "" : "disabled"}>${HISTORY_ICON} History</button>
       <span class="spacer"></span>
       <button class="btn btn-ghost btn-danger" id="deleteBtn">${ICON.trash} Delete</button>
     </div>
@@ -980,7 +980,7 @@ async function saveExport(e, a, version) {
   if (d && d.save_export) {
     e.preventDefault();
     closeMenus();
-    try { const saved = await d.save_export(j.id, fmt, version || null); if (saved) toast(`Saved ${saved}`); } catch (err) { toast(err.message, "error"); }
+    try { const saved = await d.save_export(j.id, fmt, version ?? null); if (saved) toast(`Saved ${saved}`); } catch (err) { toast(err.message, "error"); }
     return;
   }
   if (!window.showSaveFilePicker) return;
@@ -989,7 +989,7 @@ async function saveExport(e, a, version) {
   let handle;
   try {  // ask first, while the click still counts as the user's action
     const [description, mime] = EXPORT_TYPES[fmt];
-    handle = await window.showSaveFilePicker({ suggestedName: `${fileSlug(j.title)}${version ? `-v${version}` : ""}.${fmt}`, types: [{ description, accept: { [mime]: [`.${fmt}`] } }] });
+    handle = await window.showSaveFilePicker({ suggestedName: `${fileSlug(j.title)}${version == null ? "" : `-v${version}`}.${fmt}`, types: [{ description, accept: { [mime]: [`.${fmt}`] } }] });
   } catch (err) {
     if (err.name !== "AbortError") location.href = a.href;  // the picker isn't allowed here: download instead
     return;
@@ -1006,10 +1006,10 @@ async function saveExport(e, a, version) {
 
 async function copyText(version) {
   try {
-    const r = await fetch(`/api/jobs/${S.job.id}/export/txt?details=0${version ? `&version=${version}` : ""}`);
+    const r = await fetch(`/api/jobs/${S.job.id}/export/txt?details=0${version == null ? "" : `&version=${version}`}`);
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
     await navigator.clipboard.writeText(await r.text());
-    toast(version ? `Version ${version} copied` : "Transcript copied");
+    toast(version == null ? "Transcript copied" : `Version ${version} copied`);
   } catch (e) { toast("Could not copy: " + e.message, "error"); }
 }
 
@@ -1023,7 +1023,7 @@ const KIND_LABEL = { "model output": "Model output", edit: "Edit", rename: "Rena
 const EDITBAR = `<div class="editbar"><span>Unsaved changes</span><button class="btn btn-sm" id="discardBtn">Discard</button><button class="btn btn-sm btn-primary" id="saveBtn">Review and save</button></div>`;
 const HIST = { jid: null, versions: [], view: null, editing: null };  // the History dialog
 const REVIEW = { draft: null };  // the edits being reviewed before they are saved
-const latestVersion = () => (HIST.versions.length ? HIST.versions[HIST.versions.length - 1].n : 0);
+const latestVersion = () => (HIST.versions.length ? HIST.versions[HIST.versions.length - 1].n : -1);  // (0: the model's output)
 const drafting = () => S.editing && S.draft;
 const diffName = (names, sid) => (sid == null ? "No speaker" : (names || {})[sid] || `Speaker ${sid}`);
 
@@ -1046,7 +1046,7 @@ function bindEditbar() {
 
 function showVersion() {  // the "v3" next to the title, after a change that doesn't redraw the page
   const pill = $("#versionPill");
-  if (pill && S.version) pill.textContent = `v${S.version}`;
+  if (pill && S.version != null) pill.textContent = `v${S.version}`;
 }
 
 // While editing, a new title, names and merges wait for the review with the edited lines.
@@ -1162,7 +1162,7 @@ async function openReview() {
   }
   REVIEW.draft = draft;
   const dlg = reviewDialog();
-  $("#reviewBody").innerHTML = changesHtml(ch, true);
+  $("#reviewBody").innerHTML = `<p class="hint diff-base">Compared with version ${r.version}, the current one</p>${changesHtml(ch, true)}`;
   bindDiff($("#reviewBody"), ch);
   $("#reviewMsg").value = "";
   dlg.showModal();
@@ -1184,7 +1184,7 @@ async function saveReviewed(message) {
 
 // ---- History ------------------------------------------------------------------------------------
 async function openHistory() {
-  if (!S.job || !S.version) return;
+  if (!S.job || S.version == null) return;
   const dlg = diffDialog("history", "History");
   Object.assign(HIST, { jid: S.job.id, view: null, editing: null });
   $("#historyBody").innerHTML = `<p class="hint">Loading…</p>`;
@@ -1238,7 +1238,7 @@ async function viewVersion(n, against) {
 function renderVersionView() {
   const r = HIST.view, v = r.version, ch = r.changes;
   const options = [...HIST.versions].reverse().filter((x) => x.n !== v.n).map((x) => `<option value="${x.n}" ${x.n === r.against ? "selected" : ""}>version ${x.n}${x.n === v.parent ? " (the one before)" : ""}</option>`);
-  if (!v.parent) options.unshift(`<option value="0" ${r.against ? "" : "selected"}>nothing</option>`);
+  if (v.parent == null) options.unshift(`<option value="" ${r.against == null ? "selected" : ""}>nothing</option>`);
   const plain = { lines: r.lines.map((line) => ({ op: "same", line })), names_after: r.speaker_names };
   $("#historyBody").innerHTML = `
     <div class="ver-view-head"><button class="btn btn-sm btn-ghost" id="verBack">← All versions</button><span class="spacer"></span>
@@ -1246,12 +1246,12 @@ function renderVersionView() {
     <div class="ver-head"><b class="ver-title">Version ${v.n}</b>${kindPill(v)}${v.n === latestVersion() ? `<span class="pill ok">Current</span>` : ""}<span class="ver-time">${esc(when(v.time))}</span></div>
     ${v.message ? `<div class="ver-msg" dir="${mixDir(v.message)}">${esc(v.message)}</div>` : ""}
     <div class="ver-sum" dir="${mixDir(v.summary)}">${esc(v.summary || "")}</div>
-    ${options.length > 1 || v.parent ? `<label class="ver-against">Compare with <select id="verAgainst">${options.join("")}</select></label>` : ""}
+    ${options.length > (v.parent == null ? 1 : 0) ? `<label class="ver-against">Compare with <select id="verAgainst">${options.join("")}</select></label>` : ""}
     ${ch ? changesHtml(ch, true) : `<div class="diff">${diffRows(plain, false)}</div>`}`;
   bindHistory();
   if (ch) bindDiff($("#historyBody"), ch);
   const against = $("#verAgainst");
-  if (against) against.onchange = () => viewVersion(v.n, +against.value);
+  if (against) against.onchange = () => viewVersion(v.n, against.value === "" ? null : +against.value);
 }
 
 function fitMenu(id, box) {  // open upwards when the menu would run past the bottom of the dialog

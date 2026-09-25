@@ -129,8 +129,8 @@ class Api:
         data = store.transcript(job_id)
         lines = data["lines"] if data else engines.partial_lines(store.dir(job_id))
         edited = bool(data and data.get("edited"))
-        name = f"{slug(job.get('title'))}{f'-v{int(version)}' if version else ''}.{fmt}"
-        if version:  # a version picked in History
+        name = f"{slug(job.get('title'))}{'' if version is None else f'-v{int(version)}'}.{fmt}"
+        if version is not None:  # a version picked in History (0 is the model's output)
             found = history.at(store, job_id, int(version), self._app.cfg)
             if found is None:
                 return None

@@ -1,14 +1,14 @@
-"""Version history of a transcript, kept like version control: the model's output is version 1 and never
-changes, and every change saved in the app is a new version with an optional message. The edits of one
-session in edit mode are one version, reviewed as a diff before they are saved (preview). Quick changes
-outside edit mode (renaming or merging speakers, the title) are a version each, folded into one when
-they come close together. Going back to an earlier version saves it again as the newest.
+"""Version history of a transcript, kept like version control: the model's output is version 0 and never
+changes, and every change saved in the app is a new version (1, 2, ...) with an optional message. The
+edits of one session in edit mode are one version, reviewed as a diff before they are saved (preview).
+Quick changes outside edit mode (renaming or merging speakers, the title) are a version each, folded
+into one when they come close together. Going back to an earlier version saves it again as the newest.
 
 A job folder's history/ holds index.json, one entry per version ({n, time, kind, message, summary,
-parent}), and one snapshot per version (v0001.json, v0002.json, ...: title, speaker_names, lines). The
+parent}), and one snapshot per version (v0000.json, v0001.json, ...: title, speaker_names, lines). The
 current version is also in transcript.json and job.json as before, so the rest of the app reads those.
-A job that finished before the history existed gets one the first time it is opened: version 1 is the
-model's output if the folder still has it, version 2 the transcript as it was by then.
+A job that finished before the history existed gets one the first time it is opened: version 0 is the
+model's output if the folder still has it, version 1 the transcript as it was by then.
 """
 import difflib
 from datetime import datetime
@@ -30,7 +30,12 @@ def _folder(store, jid):
 
 
 def _snapshot(store, jid, n):
-    return read_json(_folder(store, jid) / f"v{n:04d}.json") if n else None
+    return None if n is None else read_json(_folder(store, jid) / f"v{n:04d}.json")
+
+
+def _original(store, jid, versions):
+    """The model's output (the first version), or None if it wasn't kept."""
+    return _snapshot(store, jid, versions[0]["n"]) if versions and versions[0]["kind"] == "model output" else None
 
 
 def _write(store, jid, versions, entry, state):
@@ -195,9 +200,9 @@ def _add(store, jid, versions, old, new, kind, message="", summary=None, time=No
 
 
 def _start(store, jid, job, state, cfg):
-    """Version 1, the model's output, and version 2 with any changes made before the history began."""
+    """Version 0, the model's output, and version 1 with any changes made before the history began."""
     lines = model_output(store, jid, job, cfg)
-    entry = {"n": 1, "time": job.get("finished") or job.get("created") or now(), "kind": "model output",
+    entry = {"n": 0, "time": job.get("finished") or job.get("created") or now(), "kind": "model output",
              "message": "", "parent": None}
     if lines is None:  # edited before the history began, and the model's own output wasn't kept
         first = state
@@ -254,7 +259,7 @@ def current(store, jid, cfg=None):
 def _apply(store, jid, job, change, versions=None):
     """Write a change to transcript.json and job.json, where the rest of the app reads the transcript."""
     if "lines" in change:
-        first = _snapshot(store, jid, 1) if versions and versions[0]["kind"] == "model output" else None
+        first = _original(store, jid, versions)
         data = store.transcript(jid) or {"model": job["model"]}
         data.update(lines=change["lines"], edited=first is None or change["lines"] != first["lines"])
         store.save_transcript(jid, data)
@@ -345,7 +350,7 @@ def version(store, jid, n, cfg=None, against=None):
         versions, entry, state = _find(store, jid, n, cfg)
         against = entry.get("parent") if entry and against is None else against
         before = _snapshot(store, jid, against) if any(v["n"] == against for v in versions) else None
-        if state is None or (against and before is None):
+        if state is None or (against is not None and before is None):
             return None
     return {"version": entry, **state, "against": against, "changes": compare(before, state) if before else None}
 
@@ -356,7 +361,7 @@ def at(store, jid, n, cfg=None):
     with store.lock:
         versions, _, state = _find(store, jid, n, cfg)
         job = store.get(jid)
-        first = _snapshot(store, jid, 1) if versions and versions[0]["kind"] == "model output" else None
+        first = _original(store, jid, versions)
     if state is None or job is None:
         return None
     return ({**job, "title": state["title"], "speaker_names": state["speaker_names"]}, state["lines"],
