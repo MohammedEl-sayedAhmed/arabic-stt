@@ -37,6 +37,8 @@ Source: "..\dist\Tafrigh\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdi
 
 [Icons]
 Name: "{autoprograms}\Tafrigh"; Filename: "{app}\Tafrigh.exe"
+; the same app in an Edge (or default browser) window, if the built-in window ever misbehaves
+Name: "{autoprograms}\Tafrigh (browser window)"; Filename: "{app}\Tafrigh.exe"; Parameters: "--browser"
 Name: "{autodesktop}\Tafrigh"; Filename: "{app}\Tafrigh.exe"; Tasks: desktopicon
 
 [Run]

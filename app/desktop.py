@@ -6,6 +6,7 @@ The window, in order of preference:
   2. a Chromium-family browser (Edge, Chrome, Chromium, Brave) in app mode: its own window with no
      tabs or address bar, and its own profile
   3. the default browser
+  4. none: the server keeps running and the address is shown (--server asks for this directly)
 Closing the window (1 or 2) quits the app, and so does Settings → Quit.
 
 From source:   .venv/bin/python -m app.desktop        (Windows: .venv\\Scripts\\python -m app.desktop)
@@ -92,11 +93,48 @@ class Api:
         self._window.destroy()
 
 
+def webview2_available():
+    """Windows: whether the Edge WebView2 runtime (and .NET 4.6.2+) is installed. Without it pywebview
+    quietly falls back to the Internet Explorer engine, which can't run this app. Elsewhere: True."""
+    if os.name != "nt":
+        return True
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full") as k:
+            if winreg.QueryValueEx(k, "Release")[0] < 394802:
+                return False
+    except OSError:
+        return False
+    client = r"Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"  # the WebView2 runtime
+    for root, path in ((winreg.HKEY_CURRENT_USER, rf"SOFTWARE\{client}"),
+                       (winreg.HKEY_LOCAL_MACHINE, rf"SOFTWARE\WOW6432Node\{client}"),
+                       (winreg.HKEY_LOCAL_MACHINE, rf"SOFTWARE\{client}")):
+        try:
+            with winreg.OpenKey(root, path) as k:
+                if str(winreg.QueryValueEx(k, "pv")[0]) not in ("", "0.0.0.0"):
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def show_address(url):
+    """No window of any kind could be opened: keep serving and say where (a windowed build has no console)."""
+    text = f"Tafrigh is running at {url}\n\nOpen this address in a web browser. To stop it, use Settings → Quit."
+    print(text, flush=True)
+    if os.name == "nt" and getattr(sys, "frozen", False):
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(None, text, "Tafrigh", 0x40)  # MB_ICONINFORMATION
+
+
 def native_window(url, app, title="Tafrigh"):
     """Show the app in a pywebview window until it is closed. False if no GUI backend is available."""
     try:
         import webview
     except ImportError:
+        return False
+    if not webview2_available():
+        print("no WebView2 runtime; using a browser window", file=sys.stderr)
         return False
     api = Api(app) if app else None
     window = webview.create_window(title, url, js_api=api, width=1280, height=860, min_size=(820, 560),
@@ -145,7 +183,8 @@ def app_mode_browser(url, profile):
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="tafrigh", description="Tafrigh: transcribe recordings with speaker labels.")
     ap.add_argument("--browser", action="store_true", help="use a browser window instead of the native one")
-    ap.add_argument("--no-window", action="store_true", help="only run the server (open the printed address yourself)")
+    ap.add_argument("--no-window", "--server", action="store_true",
+                    help="only run the server (open the printed address in any browser)")
     ap.add_argument("--port", type=int, help="default: [server] port in app/config.toml, or any free port")
     ap.add_argument("--self-test", action="store_true", help="check this installation and exit (see app/selftest.py)")
     ap.add_argument("--window", action="store_true", help="with --self-test: also open and close a window")
@@ -165,8 +204,8 @@ def main(argv=None):
     if running_here(preferred):  # already running (e.g. started twice): just show it
         url = f"http://127.0.0.1:{preferred}/"
         if args.browser or not native_window(url, None):
-            if not app_mode_browser(url, cfg.storage / "browser-profile"):
-                webbrowser.open(url)
+            if not app_mode_browser(url, cfg.storage / "browser-profile") and not webbrowser.open(url):
+                show_address(url)
         return
 
     server, app = make_server(cfg, port=pick_port(preferred))
@@ -193,8 +232,8 @@ def main(argv=None):
             if time.time() - t0 > 5:  # the window was closed by the user
                 return
             # the browser handed the window to an instance that was already running: wait for Quit
-        else:
-            webbrowser.open(url)
+        elif not webbrowser.open(url):
+            show_address(url)
         print(f"Tafrigh is running at {url} (close with Settings → Quit or Ctrl+C)", flush=True)
         app.on_quit = stopped.set
         while not stopped.wait(1):
