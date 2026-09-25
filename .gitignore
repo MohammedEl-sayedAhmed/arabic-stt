@@ -1,0 +1,12 @@
+# Private: the recordings and everything transcribed from them
+audio-test/
+results/poc/
+data/
+
+# Large or machine-specific (see docs/08-environment-changes.md to recreate)
+models/
+tools/
+.venv/
+__pycache__/
+*.part[0-9]
+*.joining
