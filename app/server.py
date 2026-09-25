@@ -100,7 +100,8 @@ class App:
 
     def model_info(self, model, jobs=None):
         ready, reason = self.cfg.availability(model)
-        keys = ("id", "kind", "engine", "title", "tagline", "facts", "service", "key_url", "rtf", "prompt", "hub")
+        keys = ("id", "kind", "engine", "title", "tagline", "facts", "service", "key_url", "rtf", "prompt", "hub",
+                "privacy", "prompt_hint", "speakers_hint")
         items = self.cfg.download_items()
         return {**{k: model.get(k) for k in keys}, "ready": ready, "reason": reason,
                 "speed": self.speed(model, self.store.list() if jobs is None else jobs) if model["kind"] == "local" else None,
