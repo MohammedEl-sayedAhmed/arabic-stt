@@ -62,6 +62,7 @@ def speaker_timeline(argv):
     timeline = speakers.diarize(audio, args.speakers or None, args.threads, args.voiceprint_model)
     print(json.dumps({"centers": [round(float(c), 3) for c in timeline.centers],
                       "labels": [int(s) for s in timeline.labels]}))
+    return 0
 
 
 def convert_whisper(src, dst):
