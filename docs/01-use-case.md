@@ -2,8 +2,7 @@
 
 ## What the MVP must do
 
-- **Input:** recorded tech meetings and phone calls. The test recordings in `audio-test/` are
-  **8 kHz mono 16-bit WAV** — phone-call quality — between 2 and 80 minutes long.
+- **Input:** recorded tech meetings and phone calls, from 2 minutes to several hours long.
 - **Language:** mainly **Egyptian Arabic**, with English tech terms and whole English sentences mixed
   in (Arabic–English *code-switching*). Example (from the public Perle test set):
   `الـ task الجديدة دي محتاجة نعمل integrate مع payment gateway`.
@@ -13,19 +12,28 @@
 - **Privacy rule:** the recordings are private meetings — **no audio is uploaded to any external
   service without explicit permission.** Everything in this project ran on the laptop.
 
-## The recordings
+## The private audio used for testing
 
-The recordings and their transcripts are private and are **not** in the repository.
+None of this audio, and nothing transcribed from it, is in the repository.
 
-| File | Length | Notes |
+**Test calls** (`audio-test/`, 8 kHz mono 16-bit WAV — phone-call quality):
+
+| Recording | Length | Notes |
 |---|---|---|
-| `record1_test_2min.wav` | 2:00 | the main test clip; 2 speakers; technical discussion |
-| `record2.wav` | 16:00 | |
-| `rec3.wav` | 25:42 | |
-| `record1.wav` | 79:37 | byte-identical to `rec4-copy.wav` (same MD5) |
+| rec1 (the 2-minute test clip) | 2:00 | 2 speakers, technical discussion; used for every proof-of-concept run |
+| rec2 | 16:00 | 2 speakers; used for the full-length runs |
+| rec3 | 25:42 | |
+| rec4 | 79:37 | (two byte-identical copies exist in the folder) |
 
-All four are 8 kHz. Speech above 4 kHz is simply not in these files, which makes every model's job
-harder than on normal 16 kHz audio (measured in [results](03-results.md#phone-quality-8-khz)).
+At 8 kHz, speech above 4 kHz is simply not in the file, which makes every model's job harder than on
+normal 16 kHz audio (measured in [results](03-results.md#phone-quality-and-telephone-codec)).
+
+**Meetings with reference transcripts** (a separate, private dataset built for this evaluation, kept
+outside the repository): 6 internal meetings from August–September 2026, 9 h 51 min in total, 2–9
+participants, recorded by ClickUp or a local recorder at 16 kHz. Each comes with the ElevenLabs
+transcript made through the Mojaz app, verified to be verbatim (English kept in Latin script), with
+speakers resolved to real people by hand. This allows scoring **both** transcription and speaker
+labels on real meetings — see [results](03-results.md#your-meetings).
 
 ## The original question (from the handoff)
 

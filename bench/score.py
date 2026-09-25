@@ -40,6 +40,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "results"
+PUBLIC_SETS = ("perle", "arzen", "mixat")  # results of any other set are private and never scored here
 TAIL_S = 0.5  # silence appended to every prepared clip (bench/prepare_data.py)
 
 EVENT_TAGS = re.compile(r"\[(?:HES|LAUGHTER|HUM|NOISE)\]")  # ArzEn's event tags, by name only
@@ -221,6 +222,9 @@ def main():
         if path.stat().st_size == 0:
             continue
         test_set, audio, model, config = parse_name(path)
+        if test_set not in PUBLIC_SETS:
+            print(f"skipping {path.name}: not a public test set", file=sys.stderr)
+            continue
         if test_set not in cache:
             cache[test_set] = references(test_set)
             if cache[test_set] is None:

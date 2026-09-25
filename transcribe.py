@@ -20,7 +20,7 @@ Engines:
   cohere   Cohere Transcribe Arabic (GGUF) run in process by transcribe.cpp
 
 Usage:
-  .venv/bin/python transcribe.py audio-test/record1_test_2min.wav
+  .venv/bin/python transcribe.py path/to/call.wav
   .venv/bin/python transcribe.py meeting.wav --speakers 2
   .venv/bin/python transcribe.py meeting.wav --engine llama --port 8081
 """
@@ -53,7 +53,8 @@ LANGUAGE_NAMES = {"ar": "Arabic", "en": "English"}
 STYLE_PROMPT = "يعني احنا كنا بنتكلم عن ال project بتاعنا و ال deadline و ال meeting اللي جاي مع ال team."
 MODELS = Path(__file__).resolve().parent / "models"
 COHERE_MODEL = str(MODELS / "cohere-transcribe-arabic-07-2026-gguf" / "cohere-transcribe-arabic-07-2026-Q4_K_M.gguf")
-# Best local model on the Perle clips and the test call; falls back to large-v3 if not downloaded.
+# Default: keeps English terms in English best and was the most complete on the test call (Cohere
+# makes fewer errors on Arabic words). Falls back to large-v3 if not downloaded.
 WHISPER_CS = MODELS / "whisper-medium-arabic-codeswitched-ct2"
 DEFAULT_WHISPER = str(WHISPER_CS) if WHISPER_CS.exists() else "large-v3"
 
@@ -250,7 +251,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("audio")
     ap.add_argument("--engine", choices=list(ENGINES), default="whisper")
-    ap.add_argument("--language", default="ar", help="ar, en or auto (default: ar)")
+    ap.add_argument("--language", default="ar", help="ar, en or auto (default: ar; Cohere can't detect, so auto = ar)")
     ap.add_argument("--prompt", help="style/vocabulary hint: Whisper's initial prompt (default for large-v3: "
                                      "an Egyptian code-switched sentence; '' for none) or Qwen3-ASR's context")
     ap.add_argument("--port", type=int, default=8081, help="llama-server port")
@@ -261,7 +262,7 @@ def main():
     ap.add_argument("--speakers", type=int, metavar="N",
                     help="label speakers: the number of speakers, or 0 to estimate it")
     ap.add_argument("--voiceprint-model", default=str(speakers.MODEL),
-                    help="speaker-embedding ONNX model for --speakers (default: WeSpeaker ResNet34)")
+                    help="speaker-embedding ONNX model for --speakers (default: TitaNet-small)")
     ap.add_argument("--out", default=str(Path(__file__).resolve().parent / "results" / "poc"),
                     help="output folder (default: results/poc)")
     ap.add_argument("--threads", type=int, default=10)

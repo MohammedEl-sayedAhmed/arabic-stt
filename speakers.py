@@ -3,8 +3,8 @@
 1. Silero VAD finds the speech.
 2. A 1.5 s window slides over the speech in 0.75 s steps (longer steps on very long
    recordings, so there are at most MAX_WINDOWS windows), and a speaker-embedding model
-   (default WeSpeaker ResNet34, trained on VoxCeleb) turns each window into a voiceprint
-   that captures timbre and pitch, not words.
+   (default NVIDIA TitaNet-small, trained with telephone speech) turns each window into a
+   voiceprint that captures timbre and pitch, not words.
 3. Spectral clustering groups the voiceprints by similarity into N speakers
    (N given, or estimated from the eigengap). The neighbour count is
    auto-tuned per recording (NME-SC, Park et al. 2019), so a few odd windows
@@ -24,7 +24,9 @@ SR = 16000
 WIN_S, HOP_S = 1.5, 0.75
 MAX_WINDOWS = 2000  # longer recordings use a longer step to keep clustering fast
 MAX_HOP_S = 5.0
-MODEL = Path(__file__).resolve().parent / "models" / "diarization" / "wespeaker_en_voxceleb_resnet34_LM.onnx"
+# On six real meeting excerpts TitaNet-small credited 11.7% of words to the wrong speaker, against
+# 25.7% for WeSpeaker ResNet34, and estimated the speaker count right in 5 of 6 (bench/compare_voiceprints.py).
+MODEL = Path(__file__).resolve().parent / "models" / "diarization" / "nemo_en_titanet_small.onnx"
 
 
 class Timeline:
@@ -145,6 +147,11 @@ def cluster_capped(emb, n_speakers=None):
 def diarize(audio, n_speakers=None, threads=4, model=MODEL):
     """Build a Timeline for 16 kHz float32 audio; n_speakers=None estimates the count.
     `model` is any sherpa-onnx speaker-embedding ONNX file (WeSpeaker, TitaNet, CAM++, ...)."""
+    return timeline(*voiceprints(audio, threads, model), n_speakers)
+
+
+def voiceprints(audio, threads=4, model=MODEL):
+    """(windows, voiceprints, speech segments, step): everything the clustering needs."""
     extractor = sherpa_onnx.SpeakerEmbeddingExtractor(
         sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(model), num_threads=threads))
     segments = speech_segments(audio)
@@ -159,7 +166,11 @@ def diarize(audio, n_speakers=None, threads=4, model=MODEL):
         stream.accept_waveform(SR, audio[a:b])
         stream.input_finished()
         embs.append(extractor.compute(stream))
-    embs = np.array(embs).reshape(len(spans), extractor.dim)
+    return spans, np.array(embs).reshape(len(spans), extractor.dim), segments, hop
+
+
+def timeline(spans, embs, segments, hop, n_speakers=None):
+    """Cluster the voiceprints into speakers and smooth the labels into a Timeline."""
     labels = cluster_capped(embs, n_speakers)
     # Majority of each window and its two neighbours, within one speech segment.
     smooth = labels.copy()

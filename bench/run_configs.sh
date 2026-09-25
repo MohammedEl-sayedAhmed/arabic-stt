@@ -4,7 +4,8 @@
 #   whisper (the default fine-tune, or $WHISPER_MODEL), large-v3, cohere, audar, qwen3asr, r2t2
 # and audio is wav16k | phone | g711. Example:
 #   SET=perle bench/run_configs.sh whisper:wav16k:ar cohere:g711:ar
-# Environment: SET (test set, default perle), PROMPT (style hint for every run), MODE (pipeline|clip).
+# Environment: SET (test set, default perle), PROMPT (style hint for every run; unset = as in
+# transcribe.py, i.e. only large-v3 gets the Egyptian hint), MODE (pipeline|clip).
 set -eu
 cd "$(dirname "$0")/.."
 PY=.venv/bin/python

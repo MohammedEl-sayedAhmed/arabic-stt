@@ -1,23 +1,44 @@
 # Private: the recordings and everything transcribed from them
 audio-test/
-results/poc/
 data/
 
-# Private: never commit the Mojaz meetings dataset or anything derived from it
-*mojaz*
-*Mojaz*
-results/meetings*
+# results/ holds only public test-set outputs; everything else there (results/poc/, results/meetings/,
+# runs on private sets) stays local
+results/*
+!results/perle.*
+!results/arzen.*
+!results/mixat.*
+!results/summary.json
 
-# Private or bulky audio/video anywhere in the tree
-*.wav
-*.mp3
-*.m4a
-*.mp4
-*.mkv
-*.webm
-*.flac
-*.ogg
-*.opus
+# Private: never commit the Mojaz meetings dataset or anything derived from it
+*[Mm][Oo][Jj][Aa][Zz]*
+*[Mm][Uu][Jj][Aa][Zz]*
+*.named.txt
+*.elevenlabs.txt
+*.speakers.*
+*.words.json
+*.srt
+*.vtt
+
+# Private or bulky audio/video anywhere in the tree (any letter case)
+*.[Ww][Aa][Vv]
+*.[Mm][Pp]3
+*.[Mm]4[AaBb]
+*.[Mm][Pp]4
+*.[Mm][Kk][VvAa]
+*.[Ww][Ee][Bb][Mm]
+*.[Ff][Ll][Aa][Cc]
+*.[Oo][Gg][Gg]
+*.[Oo][Pp][Uu][Ss]
+*.[Aa][Aa][Cc]
+*.[Aa][Mm][Rr]
+*.3[Gg][Pp]
+*.[Ww][Mm][Aa]
+*.[Aa][Ii][Ff]
+*.[Aa][Ii][Ff][Ff]
+*.[Mm][Oo][Vv]
+*.[Aa][Vv][Ii]
+*.[Cc][Aa][Ff]
 
 # Large or machine-specific (see docs/08-environment-changes.md to recreate)
 models/
@@ -27,4 +48,3 @@ __pycache__/
 *.part
 *.part[0-9]
 *.joining
-*.tmp.wav

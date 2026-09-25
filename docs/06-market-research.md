@@ -17,8 +17,11 @@ An 8-agent research workflow, web only (no audio uploaded, no sign-ups, no API k
 ## Headline findings
 
 - **ElevenLabs Scribe v2** is the only system with *independent* evidence on Egyptian
-  Arabic–English: **13.1% WER vs 45.9% for the next-best** on Perle's benchmark (arXiv 2605.19069),
-  whose public set is ~30% tech/software talk. Diarization and word timestamps built in. Free
+  Arabic–English: **13.1% WER on the Egyptian–English subset of Perle's benchmark** (arXiv
+  2605.19069), against about 45.9% for the next-best (gpt-4o-transcribe, read from the paper's
+  chart); averaged over all four language pairs, 13.2% vs 38.6%. The public set is ~30% tech/software
+  talk. These numbers use the paper's own clips and normalization, so they are **not directly
+  comparable** with this project's local scores. Diarization and word timestamps built in. Free
   allowance unclear (official pages say 4.5 h or ~30 min a month); $0.22/h after. Uses your audio
   for training unless you opt out (Profile → Data use).
 - **Speechmatics** (`ar_en` bilingual pack): **$100 credit, no card** (~250 h), does not train on your
