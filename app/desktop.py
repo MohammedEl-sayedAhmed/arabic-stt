@@ -27,6 +27,7 @@ from pathlib import Path
 
 from . import engines
 from . import transcript as T
+from . import history
 from .config import FROZEN, ROOT, Config
 from .server import make_server, slug
 
@@ -120,14 +121,20 @@ class Api:
         result = self._window.create_file_dialog(self._dialog("OPEN"), allow_multiple=False, file_types=RECORDINGS)
         return str(result[0]) if result else None
 
-    def save_export(self, job_id, fmt):
+    def save_export(self, job_id, fmt, version=None):
         store = self._app.store
         job = store.get(job_id)
         if job is None or fmt not in T.EXPORTS:
             return None
         data = store.transcript(job_id)
         lines = data["lines"] if data else engines.partial_lines(store.dir(job_id))
-        result = self._window.create_file_dialog(self._dialog("SAVE"), save_filename=f"{slug(job.get('title'))}.{fmt}")
+        name = f"{slug(job.get('title'))}{f'-v{int(version)}' if version else ''}.{fmt}"
+        if version:  # a version picked in History
+            found = history.at(store, job_id, int(version), self._app.cfg)
+            if found is None:
+                return None
+            job, lines = found
+        result = self._window.create_file_dialog(self._dialog("SAVE"), save_filename=name)
         path = result[0] if isinstance(result, (list, tuple)) else result
         if not path:
             return None

@@ -20,6 +20,7 @@ from pathlib import Path
 
 from . import __version__, engines
 from . import transcript as T
+from . import history
 from .config import FROZEN, power_profile, set_power_profile
 from .downloads import Downloads
 from .jobs import ACTIVE, Runner, Store, probe_seconds
@@ -342,6 +343,7 @@ class Handler(BaseHTTPRequestHandler):
         out = {"job": job, "lines": data["lines"] if data else engines.partial_lines(folder),
                "edited": bool(data and data.get("edited")), "partial": data is None,
                "has_audio": (folder / "audio.flac").exists()}
+        out["version"] = history.current(self.app.store, jid, self.app.cfg)  # None while it runs
         if job["status"] in ("failed", "interrupted", "cancelled"):
             log = folder / "log.txt"
             out["log"] = log.read_text(encoding="utf-8", errors="replace")[-4000:] if log.exists() else ""
@@ -351,31 +353,51 @@ class Handler(BaseHTTPRequestHandler):
         data = self.app.store.transcript(jid)
         return data["lines"] if data else engines.partial_lines(self.app.store.dir(jid))
 
-    def patch_job(self, _params, jid):
-        job, store = self.job(jid), self.app.store
-        p = self.body_json()
+    def change_from(self, job, p):
+        """What a request asks to change (title, speaker_names, lines, merge: {from, into}), as
+        (change, kind, merge) for history.save."""
+        change, kind, merge = {}, "rename", None
         if "title" in p:
-            store.update(jid, title=str(p["title"]).strip()[:200] or job["title"])
+            change["title"] = str(p["title"]).strip()[:200] or job["title"]
         if "speaker_names" in p:
-            names = {str(k): str(v).strip()[:60] for k, v in (p["speaker_names"] or {}).items()
-                     if str(v).strip() and re.fullmatch(r"\d{1,3}", str(k))}
-            store.update(jid, speaker_names=names)
+            change["speaker_names"] = {str(k): str(v).strip()[:60] for k, v in (p["speaker_names"] or {}).items()
+                                       if str(v).strip() and re.fullmatch(r"\d{1,3}", str(k))}
         if "lines" in p or "merge" in p:
             if job["status"] in ACTIVE:
                 raise ApiError(409, "wait until the transcription has finished")
-            lines = self.lines_of(jid)
+            lines = self.lines_of(job["id"])
             if "lines" in p:
-                lines = clean_lines(p["lines"])
+                lines, kind = clean_lines(p["lines"]), "edit"
             if "merge" in p:
                 src, dst = str(p["merge"].get("from")), str(p["merge"].get("into"))
                 if not (re.fullmatch(r"\d{1,3}", src) and re.fullmatch(r"\d{1,3}", dst)):
                     raise ApiError(400, "speaker ids are numbers")
+                names = change.get("speaker_names", job.get("speaker_names") or {})
+                moved, who = sum(1 for x in lines if x["speaker"] == src), {"speaker_names": names}
+                if "lines" not in p:
+                    kind, merge = "merge", {"from": src, "note": f"{T.speaker_name(who, src)} merged into "
+                                            f"{T.speaker_name(who, dst)} ({moved} line{'' if moved == 1 else 's'})"}
                 lines = [{**x, "speaker": dst if x["speaker"] == src else x["speaker"]} for x in lines]
-                names = dict(store.get(jid).get("speaker_names") or {})
-                names.pop(src, None)
-                store.update(jid, speaker_names=names)
-            store.save_transcript(jid, {"lines": lines, "edited": True, "model": job["model"]})
+                change["speaker_names"] = {k: v for k, v in names.items() if k != src}
+            change["lines"] = lines
+        return change, kind, merge
+
+    def patch_job(self, _params, jid):
+        """A change to the title, speaker names or lines, saved as a new version (app/history.py)."""
+        store = self.app.store
+        p = self.body_json()
+        with store.lock:  # one change at a time, so versions are numbered in the order they are saved
+            change, kind, merge = self.change_from(self.job(jid), p)
+            history.save(store, jid, change, kind, p.get("message"), cfg=self.app.cfg, merge=merge)
         self.get_job({}, jid)
+
+    def diff_job(self, _params, jid):
+        """What a PATCH with the same body would change, without saving it: edits are reviewed first."""
+        change, _, _ = self.change_from(self.job(jid), self.body_json())
+        found = history.preview(self.app.store, jid, change, self.app.cfg)
+        if found is None:
+            raise ApiError(409, "wait until the transcription has finished")
+        self.json(found)
 
     def delete_job(self, _params, jid):
         job = self.job(jid)
@@ -446,18 +468,65 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(chunk)
                 left -= len(chunk)
 
-    def export(self, _params, jid, fmt):
+    def export(self, params, jid, fmt):
         job = self.job(jid)
         if fmt not in T.EXPORTS:
             raise ApiError(404, "unknown format")
         fn, ctype = T.EXPORTS[fmt]
-        body = fn(job, self.lines_of(jid)).encode()
-        name = f"{slug(job.get('title'))}.{fmt}"
+        n = params.get("version")  # a version from the history; the current one by default
+        body = fn(*self.at_version(job, n)).encode()
+        tag = f"-v{n}" if n else ""
+        name = f"{slug(job.get('title'))}{tag}.{fmt}"
         ascii_name = re.sub(r"[^A-Za-z0-9._-]", "", name)
-        if not re.search(r"[A-Za-z0-9]", ascii_name.rsplit(".", 1)[0]):
-            ascii_name = f"transcript.{fmt}"
+        if not re.search(r"[A-Za-z0-9]", ascii_name.rsplit(".", 1)[0].removesuffix(tag)):
+            ascii_name = f"transcript{tag}.{fmt}"
         disposition = f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{urllib.parse.quote(name)}'
         self.reply(200, body, ctype, {"Content-Disposition": disposition})
+
+    def at_version(self, job, n):
+        """The job and its lines as they are now, or as they were at version n."""
+        if not n:
+            return job, self.lines_of(job["id"])
+        found = history.at(self.app.store, job["id"], int(n), self.app.cfg) if re.fullmatch(r"[0-9]{1,6}", n) else None
+        if found is None:
+            raise ApiError(404, "no such version")
+        return found
+
+    # ---- version history (app/history.py) ----------------------------------------------------------
+    def versions(self, _params, jid):
+        self.job(jid)
+        self.json({"versions": history.ensure(self.app.store, jid, self.app.cfg) or []})
+
+    def get_version(self, params, jid, n):
+        """Version n and its differences from the version before, or from ?against=m."""
+        self.job(jid)
+        against = params.get("against")
+        if against is not None and not re.fullmatch(r"[0-9]{1,6}", against):
+            raise ApiError(404, "no such version")
+        found = history.version(self.app.store, jid, int(n), self.app.cfg, None if against is None else int(against))
+        if found is None:
+            raise ApiError(404, "no such version")
+        self.json(found)
+
+    def patch_version(self, _params, jid, n):
+        """{"message": ...} adds, changes or clears the message of version n."""
+        self.job(jid)
+        message = self.body_json().get("message")
+        try:
+            versions = history.set_message(self.app.store, jid, int(n), message, self.app.cfg)
+        except KeyError:
+            raise ApiError(404, "no such version")
+        self.json({"versions": versions})
+
+    def restore_version(self, _params, jid, n):
+        """Version n becomes the current one again, saved as a new version (optional {"message": ...})."""
+        self.job(jid)
+        message = self.body_json().get("message")
+        try:
+            history.restore(self.app.store, jid, int(n), message, self.app.cfg)
+        except KeyError:
+            raise ApiError(404, "no such version")
+        self.get_job({}, jid)
 
     def save_key(self, _params):
         p = self.body_json()
@@ -569,6 +638,11 @@ ROUTES = [
     ("POST", rf"/api/jobs/{ID}/rerun", Handler.rerun_job),
     ("GET", rf"/api/jobs/{ID}/audio", Handler.audio),
     ("GET", rf"/api/jobs/{ID}/export/(\w+)", Handler.export),
+    ("POST", rf"/api/jobs/{ID}/diff", Handler.diff_job),
+    ("GET", rf"/api/jobs/{ID}/versions", Handler.versions),
+    ("GET", rf"/api/jobs/{ID}/versions/(\d+)", Handler.get_version),
+    ("PATCH", rf"/api/jobs/{ID}/versions/(\d+)", Handler.patch_version),
+    ("POST", rf"/api/jobs/{ID}/versions/(\d+)/restore", Handler.restore_version),
     ("POST", r"/api/keys", Handler.save_key),
     ("POST", r"/api/power", Handler.power),
     ("POST", r"/api/settings", Handler.settings),

@@ -547,3 +547,53 @@ label.set-row { cursor: pointer; }
   .seg { width: 100%; }
   .seg button { flex: 1; justify-content: center; }
 }
+
+/* ---------- version history, and the review of edits before they are saved ---------- */
+.ver-pill { font-family: var(--mono); }
+.diff-dlg { width: min(900px, calc(100vw - 32px)); }
+.diff-dlg .dlg-body { max-height: 70vh; }
+.hist-lead { margin: 0 0 12px; }
+.ver-list { display: flex; flex-direction: column; gap: 10px; }
+.ver { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.ver.current { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.ver-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ver-n { font-family: var(--mono); font-size: 14px; }
+.ver-title { font-size: 15.5px; }
+.ver-time { margin-left: auto; font-size: 12.5px; color: var(--muted); }
+.ver-msg { margin-top: 6px; font-weight: 600; overflow-wrap: anywhere; }
+.ver-sum { margin-top: 3px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.ver-actions, .ver-edit { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.ver-edit input { flex: 1; min-width: 180px; height: 30px; padding: 4px 10px; }
+.menu.up { top: auto; bottom: calc(100% + 6px); }
+.ver-view-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.ver-view-head .spacer { flex: 1; }
+.ver-against { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+.ver-against select { font-size: 13px; padding: 3px 26px 3px 8px; }
+.diff-stat { margin-top: 12px; font-weight: 620; }
+.diff-facts { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
+.diff-only { margin-top: 10px; }
+.diff { margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.drow {
+  display: grid; grid-template-columns: 44px 12px minmax(0, 1fr); gap: 0 8px;
+  padding: 5px 12px 5px 8px; border-left: 3px solid transparent;
+}
+.drow + .drow, .drow + .dsep, .dsep + .drow { border-top: 1px solid var(--border); }
+.drow .ts { grid-row: 1 / span 2; font: 12px var(--mono); color: var(--faint); padding-top: 2px; }
+.drow .sign { grid-row: 1 / span 2; font: 700 14px/1.5 var(--mono); }
+.drow .who { font-weight: 650; font-size: 12.5px; color: var(--c, var(--muted)); }
+.drow .text {
+  margin: 0; font-size: 15px; line-height: 1.7; overflow-wrap: anywhere; unicode-bidi: isolate; text-align: start;
+  font-family: var(--font-ar);
+}
+.drow .text:dir(ltr) { font-family: var(--font); }
+.drow.d-same .text { color: var(--muted); }
+.drow.d-del { background: var(--danger-soft); border-left-color: var(--danger); }
+.drow.d-add { background: var(--ok-soft); border-left-color: var(--ok); }
+.drow.d-del .sign { color: var(--danger); }
+.drow.d-add .sign { color: var(--ok); }
+.diff del, .diff-facts del { background: color-mix(in srgb, var(--danger) 24%, transparent); color: inherit; border-radius: 3px; padding: 0 2px; }
+.diff ins, .diff-facts ins { background: color-mix(in srgb, var(--ok) 26%, transparent); color: inherit; border-radius: 3px; padding: 0 2px; text-decoration: none; }
+.diff del { text-decoration: none; }
+.dsep { padding: 4px 12px; font-size: 12px; color: var(--muted); background: var(--sunken); text-align: center; }
+.review-foot { flex-wrap: wrap; }
+.review-foot input { flex: 1; min-width: 200px; }

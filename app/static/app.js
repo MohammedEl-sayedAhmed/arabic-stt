@@ -124,7 +124,7 @@ const S = {
 const ACTIVE = new Set(["preparing", "queued", "running"]);
 const model = (id) => (S.status?.models || []).find((m) => m.id === id);
 const spkColor = (sid) => (sid ? `var(--s${((parseInt(sid, 10) - 1) % 8 + 8) % 8 + 1})` : "var(--faint)");
-const spkName = (sid) => (sid == null ? "" : (S.job?.speaker_names || {})[sid] || `Speaker ${sid}`);
+const spkName = (sid) => (sid == null ? "" : shownNames()[sid] || `Speaker ${sid}`);
 // Inside the desktop app's native window: open/save dialogs and the system browser for links.
 const desktopApi = () => (window.pywebview && window.pywebview.api) || null;
 // A line's direction from its mix of scripts rather than its first letter: Egyptian speech often opens
@@ -595,6 +595,7 @@ function renderJob() {
   <div class="job-head">
     <div class="title-row">
       <h1 class="job-title" id="jobTitle" contenteditable="plaintext-only" spellcheck="false" dir="${mixDir(j.title || "Untitled")}" data-mixdir title="Click to rename">${esc(j.title || "Untitled")}</h1>
+      ${S.version ? `<button class="pill accent ver-pill" id="versionPill" title="The current version. Show the history">v${S.version}</button>` : ""}
     </div>
     <div class="meta">${meta}</div>
     <div class="actions">
@@ -602,6 +603,7 @@ function renderJob() {
       <button class="btn" id="copyBtn" ${hasLines ? "" : "disabled"}>${ICON.copy} Copy text</button>
       <div class="menu-wrap"><button class="btn" data-menu="rerunMenu" ${S.hasAudio ? "" : "disabled"}>${ICON.redo} Run again with ${ICON.chevron}</button><div class="menu" id="rerunMenu">${rerunMenu || '<button disabled>No other model is ready</button>'}</div></div>
       <button class="btn${S.editing ? " btn-primary" : ""}" id="editBtn" ${hasLines && !active ? "" : "disabled"}>${ICON.edit} ${S.editing ? "Done editing" : "Edit"}</button>
+      <button class="btn" id="historyBtn" ${S.version ? "" : "disabled"}>${HISTORY_ICON} History</button>
       <span class="spacer"></span>
       <button class="btn btn-ghost btn-danger" id="deleteBtn">${ICON.trash} Delete</button>
     </div>
@@ -618,7 +620,7 @@ function renderJob() {
         ${S.hasAudio ? `<label class="toggle"><input type="checkbox" id="followToggle" ${S.follow ? "checked" : ""}> Follow playback</label>` : ""}
       </div>
       <div class="transcript" id="transcript">${renderLines()}</div>
-      ${S.dirty ? `<div class="editbar"><span>Unsaved changes</span><button class="btn btn-sm" id="discardBtn">Discard</button><button class="btn btn-sm btn-primary" id="saveBtn">Save</button></div>` : ""}
+      ${S.dirty ? EDITBAR : ""}
     </div>
     <div class="side-col">
       ${stats.ids.length ? `<div class="panel"><h3>Speakers</h3>${stats.ids.map((sid) => speakerRow(sid, stats)).join("")}</div>` : ""}
@@ -642,7 +644,7 @@ function speakerRow(sid, stats) {
   const share = stats.total ? stats.talk[sid] / stats.total * 100 : 0;
   const others = stats.ids.filter((x) => x !== sid);
   return `<div class="spk" style="--c:${spkColor(sid)}">
-    <span class="sw"></span><input type="text" dir="auto" data-name="${esc(sid)}" value="${esc((S.job.speaker_names || {})[sid] || "")}" placeholder="Speaker ${esc(sid)}" aria-label="Name for speaker ${esc(sid)}">
+    <span class="sw"></span><input type="text" dir="auto" data-name="${esc(sid)}" value="${esc(shownNames()[sid] || "")}" placeholder="Speaker ${esc(sid)}" aria-label="Name for speaker ${esc(sid)}">
     <div class="share-bar"><i style="width:${share.toFixed(1)}%"></i></div>
     <div class="share"><span>${human(stats.talk[sid])} · ${Math.round(share)}%</span>${others.length ? `<select data-merge="${esc(sid)}" aria-label="Merge speaker ${esc(sid)} into another" ${ACTIVE.has(S.job.status) ? "disabled" : ""}><option value="">Merge into…</option>${others.map((o) => `<option value="${esc(o)}">${esc(spkName(o))}</option>`).join("")}</select>` : ""}</div>
   </div>`;
@@ -690,56 +692,22 @@ function renderLines() {
 function bindJob() {
   const j = S.job;
   const title = $("#jobTitle");
-  title.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); title.blur(); } if (e.key === "Escape") { title.textContent = j.title; title.blur(); } };
+  title.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); title.blur(); } if (e.key === "Escape") { title.textContent = drafting() ? S.draft.title : j.title; title.blur(); } };
   title.onblur = async () => {
     const t = title.textContent.trim();
+    if (drafting()) return draftTitle(title, t);  // saved with the other edits, after the review
     if (t && t !== j.title) {
-      try { await api.patch(`/api/jobs/${j.id}`, { title: t }); S.job.title = t; refreshJobs(); } catch (e) { toast(e.message, "error"); }
+      try { const r = await api.patch(`/api/jobs/${j.id}`, { title: t }); S.job.title = t; S.version = r.version; showVersion(); refreshJobs(); } catch (e) { toast(e.message, "error"); }
     } else title.textContent = j.title;
   };
   $$("[data-menu]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); toggleMenu(b.dataset.menu); }));
   $$("[data-rerun]").forEach((b) => (b.onclick = () => rerun(b.dataset.rerun)));
-  $$("#exportMenu a").forEach((a) => (a.onclick = async (e) => {
-    const fmt = a.dataset.fmt, d = desktopApi();
-    if (d && d.save_export) {  // the native window: its own Save dialog
-      e.preventDefault();
-      closeMenus();
-      try { const saved = await d.save_export(j.id, fmt); if (saved) toast(`Saved ${saved}`); } catch (err) { toast(err.message, "error"); }
-      return;
-    }
-    if (!window.showSaveFilePicker) return;  // other browsers: the link downloads the file
-    e.preventDefault();
-    closeMenus();
-    let handle;
-    try {  // ask first, while the click still counts as the user's action
-      const [description, mime] = EXPORT_TYPES[fmt];
-      handle = await window.showSaveFilePicker({ suggestedName: `${fileSlug(j.title)}.${fmt}`, types: [{ description, accept: { [mime]: [`.${fmt}`] } }] });
-    } catch (err) {
-      if (err.name !== "AbortError") location.href = a.href;  // the picker isn't allowed here: download instead
-      return;
-    }
-    try {
-      const r = await fetch(a.href);
-      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      const out = await handle.createWritable();
-      await out.write(await r.blob());
-      await out.close();
-      toast(`Saved ${handle.name}`);
-    } catch (err) { toast(`Could not save: ${err.message}`, "error"); }
-  }));
+  $$("#exportMenu a").forEach((a) => (a.onclick = (e) => saveExport(e, a)));
   const copy = $("#copyBtn");
-  if (copy) copy.onclick = async () => {
-    try {
-      const r = await fetch(`/api/jobs/${j.id}/export/txt`);
-      await navigator.clipboard.writeText(await r.text());
-      toast("Transcript copied");
-    } catch (e) { toast("Could not copy: " + e.message, "error"); }
-  };
+  if (copy) copy.onclick = () => copyText();
+  $$("#historyBtn, #versionPill").forEach((b) => (b.onclick = openHistory));
   const edit = $("#editBtn");
-  if (edit) edit.onclick = () => {
-    if (S.editing && S.dirty && !confirm("Discard your unsaved changes?")) return;
-    S.editing = !S.editing; S.dirty = false; renderJob();
-  };
+  if (edit) edit.onclick = () => (S.editing && S.dirty ? openReview() : startEditing(!S.editing));  // Done: review first
   const cancel = $("#cancelBtn");
   if (cancel) cancel.onclick = async () => {
     if (!confirm("Stop this transcription?")) return;
@@ -751,8 +719,9 @@ function bindJob() {
   };
   $$("[data-name]").forEach((inp) => {
     const save = async () => {
+      if (drafting()) return draftName(inp);  // saved with the other edits, after the review
       const names = { ...(S.job.speaker_names || {}), [inp.dataset.name]: inp.value.trim() };
-      try { const r = await api.patch(`/api/jobs/${j.id}`, { speaker_names: names }); applyJob(r); renderTranscriptOnly(); } catch (e) { toast(e.message, "error"); }
+      try { const r = await api.patch(`/api/jobs/${j.id}`, { speaker_names: names }); applyJob(r); renderTranscriptOnly(); showVersion(); } catch (e) { toast(e.message, "error"); }
     };
     inp.onchange = save;
     inp.onkeydown = (e) => e.key === "Enter" && inp.blur();
@@ -760,6 +729,7 @@ function bindJob() {
   $$("[data-merge]").forEach((sel) => (sel.onchange = async () => {
     if (!sel.value) return;
     if (!confirm(`Merge ${spkName(sel.dataset.merge)} into ${spkName(sel.value)}? All their lines move over.`)) { sel.value = ""; return; }
+    if (drafting()) { draftMerge(sel.dataset.merge, sel.value); sel.value = ""; return; }  // part of the edits
     try { const r = await api.patch(`/api/jobs/${j.id}`, { merge: { from: sel.dataset.merge, into: sel.value } }); applyJob(r); renderJob(); toast("Speakers merged"); } catch (e) { toast(e.message, "error"); }
   }));
   const search = $("#lineSearch");
@@ -772,10 +742,7 @@ function bindJob() {
   const follow = $("#followToggle");
   if (follow) follow.onchange = () => (S.follow = follow.checked);
   bindTranscript();
-  const save = $("#saveBtn");
-  if (save) save.onclick = saveEdits;
-  const discard = $("#discardBtn");
-  if (discard) discard.onclick = () => { S.dirty = false; renderJob(); };
+  bindEditbar();
 }
 
 function bindTranscript() {
@@ -804,26 +771,8 @@ function markDirty() {
   if (S.dirty) return;
   S.dirty = true;
   const col = $("#transcript").parentElement;
-  col.insertAdjacentHTML("beforeend", `<div class="editbar"><span>Unsaved changes</span><button class="btn btn-sm" id="discardBtn">Discard</button><button class="btn btn-sm btn-primary" id="saveBtn">Save</button></div>`);
-  $("#saveBtn").onclick = saveEdits;
-  $("#discardBtn").onclick = () => { S.dirty = false; renderJob(); };
-}
-
-async function saveEdits() {
-  const lines = S.lines.map((x, i) => {
-    const el = $(`.line[data-i="${i}"]`);
-    if (!el) return x;
-    const text = el.querySelector(".text").innerText.replace(/\s+/g, " ").trim();
-    const sel = el.querySelector("select[data-line]");
-    return { ...x, text, speaker: sel ? sel.value || null : x.speaker };
-  });
-  try {
-    const r = await api.patch(`/api/jobs/${S.job.id}`, { lines });
-    S.dirty = false;
-    applyJob(r);
-    renderJob();
-    toast("Saved");
-  } catch (e) { toast(e.message, "error"); }
+  col.insertAdjacentHTML("beforeend", EDITBAR);
+  bindEditbar();
 }
 
 async function rerun(modelId) {
@@ -877,6 +826,7 @@ function applyJob(r) {
   S.partial = r.partial;
   S.hasAudio = r.has_audio;
   S.log = r.log || "";
+  S.version = r.version ?? null;  // the current version in the history (app/history.py)
 }
 
 async function loadJob(id) {
@@ -924,6 +874,333 @@ function startJobPoll(id) {
 function stopJobPoll() {
   clearInterval(S.jobPoll);
   S.jobPoll = null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Export and copy, of the current version or of one picked in History
+// ---------------------------------------------------------------------------------------------
+// The native window's own Save dialog, the file picker in Chrome and Edge, or else the link's download.
+async function saveExport(e, a, version) {
+  const j = S.job, fmt = a.dataset.fmt, d = desktopApi();
+  if (d && d.save_export) {
+    e.preventDefault();
+    closeMenus();
+    try { const saved = await d.save_export(j.id, fmt, version || null); if (saved) toast(`Saved ${saved}`); } catch (err) { toast(err.message, "error"); }
+    return;
+  }
+  if (!window.showSaveFilePicker) return;
+  e.preventDefault();
+  closeMenus();
+  let handle;
+  try {  // ask first, while the click still counts as the user's action
+    const [description, mime] = EXPORT_TYPES[fmt];
+    handle = await window.showSaveFilePicker({ suggestedName: `${fileSlug(j.title)}${version ? `-v${version}` : ""}.${fmt}`, types: [{ description, accept: { [mime]: [`.${fmt}`] } }] });
+  } catch (err) {
+    if (err.name !== "AbortError") location.href = a.href;  // the picker isn't allowed here: download instead
+    return;
+  }
+  try {
+    const r = await fetch(a.href);
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    const out = await handle.createWritable();
+    await out.write(await r.blob());
+    await out.close();
+    toast(`Saved ${handle.name}`);
+  } catch (err) { toast(`Could not save: ${err.message}`, "error"); }
+}
+
+async function copyText(version) {
+  try {
+    const r = await fetch(`/api/jobs/${S.job.id}/export/txt${version ? `?version=${version}` : ""}`);
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    await navigator.clipboard.writeText(await r.text());
+    toast(version ? `Version ${version} copied` : "Transcript copied");
+  } catch (e) { toast("Could not copy: " + e.message, "error"); }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Versions (app/history.py). Version 1 is the model's output. The edits of one session in edit mode
+// are reviewed as a diff and saved as one version; quick changes outside edit mode are saved at once.
+// ---------------------------------------------------------------------------------------------
+const HISTORY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>';
+const CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+const KIND_LABEL = { "model output": "Model output", edit: "Edit", rename: "Rename", merge: "Merge", restore: "Restore" };
+const EDITBAR = `<div class="editbar"><span>Unsaved changes</span><button class="btn btn-sm" id="discardBtn">Discard</button><button class="btn btn-sm btn-primary" id="saveBtn">Review and save</button></div>`;
+const HIST = { jid: null, versions: [], view: null, editing: null };  // the History dialog
+const REVIEW = { draft: null };  // the edits being reviewed before they are saved
+const latestVersion = () => (HIST.versions.length ? HIST.versions[HIST.versions.length - 1].n : 0);
+const drafting = () => S.editing && S.draft;
+const diffName = (names, sid) => (sid == null ? "No speaker" : (names || {})[sid] || `Speaker ${sid}`);
+
+// Speaker names as shown: while editing, with the renames made in this session.
+function shownNames() {
+  return (drafting() ? S.draft.names : S.job?.speaker_names) || {};
+}
+
+function startEditing(on) {
+  Object.assign(S, { editing: on, dirty: false, draft: on ? { names: { ...(S.job.speaker_names || {}) }, title: S.job.title } : null });
+  renderJob();
+}
+
+function bindEditbar() {
+  const save = $("#saveBtn");
+  if (!save) return;
+  save.onclick = openReview;
+  $("#discardBtn").onclick = () => confirm("Discard your unsaved edits?") && startEditing(true);
+}
+
+function showVersion() {  // the "v3" next to the title, after a change that doesn't redraw the page
+  const pill = $("#versionPill");
+  if (pill && S.version) pill.textContent = `v${S.version}`;
+}
+
+// While editing, a new title, names and merges wait for the review with the edited lines.
+function draftTitle(el, title) {
+  if (!title) el.textContent = S.draft.title;
+  else if (title !== S.draft.title) { S.draft.title = title; markDirty(); }
+}
+function draftName(inp) {
+  const sid = inp.dataset.name, name = inp.value.trim().slice(0, 60);
+  if (name) S.draft.names[sid] = name; else delete S.draft.names[sid];
+  $$(`select[data-line] option[value="${sid}"], select[data-merge] option[value="${sid}"]`).forEach((o) => (o.textContent = spkName(sid)));
+  markDirty();
+}
+function draftMerge(src, dst) {
+  $$("#transcript select[data-line]").forEach((sel) => {
+    if (sel.value === src) { sel.value = dst; sel.closest(".line").style.setProperty("--c", spkColor(dst)); }
+  });
+  markDirty();
+}
+
+function collectDraft() {
+  const lines = S.lines.map((x, i) => {
+    const el = $(`#transcript .line[data-i="${i}"]`);
+    if (!el) return x;
+    const text = el.querySelector(".text").innerText.replace(/\s+/g, " ").trim();
+    const sel = el.querySelector("select[data-line]");
+    return { ...x, text, speaker: sel ? sel.value || null : x.speaker };
+  });
+  return { lines, speaker_names: S.draft.names, title: S.draft.title };
+}
+
+function diffDialog(id, title) {  // the History and review dialogs, made on first use
+  let dlg = document.getElementById(id);
+  if (dlg) return dlg;
+  document.body.insertAdjacentHTML("beforeend", `<dialog id="${id}" class="diff-dlg" aria-labelledby="${id}Title">
+    <div class="dlg-head"><h2 id="${id}Title">${title}</h2><button class="icon-btn" data-close aria-label="Close">${CLOSE_ICON}</button></div>
+    <div class="dlg-body" id="${id}Body"></div></dialog>`);
+  dlg = document.getElementById(id);
+  $("[data-close]", dlg).onclick = () => dlg.close();
+  return dlg;
+}
+window.addEventListener("hashchange", () => $$("dialog.diff-dlg[open]").forEach((d) => d.close()));
+
+// Rows like git diff: removed lines (−) in red, added lines (+) in green, and inside a changed line
+// the words that differ. With only, each change keeps one line around it and the rest is counted.
+function diffRows(ch, only) {
+  const rows = ch.lines, out = [];
+  const near = (i) => rows.slice(Math.max(0, i - 1), i + 2).some((r) => r.op !== "same");
+  const words = (w, side, tag) => w.filter(([op]) => op === "=" || op === side).map(([op, t]) => (op === "=" ? esc(t) : `<${tag}>${esc(t)}</${tag}>`)).join(" ");
+  const row = (kind, sign, x, who, text) => `<div class="drow d-${kind}" style="--c:${spkColor(x.speaker)}"><span class="ts">${clock(x.start)}</span><span class="sign" aria-hidden="true">${sign}</span><div class="who">${who}</div><p class="text" dir="${mixDir(x.text)}">${text}</p></div>`;
+  let skipped = 0;
+  const gap = () => { if (skipped) out.push(`<div class="dsep">${skipped} unchanged line${skipped === 1 ? "" : "s"}</div>`); skipped = 0; };
+  rows.forEach((r, i) => {
+    if (only && !near(i)) { skipped++; return; }
+    gap();
+    const x = r.line, before = ch.names_before, after = ch.names_after;
+    if (r.op === "same") out.push(row("same", "", x, esc(diffName(after, x.speaker)), esc(x.text)));
+    else if (r.op === "added") out.push(row("add", "+", x, esc(diffName(after, x.speaker)), esc(x.text)));
+    else if (r.op === "removed") out.push(row("del", "−", x, esc(diffName(before, x.speaker)), esc(x.text)));
+    else {  // changed: the line as it was, then as it is
+      const o = r.old, moved = o.speaker !== x.speaker, a = esc(diffName(before, o.speaker)), b = esc(diffName(after, x.speaker));
+      out.push(row("del", "−", o, moved ? `<del>${a}</del>` : a, r.words ? words(r.words, "-", "del") : esc(o.text)));
+      out.push(row("add", "+", x, moved ? `<ins>${b}</ins>` : b, r.words ? words(r.words, "+", "ins") : esc(x.text)));
+    }
+  });
+  gap();
+  return out.join("") || `<div class="dsep">No lines</div>`;
+}
+
+// The changes between two versions (history.compare): the counts, a new title and names, the lines.
+function changesHtml(ch, only) {
+  const facts = [
+    ch.title ? `<li>Title: <del dir="${mixDir(ch.title[0])}">${esc(ch.title[0])}</del> → <ins dir="${mixDir(ch.title[1])}">${esc(ch.title[1])}</ins></li>` : "",
+    ...ch.renamed.map((x) => `<li><del dir="${mixDir(x.from)}">${esc(x.from)}</del> → <ins dir="${mixDir(x.to)}">${esc(x.to)}</ins></li>`),
+  ].join("");
+  const lines = ch.lines.some((x) => x.op !== "same");
+  return `<div class="diff-stat">${esc(ch.stat)}</div>
+    ${facts ? `<ul class="diff-facts">${facts}</ul>` : ""}
+    ${lines ? `<label class="toggle diff-only"><input type="checkbox" data-diff-only ${only ? "checked" : ""}> Only the changed lines, with one line around each</label>
+      <div class="diff">${diffRows(ch, only)}</div>` : `<p class="hint">No lines changed.</p>`}`;
+}
+
+function bindDiff(box, ch) {
+  const only = $("[data-diff-only]", box);
+  if (only) only.onchange = () => { $(".diff", box).innerHTML = diffRows(ch, only.checked); };
+}
+
+// ---- reviewing the edits of a session before they are saved -------------------------------------
+function reviewDialog() {
+  const dlg = diffDialog("review", "Review your changes");
+  if (!$("#reviewForm")) {
+    dlg.insertAdjacentHTML("beforeend", `<form class="dlg-foot review-foot" id="reviewForm">
+      <input type="text" id="reviewMsg" maxlength="500" dir="auto" data-mixdir placeholder="Message (optional)" aria-label="Message for this version (optional)">
+      <button type="button" class="btn" id="reviewBack">Back to editing</button>
+      <button type="submit" class="btn btn-primary">Save version</button></form>`);
+    $("#reviewBack").onclick = () => dlg.close();
+    $("#reviewForm").onsubmit = (e) => { e.preventDefault(); saveReviewed($("#reviewMsg").value.trim()); };
+  }
+  return dlg;
+}
+
+async function openReview() {
+  if (!drafting()) return;
+  const draft = collectDraft();
+  let r;
+  try { r = await api.post(`/api/jobs/${S.job.id}/diff`, draft); } catch (e) { toast(e.message, "error"); return; }
+  const ch = r.changes;
+  if (!ch.title && !ch.renamed.length && !ch.lines.some((x) => x.op !== "same")) {
+    startEditing(false);
+    toast("Nothing changed, so no new version");
+    return;
+  }
+  REVIEW.draft = draft;
+  const dlg = reviewDialog();
+  $("#reviewBody").innerHTML = changesHtml(ch, true);
+  bindDiff($("#reviewBody"), ch);
+  $("#reviewMsg").value = "";
+  dlg.showModal();
+  $("#reviewMsg").focus();
+}
+
+async function saveReviewed(message) {
+  const before = S.version;
+  try {
+    const r = await api.patch(`/api/jobs/${S.job.id}`, { ...REVIEW.draft, message });
+    $("#review").close();
+    Object.assign(S, { editing: false, dirty: false, draft: null });
+    applyJob(r);
+    renderJob();
+    refreshJobs();
+    toast(r.version !== before ? `Saved as version ${r.version}` : "Nothing changed, so no new version");
+  } catch (e) { toast(e.message, "error"); }
+}
+
+// ---- History ------------------------------------------------------------------------------------
+async function openHistory() {
+  if (!S.job || !S.version) return;
+  const dlg = diffDialog("history", "History");
+  Object.assign(HIST, { jid: S.job.id, view: null, editing: null });
+  $("#historyBody").innerHTML = `<p class="hint">Loading…</p>`;
+  if (!dlg.open) dlg.showModal();
+  await loadVersions();
+}
+
+async function loadVersions() {
+  try { HIST.versions = (await api.get(`/api/jobs/${HIST.jid}/versions`)).versions; } catch (e) { toast(e.message, "error"); return; }
+  HIST.view = null;
+  renderVersions();
+}
+
+function kindPill(v) {
+  return v.kind === "model output" ? `<span class="pill accent">Original</span>` : `<span class="pill">${esc(KIND_LABEL[v.kind] || v.kind)}</span>`;
+}
+
+function versionActions(v, withView) {
+  const menu = `verExport${v.n}`;
+  const links = Object.entries(EXPORT_TYPES).map(([fmt, [label]]) => `<a href="/api/jobs/${HIST.jid}/export/${fmt}?version=${v.n}" data-fmt="${fmt}" data-version="${v.n}" download>${ICON.download} ${label} (.${fmt})</a>`).join("");
+  return `${withView ? `<button class="btn btn-sm" data-ver-view="${v.n}">View</button>` : ""}
+    ${v.n === latestVersion() ? "" : `<button class="btn btn-sm" data-ver-restore="${v.n}">Restore</button>`}
+    <div class="menu-wrap"><button class="btn btn-sm" data-menu="${menu}">${ICON.download} Export ${ICON.chevron}</button><div class="menu" id="${menu}">${links}</div></div>`;
+}
+
+function versionRow(v) {
+  const current = v.n === latestVersion(), editing = HIST.editing === v.n;
+  const message = editing
+    ? `<form class="ver-edit" data-ver-form="${v.n}"><input type="text" maxlength="500" dir="${mixDir(v.message)}" data-mixdir value="${esc(v.message)}" placeholder="Message (optional)" aria-label="Message for version ${v.n}"><button type="submit" class="btn btn-sm btn-primary">Save</button><button type="button" class="btn btn-sm" data-ver-cancel>Cancel</button></form>`
+    : v.message ? `<div class="ver-msg" dir="${mixDir(v.message)}">${esc(v.message)}</div>` : "";
+  return `<div class="ver${current ? " current" : ""}" data-n="${v.n}">
+    <div class="ver-head"><b class="ver-n">v${v.n}</b>${kindPill(v)}${current ? `<span class="pill ok">Current</span>` : ""}<span class="ver-time">${esc(when(v.time))}</span></div>
+    ${message}
+    <div class="ver-sum" dir="${mixDir(v.summary)}">${esc(v.summary || "")}</div>
+    ${editing ? "" : `<div class="ver-actions">${versionActions(v, true)}<button class="btn btn-sm btn-ghost" data-ver-msg="${v.n}">${v.message ? "Edit message" : "Add message"}</button></div>`}
+  </div>`;
+}
+
+function renderVersions() {
+  $("#historyBody").innerHTML = `<p class="hint hist-lead">Each saved change is kept as a version. Restoring an older one saves it again as the newest version, so nothing is lost.</p>
+    <div class="ver-list">${[...HIST.versions].reverse().map(versionRow).join("") || `<p class="hint">No versions yet.</p>`}</div>`;
+  bindHistory();
+}
+
+async function viewVersion(n, against) {
+  try { HIST.view = await api.get(`/api/jobs/${HIST.jid}/versions/${n}${against == null ? "" : `?against=${against}`}`); } catch (e) { toast(e.message, "error"); return; }
+  renderVersionView();
+}
+
+// One version, read-only: its differences from the version before it, or from any other version.
+function renderVersionView() {
+  const r = HIST.view, v = r.version, ch = r.changes;
+  const options = [...HIST.versions].reverse().filter((x) => x.n !== v.n).map((x) => `<option value="${x.n}" ${x.n === r.against ? "selected" : ""}>version ${x.n}${x.n === v.parent ? " (the one before)" : ""}</option>`);
+  if (!v.parent) options.unshift(`<option value="0" ${r.against ? "" : "selected"}>nothing</option>`);
+  const plain = { lines: r.lines.map((line) => ({ op: "same", line })), names_after: r.speaker_names };
+  $("#historyBody").innerHTML = `
+    <div class="ver-view-head"><button class="btn btn-sm btn-ghost" id="verBack">← All versions</button><span class="spacer"></span>
+      <button class="btn btn-sm" id="verCopy">${ICON.copy} Copy text</button>${versionActions(v, false)}</div>
+    <div class="ver-head"><b class="ver-title">Version ${v.n}</b>${kindPill(v)}${v.n === latestVersion() ? `<span class="pill ok">Current</span>` : ""}<span class="ver-time">${esc(when(v.time))}</span></div>
+    ${v.message ? `<div class="ver-msg" dir="${mixDir(v.message)}">${esc(v.message)}</div>` : ""}
+    <div class="ver-sum" dir="${mixDir(v.summary)}">${esc(v.summary || "")}</div>
+    ${options.length > 1 || v.parent ? `<label class="ver-against">Compare with <select id="verAgainst">${options.join("")}</select></label>` : ""}
+    ${ch ? changesHtml(ch, true) : `<div class="diff">${diffRows(plain, false)}</div>`}`;
+  bindHistory();
+  if (ch) bindDiff($("#historyBody"), ch);
+  const against = $("#verAgainst");
+  if (against) against.onchange = () => viewVersion(v.n, +against.value);
+}
+
+function fitMenu(id, box) {  // open upwards when the menu would run past the bottom of the dialog
+  const m = document.getElementById(id);
+  m.classList.remove("up");
+  if (m.classList.contains("open") && m.getBoundingClientRect().bottom > box.getBoundingClientRect().bottom) m.classList.add("up");
+}
+
+function bindHistory() {
+  const body = $("#historyBody");
+  $$("[data-ver-view]", body).forEach((b) => (b.onclick = () => viewVersion(+b.dataset.verView)));
+  $$("[data-ver-restore]", body).forEach((b) => (b.onclick = () => restoreVersion(+b.dataset.verRestore)));
+  $$("[data-ver-msg]", body).forEach((b) => (b.onclick = () => { HIST.editing = +b.dataset.verMsg; renderVersions(); }));
+  $$("[data-menu]", body).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); toggleMenu(b.dataset.menu); fitMenu(b.dataset.menu, body); }));
+  $$(".menu a[data-fmt]", body).forEach((a) => (a.onclick = (e) => saveExport(e, a, +a.dataset.version)));
+  const form = $("[data-ver-form]", body);
+  if (form) {
+    const input = $("input", form);
+    form.onsubmit = (e) => { e.preventDefault(); saveMessage(+form.dataset.verForm, input.value); };
+    $("[data-ver-cancel]", form).onclick = () => { HIST.editing = null; renderVersions(); };
+    input.focus();
+  }
+  const back = $("#verBack", body);
+  if (back) back.onclick = () => { HIST.view = null; renderVersions(); };
+  const copy = $("#verCopy", body);
+  if (copy) copy.onclick = () => copyText(HIST.view.version.n);
+}
+
+async function saveMessage(n, message) {
+  try { HIST.versions = (await api.patch(`/api/jobs/${HIST.jid}/versions/${n}`, { message: message.trim() })).versions; } catch (e) { toast(e.message, "error"); return; }
+  HIST.editing = null;
+  renderVersions();
+  toast(message.trim() ? "Message saved" : "Message removed");
+}
+
+async function restoreVersion(n) {
+  const next = latestVersion() + 1, unsaved = S.dirty ? " Your unsaved edits will be discarded." : "";
+  if (!confirm(`Restore version ${n}? The transcript goes back to how it was then, saved as version ${next}. All versions stay in the history.${unsaved}`)) return;
+  try {
+    const r = await api.post(`/api/jobs/${HIST.jid}/versions/${n}/restore`, {});
+    if (S.job && S.job.id === HIST.jid) { Object.assign(S, { editing: false, dirty: false, draft: null }); applyJob(r); renderJob(); }
+    refreshJobs();
+    toast(r.version >= next ? `Version ${n} restored as version ${r.version}` : "Nothing changed: the transcript already matches that version");
+  } catch (e) { toast(e.message, "error"); return; }
+  await loadVersions();
 }
 
 // ---------------------------------------------------------------------------------------------
