@@ -43,7 +43,7 @@ class Files(BaseHTTPRequestHandler):
         for i in range(0, len(body), step):
             try:
                 self.wfile.write(body[i:i + step])
-            except (BrokenPipeError, ConnectionResetError):
+            except ConnectionError:  # the client cancelled (Windows raises ConnectionAbortedError)
                 return
             if self.path.startswith("/slow"):
                 time.sleep(0.05)

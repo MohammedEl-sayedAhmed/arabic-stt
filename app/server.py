@@ -155,7 +155,7 @@ class Handler(BaseHTTPRequestHandler):
         except ApiError as e:
             self.drain()
             self.json({"error": str(e)}, e.status)
-        except (BrokenPipeError, ConnectionResetError):
+        except ConnectionError:  # the browser went away (e.g. seeking the player); Windows: ConnectionAbortedError
             self.close_connection = True
         except Exception as e:  # report instead of dropping the connection
             self.drain()

@@ -29,6 +29,21 @@ def now():
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
+def read_json(path, tries=40):
+    """A JSON file written by write_json, or None if it doesn't exist. On Windows a read fails while
+    another thread is replacing the file, so a denied read is retried for up to about a second."""
+    for i in range(tries):
+        try:
+            return json.loads(Path(path).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            if i >= 2:  # really missing (a replace can hide it for an instant)
+                return None
+        except (PermissionError, ValueError):
+            pass
+        time.sleep(0.025)
+    return None
+
+
 def write_json(path, data):
     tmp = Path(path).with_name(f"{Path(path).name}.{uuid.uuid4().hex[:6]}.tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -51,8 +66,8 @@ class Store:
 
     def get(self, jid):
         try:
-            return json.loads((self.dir(jid) / "job.json").read_text(encoding="utf-8"))
-        except (KeyError, OSError, ValueError):
+            return read_json(self.dir(jid) / "job.json")
+        except KeyError:
             return None
 
     def create(self, meta):
@@ -76,12 +91,17 @@ class Store:
 
     def delete(self, jid):
         with self.lock:
-            shutil.rmtree(self.dir(jid), ignore_errors=True)
+            folder = self.dir(jid)
+            for _ in range(20):  # Windows: a file still open (e.g. by the audio player) blocks deletion briefly
+                shutil.rmtree(folder, ignore_errors=True)
+                if not folder.exists():
+                    return
+                time.sleep(0.25)
 
     def transcript(self, jid):
         try:
-            return json.loads((self.dir(jid) / "transcript.json").read_text(encoding="utf-8"))
-        except (KeyError, OSError, ValueError):
+            return read_json(self.dir(jid) / "transcript.json")
+        except KeyError:
             return None
 
     def save_transcript(self, jid, data):

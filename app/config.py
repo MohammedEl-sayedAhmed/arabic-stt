@@ -91,10 +91,16 @@ class Config:
 
     # API keys: environment first, then the ones saved from the app.
     def secrets(self):
-        try:
-            return json.loads(self.secrets_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return {}
+        for _ in range(20):
+            try:
+                return json.loads(self.secrets_path.read_text(encoding="utf-8"))
+            except FileNotFoundError:
+                return {}
+            except (PermissionError, ValueError):  # Windows: being replaced by save_key right now
+                time.sleep(0.025)
+            except OSError:
+                return {}
+        return {}
 
     def api_key(self, model):
         env = os.environ.get(model.get("key_env", ""), "").strip()
