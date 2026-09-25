@@ -1041,6 +1041,7 @@ function renderSettings(focus) {
       <div class="top"><b>${esc(m.title)}</b>${src}</div>
       <form class="row" data-key-form="${esc(m.id)}"><input type="text" name="username" value="${esc(m.id)}" autocomplete="off" hidden>
         <input type="password" data-key="${esc(m.id)}" placeholder="${m.key_source ? "Replace the key" : "Paste your API key"}" autocomplete="new-password" spellcheck="false">
+        ${m.region != null ? `<input type="text" data-region value="${esc(m.region)}" placeholder="Region, e.g. westeurope" aria-label="${esc(m.service)} region" title="The region of your resource: the key works only there" autocomplete="off" spellcheck="false" style="flex:0 1 11em;min-width:7em">` : ""}
         <button class="btn" type="submit">Save</button>
         ${m.key_source === "app" ? `<button class="btn btn-ghost btn-danger" type="button" data-clear-key="${esc(m.id)}">Remove</button>` : ""}</form>
       <p>${m.key_url ? `Get a key: <a href="${esc(m.key_url)}" target="_blank" rel="noopener noreferrer">${esc(m.key_url.replace(/^https:\/\//, ""))}</a>. ` : ""}${esc((m.facts || []).slice(-1)[0] || "")}.</p>
@@ -1139,7 +1140,7 @@ function renderSettings(focus) {
       </div>
       <p class="hint">Models are kept in <code class="mono">${esc(st.home)}/models</code>. The port, defaults and model list are set in <code class="mono">app/config.toml</code>; your own changes can go in <code class="mono">${esc(st.storage.dir)}/config.toml</code>.</p>
     </section>`;
-  $$("[data-key-form]").forEach((form) => (form.onsubmit = (e) => { e.preventDefault(); saveKey(form.dataset.keyForm, $("[data-key]", form).value); }));
+  $$("[data-key-form]").forEach((form) => (form.onsubmit = (e) => { e.preventDefault(); saveKey(form.dataset.keyForm, $("[data-key]", form).value, $("[data-region]", form)?.value); }));
   $$("[data-clear-key]").forEach((b) => (b.onclick = () => confirm("Remove the saved key?") && saveKey(b.dataset.clearKey, "")));
   $$("[data-power]").forEach((b) => (b.onclick = async () => {
     try { await api.post("/api/power", { profile: b.dataset.power }); await refreshStatus(); renderSettings(); toast(`Power mode: ${b.dataset.power}`); } catch (e) { toast(e.message, "error"); }
@@ -1301,13 +1302,16 @@ async function removeDownload(id) {
   catch (e) { toast(e.message, "error"); }
 }
 
-async function saveKey(id, key) {
+async function saveKey(id, key, region) {
   key = key.trim();
+  const body = { model: id };
+  if (region !== undefined) body.region = region.trim();
+  if (key || region === undefined) body.key = key;  // with a region field, an empty key box keeps the saved key
   try {
-    await api.post("/api/keys", { model: id, key });
+    await api.post("/api/keys", body);
     await refreshStatus();
     renderSettings();
-    toast(key ? "Key saved" : "Key removed");
+    toast(key ? "Key saved" : region !== undefined ? "Region saved" : "Key removed");
     if (S.route.name === "new") renderNew();
   } catch (e) { toast(e.message, "error"); }
 }

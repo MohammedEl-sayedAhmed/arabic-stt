@@ -197,6 +197,98 @@ delete_after = true         # delete the transcript from your ElevenLabs history
 prompt = true               # sent as key terms (ElevenLabs charges about 20% more for those requests)
 rtf = 0.05
 
+# Gemini, Deepgram, AssemblyAI and Azure run through app/hosted_more.py. privacy, prompt_hint and
+# speakers_hint are the texts the app shows for the model.
+[[models]]
+id = "gemini"
+kind = "hosted"
+engine = "gemini"
+title = "Google Gemini"
+tagline = "Google's speech-to-text model"
+facts = ["Egyptian Arabic (ar-EG) with code-switching", "Speaker labels for up to 8 people",
+         "Free tier, then about $0.30/h", "Free tier uses your audio for training and human review"]
+service = "Google"
+base_url = "https://generativelanguage.googleapis.com"
+key_env = "GEMINI_API_KEY"
+key_url = "https://aistudio.google.com/apikey"
+api_model = "gemini-3.5-transcribe"  # a general model such as "gemini-3.8-flash" gets instructions and a JSON schema instead
+language_codes = []         # for Arabic + English: none, so it detects the language, which follows code-switching; English sends en-US
+max_minutes = 29            # per request: 30 min is the limit with word times, so longer recordings go in parts
+inline_limit_mb = 20        # a larger request uploads the part with the Files API instead
+delete_after = true         # delete uploaded files from the Files API once transcribed
+prompt = false              # the transcribe model can't combine key terms with word times; true adds them to a general model's instructions
+privacy = "On the free tier Google uses it to improve its products and human reviewers may read it; with billing turned on it doesn't (and never for users in the EEA, Switzerland or the UK). The app asks Google not to store the request and deletes uploaded files afterwards."
+prompt_hint = "Added to the instructions of a general Gemini model."
+speakers_hint = "Gemini finds the speakers itself, up to 8 (3 or more is experimental); any choice other than No labels turns labels on."
+rtf = 0.1
+
+[[models]]
+id = "deepgram"
+kind = "hosted"
+engine = "deepgram"
+title = "Deepgram Nova-3"
+tagline = "Fast; one language per recording"
+facts = ["Egyptian Arabic (ar-EG) among 17 Arabic codes", "No Arabic–English code-switching",
+         "$200 free credit, then $0.26/h", "Not used for training: the app opts out"]
+service = "Deepgram"
+base_url = "https://api.deepgram.com"
+key_env = "DEEPGRAM_API_KEY"
+key_url = "https://console.deepgram.com/"
+api_model = "nova-3"
+language = "ar-EG"          # for Arabic + English and auto-detect (Deepgram can't detect Arabic); or "ar", "ar-SA", ...
+diarize_model = "latest"    # speaker labels (the older diarize=true is deprecated)
+mip_opt_out = true          # keep the audio out of Deepgram's model training (sent with every request)
+prompt = true               # sent as key terms ($0.0013/min extra)
+privacy = "The app tells Deepgram not to use it for model training (mip_opt_out), so Deepgram keeps it only while it processes the request. Deepgram doesn't store transcripts."
+prompt_hint = "Sent as key terms (up to 100). Deepgram charges $0.0013 a minute more for requests with key terms."
+speakers_hint = "Deepgram works out the number of speakers itself; any choice other than No labels turns labels on."
+rtf = 0.02
+
+[[models]]
+id = "assemblyai"
+kind = "hosted"
+engine = "assemblyai"
+title = "AssemblyAI"
+tagline = "Universal-3.5 Pro, with code-switching"
+facts = ["Arabic with code-switching (Universal-3.5 Pro)", "Speaker labels for $0.02/h more",
+         "$50 free credit (up to 185 h), then $0.21/h", "Free accounts can't opt out of training"]
+service = "AssemblyAI"
+base_url = "https://api.assemblyai.com"  # EU: https://api.eu.assemblyai.com (audio stays in the EU and isn't used for training)
+key_env = "ASSEMBLYAI_API_KEY"
+key_url = "https://www.assemblyai.com/dashboard/home"
+speech_models = ["universal-3-5-pro", "universal-2"]  # Universal-2 takes languages Universal-3.5 Pro doesn't
+expected_languages = ["ar", "en"]  # language detection hints for Arabic + English
+delete_after = true         # delete the transcript and the uploaded audio from AssemblyAI once fetched
+prompt = true               # sent as key terms ($0.05/h extra)
+privacy = "AssemblyAI may use it to train its models. Free accounts can't opt out; paid accounts can, under Data controls in the dashboard. The app deletes the transcript and the uploaded audio there once it has the transcript."
+prompt_hint = "Sent as key terms (up to 6 words each). AssemblyAI charges $0.05/h more for them."
+speakers_hint = "AssemblyAI takes the number as the exact count of speakers; use Auto-detect if you aren't sure."
+rtf = 0.1
+
+[[models]]
+id = "azure"
+kind = "hosted"
+engine = "azure"
+title = "Azure AI Speech"
+tagline = "Egyptian Arabic locale, stores nothing"
+facts = ["Egyptian Arabic locale (ar-EG)", "No code-switching: one language per recording",
+         "$0.36/h, no free tier for this API", "Doesn't store your audio or transcript"]
+service = "Microsoft Azure"
+key_env = "AZURE_SPEECH_KEY"
+key_url = "https://portal.azure.com/"
+region = "westeurope"       # the region of your Speech resource, set in Settings (a key works only in its region)
+region_env = "AZURE_SPEECH_REGION"
+# endpoint = "https://<resource>.cognitiveservices.azure.com"  # instead of the region, e.g. a custom domain
+api_version = "2025-10-15"
+locale = "ar-EG"            # for Arabic + English; English sends en-US, auto-detect lets it pick ar-EG or en-US
+max_speakers = 10           # the most speakers auto-detect looks for (2-35)
+max_minutes = 115           # per request (the REST reference says under 2 hours); longer recordings go in parts
+prompt = false              # true sends the vocabulary as a phrase list (listed for ar-SA and en-US, not ar-EG)
+privacy = "Microsoft doesn't keep audio or transcripts from fast transcription. The recording is processed in the region of your Speech resource."
+prompt_hint = "Sent as a phrase list. Azure's language table lists phrase lists for ar-SA and en-US, not ar-EG."
+speakers_hint = "Azure takes the number as the most speakers to find (2 to 35); Auto-detect looks for up to 10."
+rtf = 0.05
+
 [[models]]
 id = "speechmatics"
 kind = "hosted"
