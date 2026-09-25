@@ -45,6 +45,18 @@ applied, or you can copy the text. Arabic lines are laid out right to left autom
 light and dark themes, the layout works in a narrow window, and the page loads nothing from outside
 (no CDN, web fonts or analytics).
 
+Each transcription keeps a record of how it was made: the recording (name, format, codec, sample
+rate, channels, bit rate, size, length), the model (its engine and file, or the service and API
+model), the run (processor or graphics card, power mode, threads, times, speed, peak memory, app
+version) and the computer (maker and model, operating system, processor, memory, graphics cards).
+The *Details* panel shows the main lines, with the makers' logos next to the hardware and the
+system, *More details* the rest, and *Copy details* copies all of it. The exports carry it too:
+plain text starts with a short header, WebVTT with a `NOTE`, Markdown ends with a Details section
+and JSON has a `details` object. SRT has no place for comments and stays as it was. Transcriptions
+made before this was added show fewer details. In the text, subtitle and Markdown exports, a line
+that is mostly Arabic starts with a right-to-left mark, so players and editors show it right to
+left even when it begins with an English word.
+
 ## The models and their settings
 
 All model settings live in [`app/config.toml`](../app/config.toml). Each `[[models]]` entry has an
@@ -102,6 +114,9 @@ against the real services, because no keys were available and no audio was to be
 - Everything the app stores (audio, transcripts, logs, keys) is in `app_data/`, which git ignores.
   Deleting a transcription in the app removes its folder, and deleting `app_data/` removes
   everything.
+- The details kept with each transcription name this computer's maker and model, operating system,
+  processor, memory and graphics cards. They are only shown to you and written into your exports
+  (all but SRT; add `?details=0` to an export's address to leave them out). Nothing sends them anywhere.
 
 ## Speed
 
@@ -122,8 +137,10 @@ Local jobs run one at a time. Hosted jobs have their own queue and don't wait fo
 | `app/downloads.py` | model downloads, resumable and checked against the pinned size and SHA-256 |
 | `app/desktop.py`, `app/selftest.py` | the desktop window and the installation check ([desktop app](10-desktop.md)) |
 | `app/transcript.py` | lines from words, and the exports |
+| `app/report.py` | the details of each transcription: what a job records, and how the page and the exports word it |
+| `sysinfo.py` | this computer and a recording's format (PyAV), for the details and `transcribe.py`'s `.meta.json` |
 | `app/static/` | the interface (HTML, CSS and JavaScript, no build step) |
-| `tests/` | unit tests: helpers, the API parsers, the HTTP API against mock services, downloads, paths, and the forced-alignment path. `RUN_MODEL_TESTS=1` also runs whisper-medium on a public clip |
+| `tests/` | unit tests: helpers, the API parsers, the HTTP API against mock services, downloads, paths, the details, and the forced-alignment path. `RUN_MODEL_TESTS=1` also runs whisper-medium on a public clip |
 
 Run the tests with `.venv/bin/python -m unittest discover -s tests -v`.
 
@@ -136,10 +153,10 @@ Every change needs the header `X-Tafrigh: 1`.
 | `GET /api/status` | models (ready, or what's missing), defaults, power profile, free space |
 | `POST /api/jobs?model=&speakers=&language=&prompt=&title=&name=&confirm_upload=` | the body is the file |
 | `POST /api/jobs` with JSON `{"path": …, "model": …, …}` | a file on this computer, read in place |
-| `GET /api/jobs`, `GET /api/jobs/<id>` | the list; one job with its lines (partial while it runs) |
+| `GET /api/jobs`, `GET /api/jobs/<id>` | the list; one job with its lines (partial while it runs), its `details`, and the same as the labelled `detail_groups` the page shows |
 | `PATCH /api/jobs/<id>` | `title`, `speaker_names`, `lines`, or `merge: {from, into}` |
 | `POST /api/jobs/<id>/cancel`, `POST /api/jobs/<id>/rerun`, `DELETE /api/jobs/<id>` | |
-| `GET /api/jobs/<id>/audio`, `GET /api/jobs/<id>/export/{txt,srt,vtt,md,json}` | |
+| `GET /api/jobs/<id>/audio`, `GET /api/jobs/<id>/export/{txt,srt,vtt,md,json}` | `?details=0` leaves the details out of an export |
 
 ## Limits
 

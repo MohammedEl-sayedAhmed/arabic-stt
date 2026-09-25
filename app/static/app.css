@@ -333,6 +333,16 @@ details.path .row { display: flex; gap: 8px; margin-top: 10px; }
 .side-col { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 14px; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
 .panel h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--faint); margin: 0 0 10px; font-weight: 650; }
+.job-details h4 { font-size: 12.5px; font-weight: 650; margin: 14px 0 6px; }
+.job-details > h4:first-of-type { margin-top: 0; }
+.job-details .kv { grid-template-columns: 84px 1fr; gap: 5px 10px; font-size: 13px; margin: 0; }
+.job-details .more { margin-top: 14px; }
+.job-details .more summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.job-details .more h4:first-of-type { margin-top: 10px; }
+.job-details .btn { margin-top: 14px; }
+.job-details .vendor { width: 15px; height: 15px; margin-right: 5px; vertical-align: -3px; fill: currentColor; color: var(--brand); }
+:root:not([data-theme="dark"]) .job-details .vendor.plain-light,
+:root[data-theme="dark"] .job-details .vendor.plain-dark { color: inherit; }  /* the brand colour would be too faint */
 .spk { display: grid; grid-template-columns: 10px 1fr; gap: 4px 9px; align-items: center; margin-bottom: 12px; }
 .spk:last-child { margin-bottom: 0; }
 .spk .sw { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }

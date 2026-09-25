@@ -636,15 +636,7 @@ function renderJob() {
     </div>
     <div class="side-col">
       ${stats.ids.length ? `<div class="panel"><h3>Speakers</h3>${stats.ids.map((sid) => speakerRow(sid, stats)).join("")}</div>` : ""}
-      <div class="panel"><h3>Details</h3><dl class="kv" style="grid-template-columns: 88px 1fr">
-        <dt>Model</dt><dd>${esc(j.model_title || j.model)}</dd>
-        <dt>Language</dt><dd>${esc({ ar: "Arabic + English", en: "English", auto: "Auto-detect" }[opts.language] || opts.language || "")}${j.detected_language ? ` (${esc(j.detected_language)})` : ""}</dd>
-        <dt>Speakers</dt><dd>${esc(opts.speakers === "none" ? "No labels" : opts.speakers === "auto" ? "Auto-detect" : opts.speakers)}</dd>
-        ${j.device ? `<dt>Ran on</dt><dd>${esc(deviceLabel(j.device))}</dd>` : ""}
-        ${opts.prompt ? `<dt>Vocabulary</dt><dd dir="auto">${esc(opts.prompt)}</dd>` : ""}
-        ${j.source_name ? `<dt>File</dt><dd dir="auto">${esc(j.source_name)}</dd>` : ""}
-        ${S.edited ? `<dt>Edited</dt><dd>yes — exports use your edits</dd>` : ""}
-      </dl></div>
+      ${detailsPanel()}
     </div>
   </div>` : ""}`;
   bindJob();
@@ -663,6 +655,29 @@ function speakerRow(sid, stats) {
       <div class="menu merge-menu" id="merge-${esc(sid)}" role="menu">${others.map((o) => `<button type="button" role="menuitem" data-merge-from="${esc(sid)}" data-merge-into="${esc(o)}"><span class="sw" style="background:${spkColor(o)}"></span>${esc(spkName(o))}</button>`).join("")}</div>
     </div>` : ""}</div>
   </div>`;
+}
+
+// How the transcript was made (recording, model, run, computer), worded by the server (app/report.py).
+// The main lines show; the rest are under More details. Older transcriptions simply have fewer lines.
+// The lines that name hardware or a system get the vendors' logos (brands.js).
+function detailsPanel() {
+  const groups = S.detailGroups || [];
+  if (!groups.length) return "";
+  const branded = new Set(["Ran on", "Computer", "Processor", "Graphics", "System"]);
+  const logos = (r) => (branded.has(r.label) && typeof brandIcons === "function" ? brandIcons(r.value) : "");
+  const block = (more) => groups.map((g) => {
+    const rows = g.rows.filter((r) => r.more === more);
+    return rows.length ? `<h4>${esc(g.title)}</h4><dl class="kv">${rows.map((r) => `<dt>${esc(r.label)}</dt><dd dir="${mixDir(r.value)}">${logos(r)}${esc(r.value)}</dd>`).join("")}</dl>` : "";
+  }).join("");
+  const more = block(true);
+  return `<div class="panel job-details"><h3>Details</h3>${block(false)}
+    ${more ? `<details class="more" id="moreDetails"${S.moreDetails ? " open" : ""}><summary>More details</summary>${more}</details>` : ""}
+    <button type="button" class="btn btn-sm" id="copyDetails">${ICON.copy} Copy details</button></div>`;
+}
+
+function detailsText() {
+  const groups = S.detailGroups.map((g) => [g.title, ...g.rows.map((r) => `${r.label}: ${r.value}`)].join("\n"));
+  return [S.job.title || "Untitled", ...groups].join("\n\n") + "\n";
 }
 
 function highlight(text) {
@@ -747,11 +762,17 @@ function bindJob() {
   const copy = $("#copyBtn");
   if (copy) copy.onclick = async () => {
     try {
-      const r = await fetch(`/api/jobs/${j.id}/export/txt`);
+      const r = await fetch(`/api/jobs/${j.id}/export/txt?details=0`);  // the text only; Copy details has the rest
       await navigator.clipboard.writeText(await r.text());
       toast("Transcript copied");
     } catch (e) { toast("Could not copy: " + e.message, "error"); }
   };
+  const copyDetails = $("#copyDetails");
+  if (copyDetails) copyDetails.onclick = async () => {
+    try { await navigator.clipboard.writeText(detailsText()); toast("Details copied"); } catch (e) { toast("Could not copy: " + e.message, "error"); }
+  };
+  const moreDetails = $("#moreDetails");
+  if (moreDetails) moreDetails.ontoggle = () => (S.moreDetails = moreDetails.open);  // stays open across re-renders
   const edit = $("#editBtn");
   if (edit) edit.onclick = () => {
     if (S.editing && S.dirty && !confirm("Discard your unsaved changes?")) return;
@@ -895,6 +916,7 @@ function applyJob(r) {
   S.partial = r.partial;
   S.hasAudio = r.has_audio;
   S.log = r.log || "";
+  S.detailGroups = r.detail_groups || [];
 }
 
 async function loadJob(id) {

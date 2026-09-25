@@ -18,7 +18,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import __version__, engines
+from . import __version__, engines, report
 from . import transcript as T
 from .config import FROZEN, power_profile, set_power_profile
 from .downloads import Downloads
@@ -43,7 +43,7 @@ class App:
     def __init__(self, cfg):
         self.cfg = cfg
         self.store = Store(cfg.storage)
-        self.runner = Runner(self.store, cfg)
+        self.runner = Runner(self.store, cfg, gpus=self.gpu_names)
         self.runner.recover()
         self.downloads = Downloads(cfg)
         self.server = None
@@ -65,6 +65,11 @@ class App:
             finally:
                 self.gpu_probing = False
         threading.Thread(target=run, daemon=True, name="tafrigh-gpu").start()
+
+    def gpu_names(self):
+        """The graphics cards the check found, for the job details; None until it has run (or if it failed)."""
+        devices = (getattr(self, "gpu", None) or {}).get("devices")  # jobs may start before __init__ ends
+        return [d.get("name") for d in devices if isinstance(d, dict)] if isinstance(devices, list) else None
 
     def cuda_ready(self):
         items = self.cfg.download_items()
@@ -342,6 +347,8 @@ class Handler(BaseHTTPRequestHandler):
         out = {"job": job, "lines": data["lines"] if data else engines.partial_lines(folder),
                "edited": bool(data and data.get("edited")), "partial": data is None,
                "has_audio": (folder / "audio.flac").exists()}
+        out["details"] = report.details(job, out["lines"], out["edited"])
+        out["detail_groups"] = report.groups(out["details"])  # the same, as the lines the job page shows
         if job["status"] in ("failed", "interrupted", "cancelled"):
             log = folder / "log.txt"
             out["log"] = log.read_text(encoding="utf-8", errors="replace")[-4000:] if log.exists() else ""
@@ -446,12 +453,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(chunk)
                 left -= len(chunk)
 
-    def export(self, _params, jid, fmt):
+    def export(self, params, jid, fmt):
         job = self.job(jid)
         if fmt not in T.EXPORTS:
             raise ApiError(404, "unknown format")
         fn, ctype = T.EXPORTS[fmt]
-        body = fn(job, self.lines_of(jid)).encode()
+        data, lines = self.app.store.transcript(jid), self.lines_of(jid)
+        details = None if params.get("details") == "0" else report.details(job, lines, bool(data and data.get("edited")))
+        body = fn(job, lines, details).encode()
         name = f"{slug(job.get('title'))}.{fmt}"
         ascii_name = re.sub(r"[^A-Za-z0-9._-]", "", name)
         if not re.search(r"[A-Za-z0-9]", ascii_name.rsplit(".", 1)[0]):

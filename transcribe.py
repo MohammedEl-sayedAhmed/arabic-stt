@@ -50,11 +50,7 @@ from faster_whisper import WhisperModel, decode_audio
 from faster_whisper.vad import VadOptions, get_speech_timestamps
 
 import speakers
-
-try:
-    import resource  # peak memory for the .meta.json; not on Windows
-except ImportError:
-    resource = None
+import sysinfo  # the computer, the input file and the peak memory, for the .meta.json
 
 SR = 16000
 MAX_CHUNK_S = 25
@@ -558,7 +554,9 @@ def main():
         "align_skipped_chunks": engine.skipped if isinstance(engine, Aligned) else None,
         "device": getattr(engine, "device", "cpu"),
         "seconds": round(took, 1), "rtf": round(took / (len(audio) / SR), 3),
-        "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024) if resource else None,
+        "peak_rss_mb": sysinfo.peak_memory_mb(),
+        "started": sysinfo.local_time(t0), "finished": sysinfo.local_time(),  # what "seconds" times (model loaded)
+        "source": sysinfo.recording(args.audio), "machine": sysinfo.machine(),
     }, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"\n{took:.0f} s to transcribe {len(audio) / SR:.0f} s of audio "
           f"({took / (len(audio) / SR):.2f}x real time). Saved {out / stem}.txt")

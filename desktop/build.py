@@ -35,7 +35,7 @@ def main():
         # the licence and the author credit travel with every copy
         "--add-data", f"{ROOT / 'LICENSE'}{sep}.", "--add-data", f"{ROOT / 'NOTICE'}{sep}.",
         # modules only imported inside functions or by the worker process
-        "--hidden-import", "transcribe", "--hidden-import", "speakers",
+        "--hidden-import", "transcribe", "--hidden-import", "speakers", "--hidden-import", "sysinfo",
         "--hidden-import", "app.worker", "--hidden-import", "app.desktop", "--hidden-import", "app.selftest",
         # packages with native libraries or data files loaded at run time
         "--collect-all", "faster_whisper", "--collect-all", "ctranslate2", "--collect-all", "sherpa_onnx",
