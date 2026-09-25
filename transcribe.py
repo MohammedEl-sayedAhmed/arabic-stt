@@ -19,6 +19,8 @@ Engines:
   llama    a Qwen3-ASR-family GGUF (R2T2, base Qwen3-ASR, Audar-ASR) served by
            llama-server on 127.0.0.1: bench/serve.sh r2t2|qwen3asr|audar 8081
   cohere   Cohere Transcribe Arabic (GGUF) run in process by transcribe.cpp
+  gguf     the same for any GGUF speech model transcribe.cpp runs (Parakeet, Canary, Whisper, ...),
+           given with --cohere-model; the app uses it for models added from Hugging Face
 
 Devices (--device auto, the default): Cohere runs on a GPU through transcribe.cpp (Vulkan, so
 NVIDIA, AMD and Intel graphics all work), preferring a discrete GPU; Whisper runs on an NVIDIA GPU
@@ -341,7 +343,7 @@ class Cohere:
                     self.model = transcribe_cpp.Model(self.path, backend=dev.kind, device=dev)
                     self.session = self.model.session(n_threads=args.threads)
                     try:
-                        self.session.run(np.zeros(SR, dtype=np.float32), language=self.language)
+                        self.run(np.zeros(SR, dtype=np.float32))
                     except transcribe_cpp.errors.OutputTruncated:
                         pass  # it ran; silence can make the decoder ramble
                     self.device = f"{dev.kind}: {dev.description}"
@@ -353,6 +355,26 @@ class Cohere:
                 sys.exit("--device gpu: no GPU that transcribe.cpp can use (see --gpu-info)")
         if self.model is None:
             self.use_cpu("cpu")
+        if args.language == "auto" and self.model.capabilities.supports_language_detect:
+            self.language = None  # this family can tell the language itself (Cohere can't: it gets Arabic)
+
+    def run(self, audio):
+        """session.run with the language; a family that doesn't take that option runs without one from then on."""
+        import transcribe_cpp
+
+        try:
+            return self.session.run(audio, language=self.language)
+        except (transcribe_cpp.errors.UnsupportedRequest, transcribe_cpp.errors.InvalidArgument) as e:
+            if self.language is None:
+                raise
+            print(f"{self.name} refused the language {self.language!r} ({e}); trying without one", file=sys.stderr,
+                  flush=True)
+            language, self.language = self.language, None
+            try:
+                return self.session.run(audio, language=None)
+            except (transcribe_cpp.errors.UnsupportedRequest, transcribe_cpp.errors.InvalidArgument):
+                self.language = language  # the language wasn't the problem
+                raise
 
     def use_cpu(self, label):
         import transcribe_cpp
@@ -365,7 +387,7 @@ class Cohere:
         import transcribe_cpp
 
         try:
-            text = self.session.run(np.asarray(audio, dtype=np.float32), language=self.language).text
+            text = self.run(np.asarray(audio, dtype=np.float32)).text
         except transcribe_cpp.errors.OutputTruncated as e:
             # The decoder hit its length cap, usually stuck repeating itself. Transcribe the halves
             # separately; if the audio is already short, keep what it said before the loop.
@@ -427,7 +449,7 @@ class Aligned:
         return self.aligner.words(audio, text) if text else []
 
 
-ENGINES = {"whisper": Whisper, "llama": Llama, "cohere": Cohere}
+ENGINES = {"whisper": Whisper, "llama": Llama, "cohere": Cohere, "gguf": Cohere}
 
 
 def stamp(seconds):
@@ -456,7 +478,8 @@ def main():
     ap.add_argument("--whisper-model", default=DEFAULT_WHISPER,
                     help="faster-whisper model name or local CTranslate2 folder (default: the "
                          "Arabic-English code-switching fine-tune if downloaded, else large-v3)")
-    ap.add_argument("--cohere-model", default=COHERE_MODEL, help="Cohere Transcribe GGUF for --engine cohere")
+    ap.add_argument("--cohere-model", default=COHERE_MODEL,
+                    help="Cohere Transcribe GGUF for --engine cohere, or any transcribe.cpp GGUF for --engine gguf")
     ap.add_argument("--speakers", type=int, metavar="N",
                     help="label speakers: the number of speakers, or 0 to estimate it")
     ap.add_argument("--voiceprint-model", default=str(speakers.MODEL),
@@ -476,8 +499,8 @@ def main():
         ap.error("the audio file is required")
     if args.speakers is not None and args.speakers < 0:
         ap.error("--speakers must be 0 (estimate) or the number of speakers")
-    if args.engine == "cohere" and args.prompt:
-        print("note: --prompt has no effect with --engine cohere", file=sys.stderr)
+    if args.engine in ("cohere", "gguf") and args.prompt:
+        print(f"note: --prompt has no effect with --engine {args.engine}", file=sys.stderr)
 
     def report(stage, **extra):
         if args.progress_file:  # written whole and renamed, so a reader never sees half a file

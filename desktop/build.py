@@ -32,6 +32,7 @@ def main():
         # the interface and the default settings, read at run time
         "--add-data", f"{ROOT / 'app' / 'static'}{sep}app/static",
         "--add-data", f"{ROOT / 'app' / 'config.toml'}{sep}app",
+        "--add-data", f"{ROOT / 'app' / 'catalog.toml'}{sep}app",  # the recommended models
         # the licence and the author credit travel with every copy
         "--add-data", f"{ROOT / 'LICENSE'}{sep}.", "--add-data", f"{ROOT / 'NOTICE'}{sep}.",
         # modules only imported inside functions or by the worker process
