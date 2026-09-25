@@ -25,7 +25,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-from . import engines
+from . import engines, report
 from . import transcript as T
 from .config import FROZEN, ROOT, Config
 from .server import make_server, slug
@@ -131,7 +131,8 @@ class Api:
         path = result[0] if isinstance(result, (list, tuple)) else result
         if not path:
             return None
-        Path(path).write_text(T.EXPORTS[fmt][0](job, lines), encoding="utf-8")
+        details = report.details(job, lines, bool(data and data.get("edited")))  # as the browser download
+        Path(path).write_text(T.EXPORTS[fmt][0](job, lines, details), encoding="utf-8")
         return str(path)
 
     def open_url(self, url):

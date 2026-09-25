@@ -69,7 +69,7 @@ def local_command(cfg, model, audio, out_dir, progress_file, options):
     whisper = cfg.whisper_source(model) if model["engine"] == "whisper" else None
     if model["engine"] == "whisper":
         cmd += ["--whisper-model", whisper or model["whisper_model"]]
-    elif model["engine"] == "cohere":
+    elif model["engine"] in ("cohere", "gguf"):  # gguf: any speech model transcribe.cpp runs
         cmd += ["--cohere-model", str(cfg.path(model["cohere_model"]))]
     speakers = options.get("speakers", "none")
     if speakers != "none" and cfg.speakers_ready():
@@ -386,6 +386,8 @@ HOSTED = {"elevenlabs": elevenlabs, "speechmatics": speechmatics}
 
 
 def run_hosted(cfg, model, job_dir, job, on_progress, cancelled):
+    from . import hosted_openai  # adds OpenAI, Groq and Mistral to HOSTED
     if not cfg.api_key(model):
         raise EngineError(f"no API key for {model['title']}: add it in Settings")
+    from . import hosted_more  # adds Gemini, Deepgram, AssemblyAI and Azure Speech to HOSTED
     return HOSTED[model["engine"]](cfg, model, job_dir, job, on_progress, cancelled)

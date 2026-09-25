@@ -197,6 +197,98 @@ delete_after = true         # delete the transcript from your ElevenLabs history
 prompt = true               # sent as key terms (ElevenLabs charges about 20% more for those requests)
 rtf = 0.05
 
+# Gemini, Deepgram, AssemblyAI and Azure run through app/hosted_more.py. privacy, prompt_hint and
+# speakers_hint are the texts the app shows for the model.
+[[models]]
+id = "gemini"
+kind = "hosted"
+engine = "gemini"
+title = "Google Gemini"
+tagline = "Google's speech-to-text model"
+facts = ["Egyptian Arabic (ar-EG) with code-switching", "Speaker labels for up to 8 people",
+         "Free tier, then about $0.30/h", "Free tier uses your audio for training and human review"]
+service = "Google"
+base_url = "https://generativelanguage.googleapis.com"
+key_env = "GEMINI_API_KEY"
+key_url = "https://aistudio.google.com/apikey"
+api_model = "gemini-3.5-transcribe"  # a general model such as "gemini-3.8-flash" gets instructions and a JSON schema instead
+language_codes = []         # for Arabic + English: none, so it detects the language, which follows code-switching; English sends en-US
+max_minutes = 29            # per request: 30 min is the limit with word times, so longer recordings go in parts
+inline_limit_mb = 20        # a larger request uploads the part with the Files API instead
+delete_after = true         # delete uploaded files from the Files API once transcribed
+prompt = false              # the transcribe model can't combine key terms with word times; true adds them to a general model's instructions
+privacy = "On the free tier Google uses it to improve its products and human reviewers may read it; with billing turned on it doesn't (and never for users in the EEA, Switzerland or the UK). The app asks Google not to store the request and deletes uploaded files afterwards."
+prompt_hint = "Added to the instructions of a general Gemini model."
+speakers_hint = "Gemini finds the speakers itself, up to 8 (3 or more is experimental); any choice other than No labels turns labels on."
+rtf = 0.1
+
+[[models]]
+id = "deepgram"
+kind = "hosted"
+engine = "deepgram"
+title = "Deepgram Nova-3"
+tagline = "Fast; one language per recording"
+facts = ["Egyptian Arabic (ar-EG) among 17 Arabic codes", "No Arabic–English code-switching",
+         "$200 free credit, then $0.26/h", "Not used for training: the app opts out"]
+service = "Deepgram"
+base_url = "https://api.deepgram.com"
+key_env = "DEEPGRAM_API_KEY"
+key_url = "https://console.deepgram.com/"
+api_model = "nova-3"
+language = "ar-EG"          # for Arabic + English and auto-detect (Deepgram can't detect Arabic); or "ar", "ar-SA", ...
+diarize_model = "latest"    # speaker labels (the older diarize=true is deprecated)
+mip_opt_out = true          # keep the audio out of Deepgram's model training (sent with every request)
+prompt = true               # sent as key terms ($0.0013/min extra)
+privacy = "The app tells Deepgram not to use it for model training (mip_opt_out), so Deepgram keeps it only while it processes the request. Deepgram doesn't store transcripts."
+prompt_hint = "Sent as key terms (up to 100). Deepgram charges $0.0013 a minute more for requests with key terms."
+speakers_hint = "Deepgram works out the number of speakers itself; any choice other than No labels turns labels on."
+rtf = 0.02
+
+[[models]]
+id = "assemblyai"
+kind = "hosted"
+engine = "assemblyai"
+title = "AssemblyAI"
+tagline = "Universal-3.5 Pro, with code-switching"
+facts = ["Arabic with code-switching (Universal-3.5 Pro)", "Speaker labels for $0.02/h more",
+         "$50 free credit (up to 185 h), then $0.21/h", "Free accounts can't opt out of training"]
+service = "AssemblyAI"
+base_url = "https://api.assemblyai.com"  # EU: https://api.eu.assemblyai.com (audio stays in the EU and isn't used for training)
+key_env = "ASSEMBLYAI_API_KEY"
+key_url = "https://www.assemblyai.com/dashboard/home"
+speech_models = ["universal-3-5-pro", "universal-2"]  # Universal-2 takes languages Universal-3.5 Pro doesn't
+expected_languages = ["ar", "en"]  # language detection hints for Arabic + English
+delete_after = true         # delete the transcript and the uploaded audio from AssemblyAI once fetched
+prompt = true               # sent as key terms ($0.05/h extra)
+privacy = "AssemblyAI may use it to train its models. Free accounts can't opt out; paid accounts can, under Data controls in the dashboard. The app deletes the transcript and the uploaded audio there once it has the transcript."
+prompt_hint = "Sent as key terms (up to 6 words each). AssemblyAI charges $0.05/h more for them."
+speakers_hint = "AssemblyAI takes the number as the exact count of speakers; use Auto-detect if you aren't sure."
+rtf = 0.1
+
+[[models]]
+id = "azure"
+kind = "hosted"
+engine = "azure"
+title = "Azure AI Speech"
+tagline = "Egyptian Arabic locale, stores nothing"
+facts = ["Egyptian Arabic locale (ar-EG)", "No code-switching: one language per recording",
+         "$0.36/h, no free tier for this API", "Doesn't store your audio or transcript"]
+service = "Microsoft Azure"
+key_env = "AZURE_SPEECH_KEY"
+key_url = "https://portal.azure.com/"
+region = "westeurope"       # the region of your Speech resource, set in Settings (a key works only in its region)
+region_env = "AZURE_SPEECH_REGION"
+# endpoint = "https://<resource>.cognitiveservices.azure.com"  # instead of the region, e.g. a custom domain
+api_version = "2025-10-15"
+locale = "ar-EG"            # for Arabic + English; English sends en-US, auto-detect lets it pick ar-EG or en-US
+max_speakers = 10           # the most speakers auto-detect looks for (2-35)
+max_minutes = 115           # per request (the REST reference says under 2 hours); longer recordings go in parts
+prompt = false              # true sends the vocabulary as a phrase list (listed for ar-SA and en-US, not ar-EG)
+privacy = "Microsoft doesn't keep audio or transcripts from fast transcription. The recording is processed in the region of your Speech resource."
+prompt_hint = "Sent as a phrase list. Azure's language table lists phrase lists for ar-SA and en-US, not ar-EG."
+speakers_hint = "Azure takes the number as the most speakers to find (2 to 35); Auto-detect looks for up to 10."
+rtf = 0.05
+
 [[models]]
 id = "speechmatics"
 kind = "hosted"
@@ -215,3 +307,78 @@ speaker_sensitivity = 0.5   # 0-1, higher finds more speakers (batch jobs can't 
 delete_after = true         # delete the job (audio and transcript) from Speechmatics once fetched
 prompt = true               # sent as custom vocabulary
 rtf = 0.15
+
+# OpenAI, Groq and Mistral (app/hosted_openai.py). The upload is the audio as Opus in WebM, split at
+# pauses into parts that fit the service's limits (max_part_mb, max_part_s).
+[[models]]
+id = "openai"
+kind = "hosted"
+engine = "openai"
+title = "OpenAI"
+tagline = "Doesn't keep or train on your recordings"
+facts = ["gpt-transcribe, not tested on Egyptian speech", "Speaker labels from gpt-4o-transcribe-diarize",
+         "No free tier; $0.27/h, $0.36/h with labels", "Doesn't train on your audio or keep it"]
+service = "OpenAI"
+base_url = "https://api.openai.com/v1"
+key_env = "OPENAI_API_KEY"
+key_url = "https://platform.openai.com/api-keys"
+api_model = "gpt-transcribe"  # or gpt-4o-transcribe ($0.36/h), gpt-4o-mini-transcribe ($0.18/h), whisper-1 ($0.36/h)
+diarize_model = "gpt-4o-transcribe-diarize"  # used when speaker labels are on ($0.36/h); "": voiceprints here
+carry_speakers = true       # later parts get clips of up to 4 voices heard before, so those keep their numbers
+upload_format = "webm"      # Opus in WebM, about 14 MB an hour at 32 kbps; also "ogg", "mp3" or "flac"
+upload_kbps = 32
+max_part_mb = 24            # OpenAI takes files of up to 25 MB
+max_part_s = 600            # parts for the diarize model and whisper-1; a Tier 1 account takes 10,000 tokens a minute
+max_output_tokens = 2000    # the 4o models' limit: a part whose reply reaches it is sent again in halves
+piece_s = 25                # gpt-transcribe and gpt-4o-(mini-)transcribe give no times: a request per 25 s or less
+prompt = true               # keywords for gpt-transcribe, the prompt for the other models (none for diarize)
+rtf = 0.1
+privacy = "OpenAI does not train on it and keeps no copy of transcription requests."
+prompt_hint = "Sent as keywords to gpt-transcribe, or as the prompt to other OpenAI models. Not used with speaker labels, because gpt-4o-transcribe-diarize takes no vocabulary."
+speakers_hint = "Labels come from gpt-4o-transcribe-diarize, which finds the speakers itself; the number isn't sent. A recording over 10 minutes goes in parts, and each part gets short clips of up to 4 voices heard before, so those people keep their numbers."
+
+[[models]]
+id = "groq"
+kind = "hosted"
+engine = "groq"
+title = "Groq Whisper large-v3"
+tagline = "Stock Whisper with the Egyptian hint, on Groq's servers"
+facts = ["Not measured; the same model got 20.8% WER locally", "Speaker labels from voiceprints on this computer",
+         "Free: 8 h of audio a day, then $0.111/h", "Keeps no copy by default"]
+service = "Groq"
+base_url = "https://api.groq.com/openai/v1"
+key_env = "GROQ_API_KEY"
+key_url = "https://console.groq.com/keys"
+api_model = "whisper-large-v3"  # or whisper-large-v3-turbo ($0.04/h, weaker on Arabic)
+upload_format = "webm"      # also "ogg", "mp3" or "flac" (lossless, about 3.5 times the size)
+upload_kbps = 32
+max_part_mb = 24            # 25 MB per file on the free plan (100 MB on the developer plan)
+max_part_s = 3600
+prompt = true               # added after the Egyptian style hint (Whisper prompts are limited to 224 tokens)
+rtf = 0.02
+privacy = "Groq keeps no copy by default, but may log requests for up to 30 days to look into errors or abuse."
+prompt_hint = "Added after the Egyptian style hint that Whisper gets. Whisper prompts are short, so terms past about 200 characters are left out."
+speakers_hint = "Groq gives no speaker labels, so they come from the voiceprints on this computer, as for the local models (the voiceprint model is in Settings). Each line goes to the person heard most during it."
+
+[[models]]
+id = "mistral"
+kind = "hosted"
+engine = "mistral"
+title = "Mistral Voxtral"
+tagline = "Voxtral Mini Transcribe 2, with speaker labels"
+facts = ["Arabic is one of its 13 languages; not tested here", "Speaker labels; it detects the language itself",
+         "$0.18/h; free plan limits not published", "May train on your audio unless you opt out"]
+service = "Mistral"
+base_url = "https://api.mistral.ai/v1"
+key_env = "MISTRAL_API_KEY"
+key_url = "https://console.mistral.ai/api-keys"
+api_model = "voxtral-mini-2602"  # Voxtral Mini Transcribe 2, also called voxtral-mini-latest
+upload_format = "webm"      # the docs list WAV, MP3, FLAC, OGG and WEBM
+upload_kbps = 32
+max_part_mb = 100           # the limits page says 500 MB
+max_part_s = 3480           # the limits page says 60 min per request (its transcription FAQ says about 3 h)
+prompt = true               # sent as context bias, up to 100 terms
+rtf = 0.05
+privacy = "Mistral may use it to improve its models unless you switched off Anonymous improvement data (Admin, Privacy)."
+prompt_hint = "Sent as context bias, up to 100 terms. Mistral says this is tuned for English and experimental for other languages."
+speakers_hint = "Voxtral finds the speakers itself; the number isn't sent. A recording over 58 minutes goes in parts, and each part gets its own speaker numbers, so merge them afterwards."

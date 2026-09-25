@@ -60,6 +60,7 @@ const ICON = {
   down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
   chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="m6 9 6 6 6-6"/></svg>',
   bolt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
+  layers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg>',
   gpu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="9" cy="12" r="2.5"/><circle cx="16" cy="12" r="2.5"/><path d="M6 18v2M18 18v2"/></svg>',
   folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
   external: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
@@ -186,7 +187,8 @@ function downloadBlock(id, d, compact = false) {
   const left = Math.max(0, d.missing - d.partial);
   const error = d.state === "error" ? `<div class="mc-missing">${esc(d.error || "The download failed")}</div>` : "";
   if (d.installed) return compact ? "" : `<span class="pill ok">Downloaded · ${bytes(d.size)}</span>`;
-  return `${error}<button type="button" class="btn btn-sm btn-primary" data-dl="${esc(id)}">${ICON.download} ${d.partial ? "Resume" : "Download"} (${bytes(left)})</button>`;
+  const convert = !left && model(id)?.hub?.kind === "transformers";  // downloaded, not converted yet
+  return `${error}<button type="button" class="btn btn-sm btn-primary" data-dl="${esc(id)}">${ICON.download} ${convert ? "Convert" : `${d.partial ? "Resume" : "Download"} (${bytes(left)})`}</button>`;
 }
 
 async function startDownload(id) {
@@ -288,6 +290,7 @@ function estimateText(m, seconds, short = false) {
 
 function speakerHint(m, speakers) {
   if (speakers === "none") return "One block of text with timestamps, no names.";
+  if (m?.speakers_hint) return esc(m.speakers_hint);
   if (m?.id === "speechmatics") return "Speechmatics works out the number of speakers itself; any choice here other than No labels turns labels on.";
   if (m?.id === "elevenlabs" && speakers !== "auto") return "ElevenLabs treats the number as the most speakers to find.";
   return "Labels Speaker 1, Speaker 2… by voice. Give the real number of people if you know it; auto-detect works well for larger meetings.";
@@ -296,7 +299,7 @@ function speakerHint(m, speakers) {
 function modelCard(m) {
   const f = S.form, sel = f.model === m.id;
   const badges = m.kind === "local"
-    ? `<span class="pill accent">${ICON.laptop} On this computer</span>`
+    ? `<span class="pill accent">${ICON.laptop} On this computer</span>${m.hub ? '<span class="pill">From Hugging Face</span>' : ""}`
     : `<span class="pill cloud">${ICON.cloud} Uploads to ${esc(m.service)}</span>`;
   let state = "";
   if (!m.ready && m.kind === "hosted") state = `<span class="mc-missing">Needs an API key — <button type="button" class="linkish" data-open-settings="${esc(m.id)}">add it</button></span>`;
@@ -376,7 +379,7 @@ function renderNew() {
     ${m?.prompt ? `<div class="field">
       <label for="promptInput">Vocabulary <span class="opt">optional</span></label>
       <textarea id="promptInput" dir="auto" rows="2" placeholder="Names and terms, comma-separated: Jira, GitHub, backend, deployment">${esc(f.prompt)}</textarea>
-      <p class="hint">${{ elevenlabs: "Sent as key terms (up to 5 words each). ElevenLabs charges about 20% more for requests with key terms.",
+      <p class="hint">${esc(m.prompt_hint) || { elevenlabs: "Sent as key terms (up to 5 words each). ElevenLabs charges about 20% more for requests with key terms.",
         speechmatics: "Sent as custom vocabulary (up to 6 words per term)." }[m.id] || "Given to Whisper as a hint. Plausible but untested; leave empty if unsure."}</p>
     </div>` : ""}
   </div>
@@ -384,7 +387,7 @@ function renderNew() {
   ${hosted && m.ready ? `<div class="card consent">
     ${ICON.cloud}
     <div>
-      <p><b>This model uploads the recording to ${esc(m.service)}.</b> It leaves this computer and is processed on their servers under their terms. ${m.id === "elevenlabs" ? "ElevenLabs may use it for training unless you opted out (Profile → Data use)." : "Speechmatics does not train on it unless you opted in; the app deletes the job there after fetching the transcript."}</p>
+      <p><b>This model uploads the recording to ${esc(m.service)}.</b> It leaves this computer and is processed on their servers under their terms. ${esc(m.privacy) || (m.id === "elevenlabs" ? "ElevenLabs may use it for training unless you opted out (Profile → Data use)." : "Speechmatics does not train on it unless you opted in; the app deletes the job there after fetching the transcript.")}</p>
       <label><input type="checkbox" id="confirmUpload" ${f.confirm ? "checked" : ""}> Upload this recording to ${esc(m.service)}</label>
     </div>
   </div>` : ""}
@@ -636,15 +639,7 @@ function renderJob() {
     </div>
     <div class="side-col">
       ${stats.ids.length ? `<div class="panel"><h3>Speakers</h3>${stats.ids.map((sid) => speakerRow(sid, stats)).join("")}</div>` : ""}
-      <div class="panel"><h3>Details</h3><dl class="kv" style="grid-template-columns: 88px 1fr">
-        <dt>Model</dt><dd>${esc(j.model_title || j.model)}</dd>
-        <dt>Language</dt><dd>${esc({ ar: "Arabic + English", en: "English", auto: "Auto-detect" }[opts.language] || opts.language || "")}${j.detected_language ? ` (${esc(j.detected_language)})` : ""}</dd>
-        <dt>Speakers</dt><dd>${esc(opts.speakers === "none" ? "No labels" : opts.speakers === "auto" ? "Auto-detect" : opts.speakers)}</dd>
-        ${j.device ? `<dt>Ran on</dt><dd>${esc(deviceLabel(j.device))}</dd>` : ""}
-        ${opts.prompt ? `<dt>Vocabulary</dt><dd dir="auto">${esc(opts.prompt)}</dd>` : ""}
-        ${j.source_name ? `<dt>File</dt><dd dir="auto">${esc(j.source_name)}</dd>` : ""}
-        ${S.edited ? `<dt>Edited</dt><dd>yes — exports use your edits</dd>` : ""}
-      </dl></div>
+      ${detailsPanel()}
     </div>
   </div>` : ""}`;
   bindJob();
@@ -663,6 +658,80 @@ function speakerRow(sid, stats) {
       <div class="menu merge-menu" id="merge-${esc(sid)}" role="menu">${others.map((o) => `<button type="button" role="menuitem" data-merge-from="${esc(sid)}" data-merge-into="${esc(o)}"><span class="sw" style="background:${spkColor(o)}"></span>${esc(spkName(o))}</button>`).join("")}</div>
     </div>` : ""}</div>
   </div>`;
+}
+
+// How the transcript was made (recording, model, run, computer), worded by the server (app/report.py).
+// The main lines show; the rest are under More details. Older transcriptions simply have fewer lines.
+// The lines that name hardware or a system get the vendors' logos (brands.js).
+// The Details panel: where and how fast it ran on top, then the recording, the model and the computer,
+// each with the brand's logo where there is one; every value is under "All details" and in Copy details.
+function detailsPanel() {
+  const groups = S.detailGroups || [];
+  if (!groups.length) return "";
+  const d = S.details;
+  const rows = (more) => groups.map((g) => {
+    const list = g.rows.filter((r) => more === null || r.more === more);
+    return list.length ? `<h4>${esc(g.title)}</h4><dl class="kv">${list.map((r) => `<dt>${esc(r.label)}</dt><dd dir="${mixDir(r.value)}">${esc(r.value)}</dd>`).join("")}</dl>` : "";
+  }).join("");
+  const copy = `<button type="button" class="btn btn-sm" id="copyDetails">${ICON.copy} Copy details</button>`;
+  if (!d || !d.run) {  // an older job: the plain list
+    const more = rows(true);
+    return `<div class="panel job-details"><h3>Details</h3>${rows(false)}
+      ${more ? `<details class="more" id="moreDetails"${S.moreDetails ? " open" : ""}><summary>More details</summary>${more}</details>` : ""}${copy}</div>`;
+  }
+  const rec = d.recording || {}, mod = d.model || {}, run = d.run || {}, pc = d.computer || {};
+  const value = (label) => { for (const g of groups) for (const r of g.rows) if (r.label === label) return r.value; return ""; };
+  const [kind, ...rest] = String(run.device || "").split(":");
+  let device, where, fallback;
+  if (mod.kind === "hosted") { device = mod.service || mod.title; where = "Hosted service"; fallback = ICON.cloud; }
+  else if (rest.length) {
+    device = gpuName(rest.join(":").replace(/\s*\((int8_float16|float16)\)\s*$/, ""));
+    where = `Graphics card · ${{ vulkan: "Vulkan", cuda: "CUDA", metal: "Metal", rocm: "ROCm" }[kind] || kind}`;
+    fallback = ICON.gpu;
+  } else { device = gpuName(pc.cpu) || "Processor"; where = kind.startsWith("cpu (") ? "Processor (the graphics card failed)" : "Processor"; fallback = ICON.cpu; }
+  const stats = [
+    run.rtf != null ? [`${Number(run.rtf).toFixed(2)}×`, "real time"] : null,
+    run.seconds != null ? [human(run.seconds), rec.duration ? `for ${clock(rec.duration)}` : "took"] : null,
+    run.peak_memory_mb ? [bytes(run.peak_memory_mb * 1e6), "memory"] : null,
+  ].filter(Boolean);
+  const audio = value("Audio").split(/,\s*/).filter(Boolean);
+  const recChips = [rec.extension && rec.extension.toUpperCase(), ...audio, rec.size && bytes(rec.size)].filter(Boolean);
+  const quant = /(?:^|[-_.])((?:I?Q\d(?:_[A-Z0-9]+)*)|F16|BF16|F32)(?=\.gguf$)/i.exec(mod.file || "");
+  const engine = { cohere: "transcribe.cpp", gguf: "transcribe.cpp", whisper: "faster-whisper", llama: "llama.cpp" }[mod.engine] || mod.service || "";
+  const modChips = [engine, quant && `GGUF ${quant[1].toUpperCase()}`, mod.api_model].filter(Boolean);
+  const chips = (list) => list.length ? `<div class="chips">${list.map((c) => `<span class="chip" dir="auto">${esc(c)}</span>`).join("")}</div>` : "";
+  const line = (text, icon, sub) => text ? `<div class="det-row">${logoTile(text, icon, true)}<div><div dir="${mixDir(text)}">${esc(text)}</div>${sub ? `<div class="det-sub">${esc(sub)}</div>` : ""}</div></div>` : "";
+  const maker = pc.manufacturer && typeof brandFor === "function" && brandFor(pc.manufacturer)
+    ? BRANDS[brandFor(pc.manufacturer)].title : pc.manufacturer;  // "LENOVO" -> "Lenovo"
+  const machine = [maker, pc.model].filter(Boolean).join(" ");
+  const os = String(pc.os || "").replace(/\s*\(.*\)\s*$/, "");
+  const said = [value("Language"), value("Speakers") && `Speakers: ${value("Speakers")}`].filter(Boolean).join(" · ");
+  return `<div class="panel job-details fancy"><h3>Details</h3>
+    <div class="det-hero">
+      <div class="det-dev">${logoTile(device, fallback)}<div><div class="det-main" dir="${mixDir(device)}">${esc(device)}</div><div class="det-sub">${esc(where)}</div></div></div>
+      ${stats.length ? `<div class="det-stats">${stats.map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("")}</div>` : ""}
+    </div>
+    ${rec.name ? `<section class="det-sec"><h4>${ICON.wave} Recording</h4><div class="det-main" dir="auto">${esc(rec.name)}</div>${chips(recChips)}</section>` : ""}
+    <section class="det-sec"><h4>${ICON.layers} Model</h4><div class="det-main">${esc(mod.title || S.job.model_title || "")}</div>${chips(modChips)}${said ? `<div class="det-sub">${esc(said)}</div>` : ""}</section>
+    ${machine || pc.cpu ? `<section class="det-sec"><h4>${ICON.laptop} Computer</h4>
+      ${line(machine, ICON.laptop, "")}${line(gpuName(pc.cpu), ICON.cpu, pc.threads ? `${pc.threads} threads${pc.ram_gb ? ` · ${Math.round(pc.ram_gb)} GB RAM` : ""}` : "")}${line(os, ICON.laptop, pc.arch || "")}</section>` : ""}
+    <details class="more" id="moreDetails"${S.moreDetails ? " open" : ""}><summary>All details</summary>${rows(null)}</details>
+    ${copy}</div>`;
+}
+
+// A brand's logo on a tinted tile (brands.js), or the given icon when no brand is named in the text.
+function logoTile(text, icon, small = false) {
+  const slug = typeof brandFor === "function" ? brandFor(text) : null;
+  const b = slug && BRANDS[slug];
+  const cls = `logo-tile${small ? " small" : ""}`;
+  if (!b) return `<span class="${cls} plain">${icon}</span>`;
+  const plain = Object.keys(SURFACES).filter((t) => contrast(b.hex, SURFACES[t]) < 3).map((t) => ` plain-${t}`).join("");
+  return `<span class="${cls}${plain}" style="--brand:#${b.hex}" title="${esc(b.title)}"><svg viewBox="0 0 24 24" role="img" aria-label="${esc(b.title)}"><path d="${b.path}"/></svg></span>`;
+}
+
+function detailsText() {
+  const groups = S.detailGroups.map((g) => [g.title, ...g.rows.map((r) => `${r.label}: ${r.value}`)].join("\n"));
+  return [S.job.title || "Untitled", ...groups].join("\n\n") + "\n";
 }
 
 function highlight(text) {
@@ -747,11 +816,17 @@ function bindJob() {
   const copy = $("#copyBtn");
   if (copy) copy.onclick = async () => {
     try {
-      const r = await fetch(`/api/jobs/${j.id}/export/txt`);
+      const r = await fetch(`/api/jobs/${j.id}/export/txt?details=0`);  // the text only; Copy details has the rest
       await navigator.clipboard.writeText(await r.text());
       toast("Transcript copied");
     } catch (e) { toast("Could not copy: " + e.message, "error"); }
   };
+  const copyDetails = $("#copyDetails");
+  if (copyDetails) copyDetails.onclick = async () => {
+    try { await navigator.clipboard.writeText(detailsText()); toast("Details copied"); } catch (e) { toast("Could not copy: " + e.message, "error"); }
+  };
+  const moreDetails = $("#moreDetails");
+  if (moreDetails) moreDetails.ontoggle = () => (S.moreDetails = moreDetails.open);  // stays open across re-renders
   const edit = $("#editBtn");
   if (edit) edit.onclick = () => {
     if (S.editing && S.dirty && !confirm("Discard your unsaved changes?")) return;
@@ -895,6 +970,8 @@ function applyJob(r) {
   S.partial = r.partial;
   S.hasAudio = r.has_audio;
   S.log = r.log || "";
+  S.detailGroups = r.detail_groups || [];
+  S.details = r.details || null;
 }
 
 async function loadJob(id) {
@@ -1017,6 +1094,7 @@ function renderSettings(focus) {
       <div class="top"><b>${esc(m.title)}</b>${src}</div>
       <form class="row" data-key-form="${esc(m.id)}"><input type="text" name="username" value="${esc(m.id)}" autocomplete="off" hidden>
         <input type="password" data-key="${esc(m.id)}" placeholder="${m.key_source ? "Replace the key" : "Paste your API key"}" autocomplete="new-password" spellcheck="false">
+        ${m.region != null ? `<input type="text" data-region value="${esc(m.region)}" placeholder="Region, e.g. westeurope" aria-label="${esc(m.service)} region" title="The region of your resource: the key works only there" autocomplete="off" spellcheck="false" style="flex:0 1 11em;min-width:7em">` : ""}
         <button class="btn" type="submit">Save</button>
         ${m.key_source === "app" ? `<button class="btn btn-ghost btn-danger" type="button" data-clear-key="${esc(m.id)}">Remove</button>` : ""}</form>
       <p>${m.key_url ? `Get a key: <a href="${esc(m.key_url)}" target="_blank" rel="noopener noreferrer">${esc(m.key_url.replace(/^https:\/\//, ""))}</a>. ` : ""}${esc((m.facts || []).slice(-1)[0] || "")}.</p>
@@ -1115,7 +1193,7 @@ function renderSettings(focus) {
       </div>
       <p class="hint">Models are kept in <code class="mono">${esc(st.home)}/models</code>. The port, defaults and model list are set in <code class="mono">app/config.toml</code>; your own changes can go in <code class="mono">${esc(st.storage.dir)}/config.toml</code>.</p>
     </section>`;
-  $$("[data-key-form]").forEach((form) => (form.onsubmit = (e) => { e.preventDefault(); saveKey(form.dataset.keyForm, $("[data-key]", form).value); }));
+  $$("[data-key-form]").forEach((form) => (form.onsubmit = (e) => { e.preventDefault(); saveKey(form.dataset.keyForm, $("[data-key]", form).value, $("[data-region]", form)?.value); }));
   $$("[data-clear-key]").forEach((b) => (b.onclick = () => confirm("Remove the saved key?") && saveKey(b.dataset.clearKey, "")));
   $$("[data-power]").forEach((b) => (b.onclick = async () => {
     try { await api.post("/api/power", { profile: b.dataset.power }); await refreshStatus(); renderSettings(); toast(`Power mode: ${b.dataset.power}`); } catch (e) { toast(e.message, "error"); }
@@ -1135,10 +1213,141 @@ function renderSettings(focus) {
   else if (focus && focus !== "power") { const el = $(`[data-key="${focus}"]`); if (el) setTimeout(() => el.focus(), 50); }
 }
 
-// Adding models from Hugging Face (Settings → Models): filled in by the importer.
-function hubBlock() { return ""; }
-function bindHub() {}
-async function forgetModel(_id) {}
+// Adding models from Hugging Face (Settings → Models). The state lives here, not in the dialog, which is
+// rebuilt on every status poll while a download runs; the caret in the link field is put back too.
+const HUB = { url: "", busy: false, found: null, error: "", caret: null, catalogOpen: true, pick: {} };
+const GPU_USE = { any: "Can use any graphics card (Vulkan)", nvidia: "Can use NVIDIA graphics cards only (CUDA)" };
+const quant = (file) => (String(file).match(/[-_.]((?:I?Q\d\w*?)|BF16|F16|F32)\.gguf$/i) || [null, file])[1];
+
+// Recommended models (app/catalog.toml): built in, added, or added here in one click through the importer.
+function catalogBlock() {
+  const list = S.status?.catalog || [];
+  if (!list.length) return "";
+  return `<details id="catalog"${HUB.catalogOpen ? " open" : ""}>
+    <summary class="hint" style="margin:0 0 8px;cursor:pointer"><b>Recommended models</b> for Egyptian Arabic–English meetings and calls</summary>
+    ${list.map(catalogRow).join("")}
+  </details>`;
+}
+
+function catalogRow(c) {
+  const builtin = c.builtin ? model(c.builtin) : null;
+  const file = (c.added && c.added_file) || HUB.pick[c.key] || c.files?.[0]?.file;
+  const size = builtin ? builtin.download?.size : c.files ? c.files.find((f) => f.file === file)?.size : c.size;
+  const pick = c.files?.length > 1 && !c.added && !builtin
+    ? `<select data-catalog-file="${esc(c.key)}" aria-label="File for ${esc(c.name)}">${c.files.map((f) => `<option value="${esc(f.file)}"${f.file === file ? " selected" : ""}>${esc(quant(f.file))} (${bytes(f.size)})</option>`).join("")}</select>` : "";
+  const action = builtin ? `<span class="pill">Built in</span>`
+    : c.added ? `<span class="pill ok">Added${c.added_file && c.files?.length > 1 ? `: ${esc(quant(c.added_file))}` : ""}</span>`
+    : c.problem ? "" : `<button type="button" class="btn btn-sm btn-primary" data-catalog-add="${esc(c.key)}" ${HUB.busy ? "disabled" : ""}>${ICON.download} Add (${bytes(size)})</button>`;
+  const facts = [size ? bytes(size) : "", `Licence: ${esc(c.licence)}`, esc(GPU_USE[c.gpu] || c.gpu)];
+  return `<div class="key-row"><div class="top"><b>${esc(c.name)}</b>${pick}${action}</div>
+    <p style="margin-top:0">${esc(c.good_for)}</p>
+    <p>${esc(c.evidence)}</p>
+    <p>${facts.filter(Boolean).join(" · ")}</p>
+    ${c.problem ? `<p class="mc-missing">${esc(c.problem)}</p>` : ""}
+  </div>`;
+}
+
+function hubBlock() {
+  const h = HUB, input = $("#hubUrl");
+  h.caret = input && document.activeElement === input ? [input.selectionStart, input.selectionEnd] : null;
+  return `${catalogBlock()}<div class="hub">
+    <p class="hint" style="margin:0 0 8px"><b>Add a model from Hugging Face.</b> Paste the link to its page, or its name (org/name). Whisper models for faster-whisper or in Transformers format, and GGUF speech models for transcribe.cpp, can be added.</p>
+    <form class="row" id="hubForm"><input type="text" id="hubUrl" value="${esc(h.url)}" placeholder="https://huggingface.co/org/name" spellcheck="false" autocomplete="off" aria-label="Hugging Face link or model name">
+      <button class="btn" type="submit" ${h.busy ? "disabled" : ""}>${h.busy ? "Checking…" : "Check"}</button></form>
+    ${h.found ? hubFound(h.found) : ""}
+    ${h.error ? `<div class="hub-found error" role="alert">${esc(h.error)}</div>` : ""}
+  </div>`;
+}
+
+function hubFound(f) {
+  const file = f.choices && f.choices.length > 1
+    ? `<select id="hubFile" aria-label="Model file" ${HUB.busy ? "disabled" : ""}>${f.choices.map((c) => `<option value="${esc(c.file)}"${c.file === f.file ? " selected" : ""}>${esc(c.file)} (${bytes(c.size)})</option>`).join("")}</select>`
+    : `<code>${esc(f.file)}</code>`;
+  const action = f.problem ? `<p class="mc-missing" style="margin:0">${esc(f.problem)}</p>`
+    : f.added ? `<span class="pill ok">Already in the app</span>`
+    : `<button type="button" class="btn btn-sm btn-primary" id="hubAdd" ${HUB.busy ? "disabled" : ""}>${ICON.download} Add and download (${bytes(f.size)})</button>`;
+  return `<div class="hub-found"><dl class="kv">
+      <dt>Model</dt><dd><a href="https://huggingface.co/${esc(f.repo)}" target="_blank" rel="noopener noreferrer">${esc(f.repo)}</a></dd>
+      <dt>Kind</dt><dd>${esc(f.label)}</dd>
+      ${f.architecture ? `<dt>Architecture</dt><dd><code>${esc(f.architecture)}</code></dd>` : ""}
+      ${f.file ? `<dt>File</dt><dd>${file}</dd>` : ""}
+      <dt>Size</dt><dd>${bytes(f.size)}${f.kind === "transformers" ? ", then converted on this computer" : ""}</dd>
+      <dt>Licence</dt><dd>${esc(f.licence || "Not stated on the model page")}</dd>
+      <dt>Revision</dt><dd><code>${esc(f.revision.slice(0, 7))}</code></dd>
+    </dl>${action}</div>`;
+}
+
+function bindHub() {
+  const form = $("#hubForm"), input = $("#hubUrl");
+  if (!form) return;
+  input.oninput = () => (HUB.url = input.value);
+  form.onsubmit = (e) => { e.preventDefault(); hubCheck(); };
+  if (HUB.caret) { input.focus(); input.setSelectionRange(...HUB.caret); }
+  const file = $("#hubFile");
+  if (file) file.onchange = () => hubCheck(file.value);
+  const add = $("#hubAdd");
+  if (add) add.onclick = hubAdd;
+  const list = $("#catalog");
+  if (list) list.ontoggle = () => (HUB.catalogOpen = list.open);
+  $$("[data-catalog-file]").forEach((sel) => (sel.onchange = () => { HUB.pick[sel.dataset.catalogFile] = sel.value; rerenderHub(); }));
+  $$("[data-catalog-add]").forEach((b) => (b.onclick = () => catalogAdd(b.dataset.catalogAdd)));
+}
+
+const rerenderHub = () => $("#settings").open && renderSettings();
+
+async function hubCheck(file) {
+  const url = HUB.url.trim();
+  if (!url || HUB.busy) return;
+  Object.assign(HUB, { busy: true, error: "" }, file ? {} : { found: null });
+  rerenderHub();
+  try { HUB.found = await api.post("/api/hub/inspect", file ? { url, file } : { url }); }
+  catch (e) { Object.assign(HUB, { found: null, error: e.message }); }
+  HUB.busy = false;
+  rerenderHub();
+}
+
+// Adds a model and starts its download; returns the error message, if any.
+async function addModel(body, name) {
+  Object.assign(HUB, { busy: true, error: "" });
+  rerenderHub();
+  try {
+    S.status = await api.post("/api/hub/add", body);
+    toast(`Added ${name}. The download has started.`);
+    renderTop(); scheduleStatus();
+    if (S.route.name === "new") renderNew();
+    return null;
+  } catch (e) { return e.message; }
+  finally { HUB.busy = false; }
+}
+
+async function hubAdd() {
+  const f = HUB.found;
+  if (!f || HUB.busy) return;
+  const error = await addModel({ url: HUB.url.trim(), file: f.file || undefined, revision: f.revision }, f.repo);
+  Object.assign(HUB, error ? { error } : { url: "", found: null });
+  rerenderHub();
+}
+
+async function catalogAdd(key) {
+  const c = (S.status?.catalog || []).find((x) => x.key === key);
+  if (!c || HUB.busy) return;
+  const file = c.files ? HUB.pick[key] || c.files[0].file : undefined;
+  const error = await addModel({ url: c.repo, file, revision: c.revision }, c.name);
+  if (error) toast(error, "error");
+  rerenderHub();
+}
+
+async function forgetModel(id) {
+  const m = model(id);
+  if (!confirm(`Remove ${m ? m.title : id} from the app? Its files are deleted from this computer. You can add it again later.`)) return;
+  try {
+    S.status = await api.del(`/api/models/${id}`);
+    if (S.form.model === id) S.form.model = null;
+    renderTop(); refreshDownloadViews();
+    if (S.route.name === "new") renderNew();
+    toast("Removed");
+  } catch (e) { toast(e.message, "error"); }
+}
 
 async function removeDownload(id) {
   if (!confirm("Delete this model's files from this computer? You can download them again later.")) return;
@@ -1146,13 +1355,16 @@ async function removeDownload(id) {
   catch (e) { toast(e.message, "error"); }
 }
 
-async function saveKey(id, key) {
+async function saveKey(id, key, region) {
   key = key.trim();
+  const body = { model: id };
+  if (region !== undefined) body.region = region.trim();
+  if (key || region === undefined) body.key = key;  // with a region field, an empty key box keeps the saved key
   try {
-    await api.post("/api/keys", { model: id, key });
+    await api.post("/api/keys", body);
     await refreshStatus();
     renderSettings();
-    toast(key ? "Key saved" : "Key removed");
+    toast(key ? "Key saved" : region !== undefined ? "Region saved" : "Key removed");
     if (S.route.name === "new") renderNew();
   } catch (e) { toast(e.message, "error"); }
 }

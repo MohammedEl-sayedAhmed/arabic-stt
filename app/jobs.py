@@ -18,7 +18,9 @@ from pathlib import Path
 
 import soundfile as sf
 
-from . import engines
+import sysinfo
+
+from . import engines, report
 from .config import power_profile, replace_file, set_power_profile
 
 ACTIVE = ("preparing", "queued", "running")
@@ -156,8 +158,9 @@ def convert(source, dest, on_progress, cancelled):
 
 
 class Runner:
-    def __init__(self, store, cfg):
+    def __init__(self, store, cfg, gpus=None):
         self.store, self.cfg = store, cfg
+        self.gpus = gpus or (lambda: None)  # the graphics cards the app found, for the job details
         self.queues = {"prepare": queue.Queue(), "local": queue.Queue(), "hosted": queue.Queue()}
         self.cancelled = set()
         self.procs = {}  # job id -> running transcribe.py process
@@ -212,7 +215,8 @@ class Runner:
             if not source or not source.exists():
                 raise engines.EngineError("the recording is missing")
             total = probe_seconds(source)
-            self.store.update(jid, status="preparing", stage="converting", done=0, total=total)
+            self.store.update(jid, status="preparing", stage="converting", done=0, total=total,
+                              source=sysinfo.recording(source, job.get("source_name")))  # before an upload is deleted
             try:
                 convert(source, audio, lambda t: self.store.update(jid, done=t), lambda: jid in self.cancelled)
             except engines.Cancelled:
@@ -229,7 +233,7 @@ class Runner:
             raise engines.EngineError(f"unknown model {job['model']}")
         from .compare import try_fingerprint  # the same recording added again joins this one's group
         self.store.update(jid, status="queued", stage=None, done=None, total=None, audio_s=round(info.duration, 2),
-                          fingerprint=job.get("fingerprint") or try_fingerprint(audio))
+                          queued=now(), fingerprint=job.get("fingerprint") or try_fingerprint(audio))
         self.queues[model["kind"]].put(jid)
 
     def work(self, jid, kind):
@@ -239,7 +243,7 @@ class Runner:
         model = self.cfg.models[job["model"]]
         folder = self.store.dir(jid)
         self.store.update(jid, status="running", stage="starting", started=now(), done=None, total=None,
-                          error=None, elapsed=None)
+                          error=None, elapsed=None, **report.run_facts(self.cfg, model, self.gpus()))
         t0 = time.time()
         last_write = [0.0]
 
@@ -291,7 +295,8 @@ class Runner:
         """A new job on the same audio with another model or other options."""
         old = self.store.get(jid)
         new = self.new_job(title=old["title"], source_name=old.get("source_name"), model_id=model_id,
-                           options=options, rerun_of=jid, fingerprint=old.get("fingerprint"))
+                           options=options, rerun_of=jid, source=old.get("source"),  # the same recording
+                           fingerprint=old.get("fingerprint"))
         src, dst = self.store.dir(jid) / "audio.flac", self.store.dir(new["id"]) / "audio.flac"
         try:
             os.link(src, dst)  # same file on disk, no extra space

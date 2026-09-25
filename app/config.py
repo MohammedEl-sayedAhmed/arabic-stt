@@ -79,6 +79,12 @@ class Config:
         self.keep_original = data["storage"].get("keep_original", False)
         self.max_upload = int(data["storage"].get("max_upload_gb", 4) * 1024 ** 3)
         self.models = {m["id"]: m for m in data["models"] if not m.get("disabled")}
+        # Models added from Hugging Face in the app (app/hub.py); they never replace a model of the config.
+        self.added_models_path = self.storage / "models.json"
+        for m in _read_json(self.added_models_path).get("models", []):
+            if isinstance(m, dict) and m.get("hub") and m.get("kind") == "local" and str(m.get("id")).startswith("hf-") \
+                    and all(m["id"] != x["id"] for x in data["models"]):
+                self.models[m["id"]] = m
         self.secrets_path = self.storage / "secrets.json"
         self.settings_path = self.storage / "settings.json"
 
@@ -134,6 +140,12 @@ class Config:
             return "environment"
         return "app" if self.secrets().get(model["id"], "").strip() else None
 
+    def region(self, model):
+        """A hosted model's region (Azure Speech keys work only in their resource's region): the
+        environment, then the one saved in Settings (next to the key), then the config."""
+        env = os.environ.get(model.get("region_env", ""), "").strip()
+        return (env or self.secrets().get(f"{model['id']}:region", "").strip() or model.get("region", "")).lower()
+
     def save_key(self, model_id, key):
         secrets = self.secrets()
         if key:
@@ -168,7 +180,7 @@ class Config:
             return (True, None) if self.api_key(model) else (False, "needs an API key")
         if model["engine"] == "whisper":
             return (True, None) if self.whisper_source(model) else (False, "not downloaded")
-        if model["engine"] == "cohere":
+        if model["engine"] in ("cohere", "gguf"):  # gguf: any GGUF speech model transcribe.cpp runs
             return (True, None) if self.path(model["cohere_model"]).exists() else (False, "not downloaded")
         return False, f"unknown engine {model['engine']}"
 
@@ -176,9 +188,10 @@ class Config:
         return self.path(self.local["voiceprint_model"]).exists()
 
     def download_items(self):
-        """Everything the app can download: {id: {"title", "files": [{url, path, size, sha256}]}}."""
-        items = {mid: {"title": m["title"], "files": m["files"]} for mid, m in self.models.items()
-                 if m["kind"] == "local" and m.get("files")}
+        """Everything the app can download: {id: {"title", "files": [{url, path, size, sha256}], "convert"}}
+        (convert: a Transformers checkpoint turned into a faster-whisper model after the download)."""
+        items = {mid: {"title": m["title"], "files": m["files"], "convert": m.get("convert")}
+                 for mid, m in self.models.items() if m["kind"] == "local" and m.get("files")}
         if self.local.get("voiceprint_files"):
             items["voiceprints"] = {"title": "Voiceprint model (speaker labels)", "files": self.local["voiceprint_files"]}
         platform = "win32" if os.name == "nt" else sys.platform
