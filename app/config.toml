@@ -50,7 +50,7 @@ engine = "whisper"
 whisper_model = "models/whisper-medium-arabic-codeswitched-ct2"
 title = "whisper-medium code-switching"
 tagline = "Keeps English terms in English"
-facts = ["18.5% WER on the public Egyptian set", "48.8% different from ElevenLabs on your meetings",
+facts = ["18.5% WER on the public Egyptian set", "48.8% different from ElevenLabs on real meetings",
          "English kept: 90% / 57%", "Word timestamps"]
 rtf = 0.55
 prompt = true               # accepts a vocabulary / style hint
@@ -86,7 +86,7 @@ engine = "cohere"
 cohere_model = "models/cohere-transcribe-arabic-07-2026-gguf/cohere-transcribe-arabic-07-2026-Q4_K_M.gguf"
 title = "Cohere Transcribe Arabic"
 tagline = "Arabic-heavy meetings, fastest"
-facts = ["13.4% WER on the public Egyptian set", "43.8% different from ElevenLabs on your meetings",
+facts = ["13.4% WER on the public Egyptian set", "43.8% different from ElevenLabs on real meetings",
          "Fewest errors on Arabic words", "English kept: 77% / 46%"]
 rtf = 0.3
 prompt = false
@@ -144,7 +144,7 @@ id = "elevenlabs"
 kind = "hosted"
 engine = "elevenlabs"
 title = "ElevenLabs Scribe"
-tagline = "What your meeting-minutes app uses"
+tagline = "Best published result for Egyptian–English"
 facts = ["13.1% WER on Perle's Egyptian subset (published)", "Speaker labels built in",
          "4.5 h a month free, then $0.22/h", "Trains on your audio unless you opt out"]
 service = "ElevenLabs"

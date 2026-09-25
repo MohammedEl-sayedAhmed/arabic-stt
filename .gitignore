@@ -40,7 +40,7 @@ results/*
 *.[Aa][Vv][Ii]
 *.[Cc][Aa][Ff]
 
-# Large or machine-specific (see docs/08-environment-changes.md to recreate)
+# Large or machine-specific (see docs/08-disk-and-cleanup.md to recreate)
 models/
 tools/
 .venv/

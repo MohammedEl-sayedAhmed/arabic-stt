@@ -1,12 +1,12 @@
-# 10. The desktop app (Windows and Linux) — scaffold
+# The desktop app (Windows and Linux)
 
-Tafrigh (see [the app](09-app.md)) also runs as a desktop application: its own window, a Start-menu
-/ app-menu entry, models downloaded from inside the app, and a Windows build and installer. It is
-the same code — the local server and the web interface — shown in a native window, so every
+Tafrigh ([the app](09-app.md)) also runs as a desktop application, with its own window, a Start menu
+or application menu entry, models downloaded from inside the app, and a Windows build and installer.
+It is the same code, the local server and the web interface, shown in a native window, so every
 feature works the same way in the browser and on the desktop.
 
-This is a **scaffold**: it builds, installs and runs, the checks below pass, and the pieces a
-product needs next are listed at the end.
+It builds, installs and runs on both systems, and the checks below pass. Code signing,
+auto-update and Linux packages are not done yet (see the end of this page).
 
 ## Run it
 
@@ -15,22 +15,33 @@ product needs next are listed at the end.
 | Linux | `./app.sh --desktop` | `dist/Tafrigh/Tafrigh` |
 | Windows | `app.cmd` (after the one-time setup below) | Start menu → Tafrigh (installer), or `Tafrigh.exe` |
 
-Windows setup from source, once: install Python 3.12, then in the project folder
+To set up on Windows from source, once: install Python 3.12, then in the project folder run
 `py -3.12 -m venv .venv` and `.venv\Scripts\pip install -r requirements.txt -r requirements-desktop.txt`.
 
-The window, in order of preference:
+Tafrigh picks the first of these that works:
 
-1. **Native window** (pywebview) using the system's web engine: Edge WebView2 on Windows (part of
-   Windows 10 and 11), WebKit on macOS, GTK WebKit or Qt on Linux. Adds native *Open* and *Save*
-   dialogs: a recording chosen with *choose a file* is read in place (not copied), and exports are
-   saved where you pick.
-2. **App-mode browser window**: Edge, Chrome, Chromium or Brave with `--app` (no tabs or address
-   bar) and a profile of its own — used on Linux when GTK WebKit and Qt are missing, as on this
-   laptop.
-3. **A browser tab**, if none of the above exists.
+1. A native window (pywebview) using the system's web engine: Edge WebView2 on Windows (part of
+   Windows 10 and 11), WebKit on macOS, GTK WebKit or Qt on Linux. It adds native *Open* and *Save*
+   dialogs: a recording picked with *choose a file* is read in place rather than copied, and exports
+   are saved where you choose. On Windows, Tafrigh first checks that the WebView2 runtime is
+   installed, because without it pywebview would quietly fall back to the old Internet Explorer
+   engine, which can't run the app.
+2. An app-mode browser window: Edge, Chrome, Chromium or Brave with `--app` (no tabs or address bar)
+   and a profile of its own. On Linux this is used when neither GTK WebKit nor Qt is available, as on
+   the test laptop.
+3. A tab in the default browser.
+4. If no window of any kind can be opened, the server keeps running and Tafrigh shows its address
+   (in a message box on Windows), so any browser can use it.
 
-Closing the window quits the app; so does *Settings → Quit*. `--browser` forces 2/3, `--no-window`
-only runs the server, `--port N` picks the port (default 8765, or any free one).
+Closing the window quits the app, and so does *Settings → Quit*. `--browser` skips the native window,
+`--server` (or `--no-window`) runs only the server, and `--port N` picks the port (the default is
+8765, or any free one). The Windows installer also adds a *Tafrigh (browser window)* shortcut, which
+starts it with `--browser`.
+
+On Linux the native window needs Python bindings for one of the two engines. On KDE the simplest
+is Qt: `pip install "pywebview[qt]"` (about 150 MB). On GNOME it is GTK WebKit, which needs the
+system package `gir1.2-webkit2-4.1` and PyGObject in the virtual environment. Without either, the
+app-mode browser window is used, which works just as well apart from the native dialogs.
 
 ## Where things are kept
 
@@ -43,19 +54,19 @@ only runs the server, `--port N` picks the port (default 8765, or any free one).
 
 `TAFRIGH_HOME=<folder>` overrides it. Uninstalling keeps this folder.
 
-## Models: downloaded in the app
+## Models are downloaded in the app
 
-A fresh installation has no local models. **Settings → Models on this computer** (or the button on a
-model's card) downloads them:
+A fresh installation has no local models. *Settings → Models on this computer*, or the button on a
+model's card, downloads them:
 
 | Model | Download | Source (pinned revision) |
 |---|---|---|
-| whisper-medium code-switching | 778 MB | Hugging Face `Seif-Eldeen-Sameh/whisper-medium-arabic-codeswitched-ct2` + the Whisper tokenizer |
+| whisper-medium code-switching | 778 MB | Hugging Face `Seif-Eldeen-Sameh/whisper-medium-arabic-codeswitched-ct2`, plus the Whisper tokenizer |
 | Cohere Transcribe Arabic | 1.6 GB | Hugging Face `handy-computer/cohere-transcribe-arabic-07-2026-gguf` |
 | Whisper large-v3 | 3.1 GB | Hugging Face `Systran/faster-whisper-large-v3` (a copy already in the Hugging Face cache is used instead) |
-| Voiceprint model (speaker labels) | 40 MB | sherpa-onnx release (TitaNet-small); fetched together with the first model |
+| Voiceprint model (speaker labels) | 40 MB | sherpa-onnx release (TitaNet-small), fetched together with the first model |
 
-Every file is pinned in `app/config.toml` by URL (a fixed revision), size and SHA-256. A download
+Every file is pinned in `app/config.toml` by URL (at a fixed revision), size and SHA-256. A download
 resumes after a dropped connection (HTTP range requests) and only becomes the real file once the size
 and checksum match. Files can be deleted again from the same screen. The hosted models (ElevenLabs,
 Speechmatics) need no download, only an API key.
@@ -65,73 +76,80 @@ Speechmatics) need no download, only an API key.
 ```sh
 pip install -r requirements.txt -r requirements-desktop.txt
 python desktop/build.py              # dist/Tafrigh/ (Tafrigh.exe on Windows); --console to debug
-dist/Tafrigh/Tafrigh --self-test     # Windows: add --report selftest.json (a windowed app has no console)
+dist/Tafrigh/Tafrigh --self-test     # on Windows add --report selftest.json (a windowed app has no console)
 iscc desktop/installer.iss           # Windows only (Inno Setup 6): dist/Tafrigh-0.1.0-setup.exe
 ```
 
-Build on the system you build for — PyInstaller does not cross-compile. The build is one folder
-(about 470 MB on Linux: CTranslate2, onnxruntime, sherpa-onnx, the FFmpeg libraries, transcribe.cpp
-with its CPU/Vulkan backends, numpy); models are not included. The same executable runs the model
-worker (`Tafrigh --transcribe …`), so each transcription still gets its own process.
+Build on the system you are building for, since PyInstaller doesn't cross-compile. The build is one
+folder, about 470 MB on Linux (CTranslate2, onnxruntime, sherpa-onnx, the FFmpeg libraries,
+transcribe.cpp with its CPU and Vulkan backends, numpy); models are not included. The same executable
+runs the model worker (`Tafrigh --transcribe …`), so each transcription still gets its own process.
 
-**Automated builds:** [`.github/workflows/desktop.yml`](../.github/workflows/desktop.yml) builds and
-checks it on Windows and Linux: unit tests, a self-test from source, the build, a self-test of the
-build; on Windows also the real-model test, a native-window test and the installer, which it uploads
-(kept 7 days). It runs only when started by hand (*Actions → Desktop build → Run workflow*, or
-`gh workflow run desktop.yml`) or for a version tag (`git tag v0.1.0 && git push --tags`), so it
-doesn't use Actions minutes on every push.
+The GitHub Actions workflow [`.github/workflows/desktop.yml`](../.github/workflows/desktop.yml)
+builds and checks the app on Windows and Linux. It runs the unit tests, a self-test from source, the
+build, and a self-test of the build; on Windows also the real-model test, a native-window test and
+the installer, which it uploads and keeps for 7 days. It only runs when started by hand
+(*Actions → Desktop build → Run workflow*, or `gh workflow run desktop.yml`) or for a version tag
+(`git tag v0.1.0 && git push --tags`), so it doesn't use Actions minutes on every push.
 
 ## Self-test
 
 `Tafrigh --self-test [--window] [--models] [--report file.json]` checks an installation without
-touching your data: the model process starts and imports everything a local run needs; the interface
-and API answer; a generated tone is uploaded, converted to 16 kHz FLAC and "transcribed" by a
-stand-in for the ElevenLabs API on 127.0.0.1. With `--window`, a native window opens, loads the app
-and closes. With `--models` (downloads about 820 MB into a temporary folder), whisper-medium and the
-voiceprint model are fetched with the app's own downloader and a public 11-second speech sample (JFK,
-from the openai/whisper repository) is transcribed with speaker labels — here: *"and so my fellow
-americans, ask not what your country can do for you…"* in 16 s.
+touching your data. It starts the model process and has it import everything a local run needs,
+checks that the interface and API answer, then uploads a generated tone, converts it to 16 kHz FLAC
+and has it "transcribed" by a stand-in for the ElevenLabs API on 127.0.0.1. With `--window`, a native
+window opens, loads the app and closes. With `--models` (about 820 MB of downloads into a temporary
+folder), whisper-medium and the voiceprint model are fetched with the app's own downloader, and a
+public 11-second speech sample (JFK, from the openai/whisper repository) is transcribed with speaker
+labels. On the test laptop that gave *"and so my fellow americans, ask not what your country can do
+for you…"* in 16 s.
 
 ## What changed to make it cross-platform
 
-- **No ffmpeg program needed**: recordings are converted with PyAV (the FFmpeg libraries that
-  faster-whisper already ships) — about 7 s for 30 minutes of audio here.
-- **Processes**: model runs start in their own process group on Linux, or with `CREATE_NO_WINDOW`
-  on Windows, and are stopped the right way on each (so *Cancel* works on both).
-- **Text files are UTF-8 everywhere** (Windows would otherwise use a code page and fail on Arabic),
-  including the model process's output.
-- **Windows file locking**: replacing a file that another thread is reading is retried; progress
+- No ffmpeg program is needed. Recordings are converted with PyAV, using the FFmpeg libraries that
+  faster-whisper already ships, which takes about 7 s for 30 minutes of audio here.
+- Model runs start in their own process group on Linux, or with `CREATE_NO_WINDOW` on Windows, and
+  are stopped the right way on each, so *Cancel* works on both.
+- Text files are UTF-8 everywhere, including the model process's output. Windows would otherwise use
+  a code page and fail on Arabic.
+- Windows file locking: replacing a file that another thread is reading is retried, and progress
   updates that collide are skipped.
 - `transcribe.py` works without the Unix-only `resource` module (peak memory is then not recorded).
 
 ## Verified so far
 
-On this Linux laptop:
-- 20 unit tests: the app's API, the hosted-service parsers, downloads (resume, a server that ignores
-  ranges, checksum mismatch, cancel), paths and the worker command.
-- The desktop build: `--self-test` passes, and it transcribed the public demo clip with **Cohere (51 s)
-  and whisper-medium (65 s)**, 7 speakers told apart by voice — the same results as from source.
-- A real model download (the 40 MB voiceprint model) through the build, with checksum; every other
-  pinned URL was checked (the small files downloaded and verified, the large ones by published size).
+On the Linux test laptop:
+- The unit tests: the app's API, the hosted-service parsers, downloads (resume, a server that ignores
+  ranges, a checksum mismatch, cancel), paths, the worker command and the forced-alignment path.
+- The desktop build: `--self-test` passes, and it transcribed the public demo clip with Cohere (51 s)
+  and whisper-medium (65 s), with 7 speakers told apart by voice, the same results as from source.
+- A real model download (the 40 MB voiceprint model) through the build, with its checksum. Every
+  other pinned URL was checked: the small files downloaded and verified, the large ones by their
+  published size.
 
-On Windows (GitHub Actions, `windows-latest`, 2026-09-25): all checks passed — the 20 unit tests,
-the self-test from source and of the built `Tafrigh.exe`, the **real-model test** (whisper-medium and
-the voiceprint model downloaded in 15 s; the speech sample transcribed in 13 s: *"and so my fellow
-americans, ask not what your country can do for you…"*), the **native window** (it opened, loaded the
+On Windows (GitHub Actions, `windows-latest`, 25 September 2026) all checks passed: the unit tests,
+the self-test from source and of the built `Tafrigh.exe`, the real-model test (whisper-medium and the
+voiceprint model downloaded in 15 s, and the speech sample transcribed in 13 s: *"and so my fellow
+americans, ask not what your country can do for you…"*), the native window (it opened, loaded the
 app and closed, through Edge WebView2), and the installer (`Tafrigh-0.1.0-setup.exe`, 77 MB). The
 first Windows run found one real bug: reading a job's status file while another thread replaced it
-failed on Windows (never on Linux); such reads are now retried. The whole run took about 4 minutes.
+failed on Windows, never on Linux. Such reads are now retried. The whole run took about 4 minutes.
 
-Not tested on Windows yet: the native open/save dialogs and a long local transcription by hand.
+Not yet tested on Windows: the native open and save dialogs, and a long local transcription by
+hand.
 
-## Not done yet (for a product)
+## Not done yet
 
-- **Code signing** — unsigned installers trigger Windows SmartScreen warnings ("Windows protected your
-  PC" → More info → Run anyway).
-- **Updates**: no auto-update; install a new version over the old one.
-- **macOS**: pywebview and PyInstaller support it, but it isn't built or tested here.
-- **Native window on Linux**: needs GTK WebKit (`gir1.2-webkit2-4.1`) or Qt; otherwise the app-mode
-  browser window is used. Linux packages (AppImage/.deb) aren't made yet.
-- **Older Windows** (before 10) may lack WebView2; the installer doesn't bundle its bootstrapper.
-- **GPU**: CPU-only; a CUDA build of CTranslate2 would make local models much faster on NVIDIA GPUs.
-- **Size**: about 470 MB unpacked; could shrink by dropping unused CPU variants of transcribe.cpp.
+- Code signing. Unsigned installers trigger a Windows SmartScreen warning ("Windows protected your
+  PC"; choose *More info*, then *Run anyway*).
+- Updates. There is no auto-update; install a new version over the old one.
+- macOS. pywebview and PyInstaller support it, but it hasn't been built or tested here.
+- Linux packages. There is no AppImage or .deb yet.
+- Windows before 10 may lack WebView2, and the installer doesn't bundle its bootstrapper; Tafrigh
+  then opens in a browser window.
+- GPU. Everything runs on the CPU for now. The bundled transcribe.cpp already has a Vulkan backend,
+  and on the test laptop's integrated Intel GPU it ran Cohere at 0.15× real time against 0.41× on the
+  CPU (performance mode, a 50-second public clip, the same text). Whisper on NVIDIA GPUs would need
+  CUDA and NVIDIA's cuBLAS and cuDNN libraries.
+- Size: about 470 MB unpacked, which could shrink by dropping the unused CPU variants of
+  transcribe.cpp.
