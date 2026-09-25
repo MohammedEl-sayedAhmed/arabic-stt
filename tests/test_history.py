@@ -380,10 +380,14 @@ class HistoryApi(unittest.TestCase):
         self.assertEqual(self.call("POST", f"{base}/versions/9/restore", {})[0], 404)
 
         job = self.app.store.get(jid)
-        status, txt, headers = self.call("GET", f"{base}/export/txt?version=2")
+        status, txt, headers = self.call("GET", f"{base}/export/txt?version=2&details=0")
         self.assertEqual(txt.decode(), T.to_txt({**job, "title": "Weekly sync", "speaker_names": {}}, fixed))
         self.assertIn("Weekly-sync-v2.txt", headers["Content-Disposition"])
-        self.assertEqual(self.call("GET", f"{base}/export/txt")[1].decode(), T.to_txt(job, lines), "the current version")
+        self.assertEqual(self.call("GET", f"{base}/export/txt?details=0")[1].decode(), T.to_txt(job, lines),
+                         "the current version")
+        # the details that come with an export say whether that version was corrected by hand
+        self.assertTrue(self.call("GET", f"{base}/export/json?version=2")[1]["details"]["run"]["edited"])
+        self.assertFalse(self.call("GET", f"{base}/export/json")[1]["details"]["run"]["edited"])
         self.assertTrue(self.call("GET", f"{base}/export/md?version=4")[1].decode().startswith("# Sprint planning"))
         data = self.call("GET", f"{base}/export/json?version=3")[1]  # (parsed: it is JSON)
         self.assertEqual(data["speakers"], {"1": "Mona", "2": "Speaker 2"})

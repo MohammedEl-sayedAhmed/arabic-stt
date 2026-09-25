@@ -12,7 +12,7 @@
 <p align="center">
   <img alt="Windows and Linux" src="https://img.shields.io/badge/runs_on-Windows%20%7C%20Linux-0b7f7d">
   <img alt="CPU only" src="https://img.shields.io/badge/GPU-not_needed-0b7f7d">
-  <img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-0b7f7d">
+  <img alt="AGPL-3.0 licence" src="https://img.shields.io/badge/licence-AGPL--3.0-0b7f7d">
 </p>
 
 <p align="center">
@@ -182,9 +182,23 @@ handy-computer, run with transcribe.cpp), OpenAI Whisper through
 
 ## Licence
 
-The code and docs are under the [MIT licence](LICENSE). The models keep their own licences: the
-whisper-medium fine-tune and Whisper large-v3 are MIT (check the fine-tune's card for its training
-data), Cohere Transcribe Arabic and the Whisper tokenizer are Apache-2.0, and NVIDIA TitaNet through
-sherpa-onnx is CC-BY-4.0. The desktop build bundles third-party packages under their own licences,
-including the FFmpeg libraries that come with PyAV (LGPL). ElevenLabs and Speechmatics are used
-under their own terms.
+Tafrigh is made by Mohammed El-sayed Ahmed and is free software under the
+[GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-only). You can use, study, change and
+share it. If you distribute a modified version, or run one as a service for others, you must publish
+its source under the same licence, and keep the author credit in its About section and README (the
+[NOTICE](NOTICE) file has the exact terms). Versions published up to 25 September 2026 were under the
+MIT licence.
+
+For use without these conditions, for example inside a closed-source product, commercial licences
+are available from the author: contact [Mohammed El-sayed Ahmed](https://github.com/MohammedEl-sayedAhmed).
+Contributions are welcome; by sending one you agree that it may be distributed under both the AGPL
+and the commercial licence.
+
+The models keep their own licences: the whisper-medium fine-tune and Whisper large-v3 are MIT (check
+the fine-tune's card for its training data), Cohere Transcribe Arabic and the Whisper tokenizer are
+Apache-2.0, and NVIDIA TitaNet through sherpa-onnx is CC-BY-4.0. The desktop build bundles
+third-party packages under their own licences, including the FFmpeg libraries that come with PyAV
+(LGPL). ElevenLabs and Speechmatics are used under their own terms. The vendor logos in a
+transcription's details come from [Simple Icons](https://simpleicons.org) (CC0). The trademarks
+belong to their owners, and the logos are shown only to identify the hardware and system a
+transcription was made on.

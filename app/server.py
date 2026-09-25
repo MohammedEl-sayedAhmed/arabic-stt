@@ -18,7 +18,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import __version__, engines
+from . import __version__, engines, hub, report
 from . import transcript as T
 from . import history
 from .config import FROZEN, power_profile, set_power_profile
@@ -44,7 +44,7 @@ class App:
     def __init__(self, cfg):
         self.cfg = cfg
         self.store = Store(cfg.storage)
-        self.runner = Runner(self.store, cfg)
+        self.runner = Runner(self.store, cfg, gpus=self.gpu_names)
         self.runner.recover()
         self.downloads = Downloads(cfg)
         self.server = None
@@ -66,6 +66,11 @@ class App:
             finally:
                 self.gpu_probing = False
         threading.Thread(target=run, daemon=True, name="tafrigh-gpu").start()
+
+    def gpu_names(self):
+        """The graphics cards the check found, for the job details; None until it has run (or if it failed)."""
+        devices = (getattr(self, "gpu", None) or {}).get("devices")  # jobs may start before __init__ ends
+        return [d.get("name") for d in devices if isinstance(d, dict)] if isinstance(devices, list) else None
 
     def cuda_ready(self):
         items = self.cfg.download_items()
@@ -96,12 +101,14 @@ class App:
 
     def model_info(self, model, jobs=None):
         ready, reason = self.cfg.availability(model)
-        keys = ("id", "kind", "engine", "title", "tagline", "facts", "service", "key_url", "rtf", "prompt", "hub")
+        keys = ("id", "kind", "engine", "title", "tagline", "facts", "service", "key_url", "rtf", "prompt", "hub",
+                "privacy", "prompt_hint", "speakers_hint")
         items = self.cfg.download_items()
         return {**{k: model.get(k) for k in keys}, "ready": ready, "reason": reason,
                 "speed": self.speed(model, self.store.list() if jobs is None else jobs) if model["kind"] == "local" else None,
                 "key_source": self.cfg.key_source(model) if model["kind"] == "hosted" else None,
-                "download": self.downloads.status(model["id"]) if model["id"] in items else None}
+                "download": self.downloads.status(model["id"]) if model["id"] in items else None,
+                "region": self.cfg.region(model) if "region" in model else None}
 
     def used_bytes(self):
         """Disk space of all transcriptions (audio copies, transcripts, logs), counted at most every 30 s."""
@@ -122,6 +129,7 @@ class App:
             "app": "tafrigh", "version": __version__,
             "desktop": self.desktop, "frozen": FROZEN, "home": str(self.cfg.home),
             "models": [self.model_info(m, jobs) for m in self.cfg.models.values()],
+            "catalog": hub.catalog(self.cfg),  # recommended models (app/catalog.toml)
             "voiceprints": self.downloads.status("voiceprints") if "voiceprints" in items else None,
             "cuda": self.downloads.status("cuda") if "cuda" in items else None,
             "gpu": self.gpu, "gpu_probing": self.gpu_probing,
@@ -343,6 +351,8 @@ class Handler(BaseHTTPRequestHandler):
         out = {"job": job, "lines": data["lines"] if data else engines.partial_lines(folder),
                "edited": bool(data and data.get("edited")), "partial": data is None,
                "has_audio": (folder / "audio.flac").exists()}
+        out["details"] = report.details(job, out["lines"], out["edited"])
+        out["detail_groups"] = report.groups(out["details"])  # the same, as the lines the job page shows
         out["version"] = history.current(self.app.store, jid, self.app.cfg)  # None while it runs
         if job["status"] in ("failed", "interrupted", "cancelled"):
             log = folder / "log.txt"
@@ -474,7 +484,9 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(404, "unknown format")
         fn, ctype = T.EXPORTS[fmt]
         n = params.get("version")  # a version from the history; the current one by default
-        body = fn(*self.at_version(job, n)).encode()
+        shown, lines, edited = self.at_version(job, n)
+        details = None if params.get("details") == "0" else report.details(shown, lines, edited)
+        body = fn(shown, lines, details).encode()
         tag = f"-v{n}" if n else ""
         name = f"{slug(job.get('title'))}{tag}.{fmt}"
         ascii_name = re.sub(r"[^A-Za-z0-9._-]", "", name)
@@ -484,9 +496,10 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(200, body, ctype, {"Content-Disposition": disposition})
 
     def at_version(self, job, n):
-        """The job and its lines as they are now, or as they were at version n."""
+        """(job, lines, edited by hand) as they are now, or as they were at version n."""
         if not n:
-            return job, self.lines_of(job["id"])
+            data = self.app.store.transcript(job["id"])
+            return job, self.lines_of(job["id"]), bool(data and data.get("edited"))
         found = history.at(self.app.store, job["id"], int(n), self.app.cfg) if re.fullmatch(r"[0-9]{1,6}", n) else None
         if found is None:
             raise ApiError(404, "no such version")
@@ -533,7 +546,13 @@ class Handler(BaseHTTPRequestHandler):
         model = self.app.cfg.models.get(p.get("model"))
         if model is None or model["kind"] != "hosted":
             raise ApiError(400, "not a hosted model")
-        self.app.cfg.save_key(model["id"], str(p.get("key") or "").strip())
+        if "region" in p and "region" in model:  # Azure Speech: saved next to the key; empty = the config's
+            region = str(p.get("region") or "").strip().lower()
+            if region and not re.fullmatch(r"[a-z0-9]{2,40}", region):
+                raise ApiError(400, "a region is a name like westeurope")
+            self.app.cfg.save_key(f"{model['id']}:region", region)
+        if "key" in p or "region" not in p:  # a request with only a region keeps the key
+            self.app.cfg.save_key(model["id"], str(p.get("key") or "").strip())
         self.json(self.app.model_info(model))
 
     def power(self, _params):
@@ -602,6 +621,33 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(409, str(e))
         self.json(self.app.status())
 
+    # Models added from Hugging Face (app/hub.py)
+    def hub_inspect(self, _params):
+        p = self.body_json()
+        try:
+            self.json(hub.inspect(self.app.cfg, p.get("url"), p.get("file"), p.get("revision")))
+        except hub.HubError as e:
+            raise ApiError(400, str(e))
+
+    def hub_add(self, _params):
+        p = self.body_json()
+        try:
+            model = hub.add(self.app.cfg, p.get("url"), p.get("file"), p.get("revision"))
+        except hub.HubError as e:
+            raise ApiError(400, str(e))
+        self.download({}, model["id"])  # with the voiceprint model, as from a model card; replies with the status
+
+    def forget_model(self, _params, model_id):
+        if not (self.app.cfg.models.get(model_id) or {}).get("hub"):
+            raise ApiError(404, "no model added from Hugging Face with that id")
+        if any(j["status"] in ACTIVE and j["model"] == model_id for j in self.app.store.list()):
+            raise ApiError(409, "a transcription is using it; wait until it has finished")
+        if (self.app.downloads.jobs.get(model_id) or {}).get("state") == "queued" or self.app.downloads.busy(model_id):
+            raise ApiError(409, "wait until the download has finished or cancel it")
+        self.app.downloads.remove(model_id)
+        hub.forget(self.app.cfg, model_id)
+        self.json(self.app.status())
+
     def quit(self, _params):
         self.json({"bye": True})
         target = self.app.on_quit or self.app.server.shutdown
@@ -651,6 +697,9 @@ ROUTES = [
     ("POST", r"/api/downloads/([\w-]+)", Handler.download),
     ("POST", r"/api/downloads/([\w-]+)/cancel", Handler.cancel_download),
     ("DELETE", r"/api/downloads/([\w-]+)", Handler.remove_download),
+    ("POST", r"/api/hub/inspect", Handler.hub_inspect),
+    ("POST", r"/api/hub/add", Handler.hub_add),
+    ("DELETE", r"/api/models/(hf-[\w-]+)", Handler.forget_model),
     ("POST", r"/api/quit", Handler.quit),
 ]
 

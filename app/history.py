@@ -351,10 +351,13 @@ def version(store, jid, n, cfg=None, against=None):
 
 
 def at(store, jid, n, cfg=None):
-    """(job, lines) as they were at version n, for the exports; None if there is no version n."""
+    """(job, lines, edited) as they were at version n, for the exports, edited saying whether its lines
+    differ from the model's; None if there is no version n."""
     with store.lock:
-        _, _, state = _find(store, jid, n, cfg)
+        versions, _, state = _find(store, jid, n, cfg)
         job = store.get(jid)
+        first = _snapshot(store, jid, 1) if versions and versions[0]["kind"] == "model output" else None
     if state is None or job is None:
         return None
-    return {**job, "title": state["title"], "speaker_names": state["speaker_names"]}, state["lines"]
+    return ({**job, "title": state["title"], "speaker_names": state["speaker_names"]}, state["lines"],
+            first is None or state["lines"] != first["lines"])
