@@ -303,7 +303,10 @@ function modelCard(m) {
     : `<span class="pill cloud">${ICON.cloud} Uploads to ${esc(m.service)}</span>`;
   let state = "";
   if (!m.ready && m.kind === "hosted") state = `<span class="mc-missing">Needs an API key — <button type="button" class="linkish" data-open-settings="${esc(m.id)}">add it</button></span>`;
-  else if (!m.ready && m.download) state = `<span class="mc-missing">Not downloaded yet</span>${downloadBlock(m.id, m.download)}`;
+  else if (!m.ready && m.download) {
+    const unconverted = m.hub?.kind === "transformers" && !m.download.missing;  // downloaded; the conversion is still to do
+    state = `<span class="mc-missing">${unconverted ? "Downloaded, not converted yet" : "Not downloaded yet"}</span>${downloadBlock(m.id, m.download)}`;
+  }
   else if (!m.ready) state = `<span class="mc-missing">${esc(m.reason)}</span>`;
   const foot = m.ready ? `<div class="mc-foot">${estimateText(m, f.seconds, true)}</div>` : `<div class="mc-foot">${state}</div>`;
   return `<div class="model-card${m.ready ? "" : " unavailable"}" role="radio" tabindex="0" aria-checked="${sel && m.ready}" data-model="${esc(m.id)}">
