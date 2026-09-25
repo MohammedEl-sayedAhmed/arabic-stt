@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Proof of concept: transcribe a meeting recording entirely on this machine.
+"""Transcribe a meeting recording entirely on this machine.
 
 The audio is split at pauses (Silero VAD) into chunks of at most 25 s, each
 chunk is transcribed by the chosen engine, and the transcript is printed and
@@ -10,7 +10,8 @@ voiceprint every 0.75 s, grouped by spectral clustering) and each line is
 labelled Speaker 1, Speaker 2, ... in order of first appearance. Whisper
 gives word timestamps, so every word gets the speaker whose voice is active
 at that moment; the llama and cohere engines have no word timestamps and are
-transcribed one speaker turn at a time.
+transcribed one speaker turn at a time, or, with --align, forced-aligned so that
+their words get times too (align.py, experimental).
 
 Engines:
   whisper  Whisper through faster-whisper (int8 on CPU): the code-switching fine-tune
@@ -23,6 +24,8 @@ Usage:
   .venv/bin/python transcribe.py path/to/call.wav
   .venv/bin/python transcribe.py meeting.wav --speakers 2
   .venv/bin/python transcribe.py meeting.wav --engine llama --port 8081
+  .venv/bin/python transcribe.py meeting.wav --engine cohere --speakers 3 \
+      --align models/mms-300m-1130-forced-aligner
 """
 import argparse
 import base64
@@ -115,7 +118,14 @@ def speaker_lines(engine, audio, timeline, on_chunk=None):
     chunks = split_at_pauses(audio)
     for i, (a, b) in enumerate(chunks, 1):
         if hasattr(engine, "words"):
-            for ws, we, word in engine.words(np.concatenate([audio[a:b], TAIL])):
+            chunk = np.concatenate([audio[a:b], TAIL])
+            if isinstance(engine, Aligned) and not timeline.changes(a / SR, b / SR):
+                # one voice throughout: every word gets that speaker, so timing the words isn't needed
+                items = engine.aligner.spread(engine(chunk), (b - a) / SR)
+                engine.skipped += 1
+            else:
+                items = engine.words(chunk)
+            for ws, we, word in items:
                 s, e = a / SR + ws, a / SR + we
                 speaker = timeline.speaker_at((s + e) / 2)
                 add(s, e, speaker, word)
@@ -239,6 +249,29 @@ def trim_loop(text, max_n=8, min_repeats=3):
     return text
 
 
+class Aligned:
+    """An engine without word timestamps (cohere, llama) plus forced alignment (align.py): the text of
+    each chunk is aligned to its audio, so every word gets a time and, with --speakers, its own
+    speaker, as with Whisper. The audio is no longer cut at speaker changes."""
+
+    def __init__(self, engine, aligner):
+        self.engine, self.aligner = engine, aligner
+        self.name = f"{engine.name}-aligned"  # its own output files, next to an unaligned run
+        self.skipped = 0  # chunks with a single voice, where no alignment was needed
+
+    def __getattr__(self, name):  # anything else (prompt, context) is the engine's
+        if name in ("engine", "aligner"):
+            raise AttributeError(name)
+        return getattr(self.engine, name)
+
+    def __call__(self, audio):
+        return self.engine(audio)
+
+    def words(self, audio):
+        text = self.engine(audio)
+        return self.aligner.words(audio, text) if text else []
+
+
 ENGINES = {"whisper": Whisper, "llama": Llama, "cohere": Cohere}
 
 
@@ -272,6 +305,9 @@ def main():
                     help="output folder (default: results/poc)")
     ap.add_argument("--threads", type=int, default=10)
     ap.add_argument("--progress-file", help="keep this JSON file updated with the current stage (used by the app)")
+    ap.add_argument("--align", metavar="MODEL_DIR",
+                    help="cohere/llama: forced-align the text to get word times (align.py), so with --speakers "
+                         "each word gets its own speaker instead of the audio being cut at speaker changes")
     args = ap.parse_args()
     if args.speakers is not None and args.speakers < 0:
         ap.error("--speakers must be 0 (estimate) or the number of speakers")
@@ -293,6 +329,9 @@ def main():
         sys.exit(f"{args.audio}: no audio")
     report("loading", audio_s=round(len(audio) / SR, 2))
     engine = ENGINES[args.engine](args)
+    if args.align and not hasattr(engine, "words"):
+        import align
+        engine = Aligned(engine, align.Aligner(args.align, threads=args.threads))
     print(f"{args.audio}: {len(audio) / SR / 60:.1f} min, engine {engine.name}\n")
     t0 = time.time()
     timeline = None
@@ -345,6 +384,9 @@ def main():
         "audio": str(args.audio), "audio_s": round(len(audio) / SR, 2), "engine": engine.name,
         "language": args.language, "prompt": getattr(engine, "prompt", None) or getattr(engine, "context", None),
         "speakers": args.speakers, "voiceprint_model": Path(args.voiceprint_model).name if timeline else None,
+        "aligner": engine.aligner.name if isinstance(engine, Aligned) else None,
+        "align_failures": engine.aligner.failures if isinstance(engine, Aligned) else None,
+        "align_skipped_chunks": engine.skipped if isinstance(engine, Aligned) else None,
         "seconds": round(took, 1), "rtf": round(took / (len(audio) / SR), 3),
         "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024) if resource else None,
     }, ensure_ascii=False, indent=1), encoding="utf-8")
