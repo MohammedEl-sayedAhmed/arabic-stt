@@ -253,6 +253,7 @@ class Runner:
         try:
             if kind == "local":
                 self.performance(True)
+                self.store.update(jid, power=power_profile())  # the estimates compare like with like
                 result = engines.run_local(self.cfg, model, folder, job, on_progress, cancelled,
                                            register=lambda p: self.procs.__setitem__(jid, p))
             else:
@@ -273,10 +274,9 @@ class Runner:
                 self.performance(False)
 
     def performance(self, on):
-        """With performance_while_running: switch to the performance profile while local jobs run."""
-        if not self.cfg.local.get("performance_while_running"):
-            return
-        if on and self.saved_profile is None:
+        """With performance_while_running: switch to the performance profile while local jobs run. Switching
+        back doesn't depend on the setting, which may have been turned off in the meantime."""
+        if on and self.saved_profile is None and self.cfg.setting("performance_while_running"):
             current = power_profile()
             if current and current != "performance" and set_power_profile("performance"):
                 self.saved_profile = current

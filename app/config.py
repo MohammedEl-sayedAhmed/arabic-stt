@@ -80,6 +80,7 @@ class Config:
         self.max_upload = int(data["storage"].get("max_upload_gb", 4) * 1024 ** 3)
         self.models = {m["id"]: m for m in data["models"] if not m.get("disabled")}
         self.secrets_path = self.storage / "secrets.json"
+        self.settings_path = self.storage / "settings.json"
 
     def path(self, value):
         """A path from the config: absolute, or relative to the data folder (home)."""
@@ -91,16 +92,38 @@ class Config:
 
     # API keys: environment first, then the ones saved from the app.
     def secrets(self):
-        for _ in range(20):
-            try:
-                return json.loads(self.secrets_path.read_text(encoding="utf-8"))
-            except FileNotFoundError:
-                return {}
-            except (PermissionError, ValueError):  # Windows: being replaced by save_key right now
-                time.sleep(0.025)
-            except OSError:
-                return {}
-        return {}
+        return _read_json(self.secrets_path)
+
+    # Settings changed in the app (Settings → Speed) are saved to <storage>/settings.json and win over
+    # the same keys in [local].
+    SETTINGS = {"performance_while_running": False, "device": "auto", "threads": 10}
+
+    def saved_settings(self):
+        return _read_json(self.settings_path)
+
+    def setting(self, key):
+        return self.saved_settings().get(key, self.local.get(key, self.SETTINGS[key]))
+
+    def settings(self):
+        return {key: self.setting(key) for key in self.SETTINGS}
+
+    def save_settings(self, **values):
+        """Check and save settings from the app; returns them all. Raises ValueError on a bad value."""
+        for key, value in values.items():
+            if key == "performance_while_running" and isinstance(value, bool):
+                continue
+            if key == "device" and value in ("auto", "cpu"):
+                continue
+            if key == "threads" and isinstance(value, int) and not isinstance(value, bool) \
+                    and 1 <= value <= max(1, os.cpu_count() or 1):
+                continue
+            raise ValueError(f"bad value for {key}: {value!r}")
+        saved = {**self.saved_settings(), **values}
+        self.storage.mkdir(parents=True, exist_ok=True)
+        tmp = self.settings_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(saved, indent=1), encoding="utf-8")
+        replace_file(tmp, self.settings_path)
+        return self.settings()
 
     def api_key(self, model):
         env = os.environ.get(model.get("key_env", ""), "").strip()
@@ -158,7 +181,31 @@ class Config:
                  if m["kind"] == "local" and m.get("files")}
         if self.local.get("voiceprint_files"):
             items["voiceprints"] = {"title": "Voiceprint model (speaker labels)", "files": self.local["voiceprint_files"]}
+        platform = "win32" if os.name == "nt" else sys.platform
+        cuda = [f for f in self.local.get("cuda_files", []) if f.get("platform") == platform]
+        if cuda:
+            items["cuda"] = {"title": "NVIDIA GPU libraries (for Whisper)", "files": cuda}
         return items
+
+    def cuda_dir(self):
+        """Where the NVIDIA libraries are unpacked (transcribe.py --cuda-libs)."""
+        files = self.download_items().get("cuda", {}).get("files")
+        return self.path(files[0]["path"]).parent if files else self.path("models/nvidia-cuda")
+
+
+def _read_json(path):
+    """A small JSON file as a dict ({} if missing or unreadable); retried while Windows replaces it."""
+    for _ in range(20):
+        try:
+            data = json.loads(Path(path).read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except FileNotFoundError:
+            return {}
+        except (PermissionError, ValueError):  # Windows: being replaced right now
+            time.sleep(0.025)
+        except OSError:
+            return {}
+    return {}
 
 
 def power_profile():

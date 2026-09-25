@@ -2,12 +2,15 @@
 
 Every file in the config has a pinned URL (a fixed Hugging Face revision or release), its size and
 its SHA-256. A download goes to <file>.part, resumes with an HTTP Range request after a dropped
-connection, and becomes the real file only once size and checksum match.
+connection, and becomes the real file only once size and checksum match. A file with `unpack` is a
+package (a wheel): the listed members are copied out next to it, checked by size, and the package is
+deleted.
 """
 import hashlib
 import shutil
 import threading
 import time
+import zipfile
 
 import requests
 
@@ -27,15 +30,29 @@ class Downloads:
 
     # ---- state -----------------------------------------------------------------------------------
     def installed(self, f):
+        if f.get("unpack"):
+            return all(p.exists() and p.stat().st_size == f["unpack"][m] for m, p in self.unpacked(f).items())
         p = self.cfg.path(f["path"])
         return p.exists() and p.stat().st_size == f["size"]
+
+    def unpacked(self, f):
+        """{member: where it goes} for a package: next to the package, under the member's own name."""
+        folder = self.cfg.path(f["path"]).parent
+        return {m: folder / m.rsplit("/", 1)[-1] for m in f.get("unpack", {})}
+
+    def package_ready(self, f):
+        """A package that was downloaded and verified but not yet unpacked (e.g. the app was closed)."""
+        p = self.cfg.path(f["path"])
+        return bool(f.get("unpack")) and p.exists() and p.stat().st_size == f["size"]
 
     def status(self, item_id):
         files = self.cfg.download_items()[item_id]["files"]
         missing = [f for f in files if not self.installed(f)]
         job = dict(self.jobs.get(item_id) or {})
         partial = sum(self.part_size(f) for f in missing)
-        return {"size": sum(f["size"] for f in files), "missing": sum(f["size"] for f in missing),
+        return {"size": sum(f["size"] for f in files),
+                "missing": sum(0 if self.package_ready(f) else f["size"] for f in missing),
+                "on_disk": sum(sum(f["unpack"].values()) if f.get("unpack") else f["size"] for f in files),
                 "installed": not missing, "partial": partial, **job}
 
     def all_status(self):
@@ -50,14 +67,16 @@ class Downloads:
         return p.with_name(p.name + ".part")
 
     def busy(self, item_id):
-        return (self.jobs.get(item_id) or {}).get("state") in ("downloading", "verifying")
+        return (self.jobs.get(item_id) or {}).get("state") in ("downloading", "verifying", "unpacking")
 
     # ---- actions ---------------------------------------------------------------------------------
     def start(self, item_ids):
         """Download the given items (e.g. a model and the voiceprint model) one after another."""
         items = self.cfg.download_items()
         todo = [i for i in item_ids if i in items and not self.busy(i) and not self.status(i)["installed"]]
-        need = sum(self.status(i)["missing"] - self.status(i)["partial"] for i in todo)
+        unpack = sum(sum(f["unpack"].values()) for i in todo for f in items[i]["files"]
+                     if f.get("unpack") and not self.installed(f))
+        need = sum(self.status(i)["missing"] - self.status(i)["partial"] for i in todo) + unpack
         root = self.cfg.home
         root.mkdir(parents=True, exist_ok=True)
         if need and shutil.disk_usage(root).free < need + 500e6:
@@ -83,6 +102,9 @@ class Downloads:
         for f in self.cfg.download_items()[item_id]["files"]:
             for p in (self.cfg.path(f["path"]), self.part_path(f)):
                 p.unlink(missing_ok=True)
+            for p in self.unpacked(f).values():
+                p.unlink(missing_ok=True)
+                p.with_name(p.name + ".part").unlink(missing_ok=True)
         self.jobs.pop(item_id, None)
 
     # ---- work --------------------------------------------------------------------------------------
@@ -97,7 +119,10 @@ class Downloads:
                 for f in self.cfg.download_items()[item_id]["files"]:
                     if not self.installed(f):
                         job["file"] = f["path"].rsplit("/", 1)[-1]
-                        self.fetch(f, job, lambda: item_id in self.cancelled)
+                        if not self.package_ready(f):
+                            self.fetch(f, job, lambda: item_id in self.cancelled)
+                        if f.get("unpack"):
+                            self.unpack(f, job, lambda: item_id in self.cancelled)
                 job.update(state="done", file=None)
             except Cancelled:
                 job.update(state="cancelled", file=None)
@@ -153,4 +178,26 @@ class Downloads:
             part.unlink(missing_ok=True)
             raise RuntimeError(f"{dest.name}: checksum mismatch (the download was damaged; try again)")
         replace_file(part, dest)
+        job["state"] = "downloading"
+
+    def unpack(self, f, job, cancelled):
+        """Copy the listed members out of a downloaded package, check their sizes, delete the package."""
+        job["state"] = "unpacking"
+        package = self.cfg.path(f["path"])
+        with zipfile.ZipFile(package) as z:
+            for member, dest in self.unpacked(f).items():
+                tmp = dest.with_name(dest.name + ".part")
+                try:
+                    with z.open(member) as src, open(tmp, "wb") as out:
+                        while block := src.read(1 << 22):
+                            if cancelled():
+                                raise Cancelled()
+                            out.write(block)
+                    if tmp.stat().st_size != f["unpack"][member]:
+                        raise RuntimeError(f"{dest.name}: not the expected size in {package.name}")
+                except BaseException:
+                    tmp.unlink(missing_ok=True)
+                    raise
+                replace_file(tmp, dest)
+        package.unlink(missing_ok=True)
         job["state"] = "downloading"

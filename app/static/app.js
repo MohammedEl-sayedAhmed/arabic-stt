@@ -60,6 +60,9 @@ const ICON = {
   down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
   chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="m6 9 6 6 6-6"/></svg>',
   bolt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
+  gpu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="9" cy="12" r="2.5"/><circle cx="16" cy="12" r="2.5"/><path d="M6 18v2M18 18v2"/></svg>',
+  folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  external: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
   lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
   play: '<path d="M8 5.5v13a1 1 0 0 0 1.5.9l10-6.5a1 1 0 0 0 0-1.7l-10-6.5A1 1 0 0 0 8 5.5z"/>',
   pause: '<rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/>',
@@ -124,15 +127,26 @@ const spkColor = (sid) => (sid ? `var(--s${((parseInt(sid, 10) - 1) % 8 + 8) % 8
 const spkName = (sid) => (sid == null ? "" : (S.job?.speaker_names || {})[sid] || `Speaker ${sid}`);
 // Inside the desktop app's native window: open/save dialogs and the system browser for links.
 const desktopApi = () => (window.pywebview && window.pywebview.api) || null;
-const DL_ACTIVE = new Set(["queued", "downloading", "verifying"]);
+const DL_ACTIVE = new Set(["queued", "downloading", "verifying", "unpacking", "converting"]);
 const downloading = () => (S.status?.models || []).some((m) => m.download && DL_ACTIVE.has(m.download.state))
-  || (S.status?.voiceprints && DL_ACTIVE.has(S.status.voiceprints.state));
+  || [S.status?.voiceprints, S.status?.cuda].some((d) => d && DL_ACTIVE.has(d.state));
+// "Intel(R) Iris(R) Xe Graphics (ADL GT2)" -> "Intel Iris Xe Graphics"; short: "Iris Xe"
+const gpuName = (n) => (n || "").replace(/\((R|TM)\)/gi, "").replace(/\s*\([^)]*\)\s*$/, "").replace(/\s+/g, " ").trim();
+const gpuShort = (n) => gpuName(n).replace(/\b(Intel|NVIDIA|AMD|Radeon\(TM\)|Graphics|Laptop|GPU)\b/gi, "").replace(/\s+/g, " ").trim() || gpuName(n);
+function deviceLabel(d) {
+  if (!d) return "";
+  const [kind, ...rest] = String(d).split(":");
+  if (!rest.length) return kind.startsWith("cpu (") ? "Processor (the graphics card failed, so it finished there)" : "Processor";
+  const name = gpuName(rest.join(":").replace(/\s*\((int8_float16|float16)\)\s*$/, ""));
+  return `Graphics card: ${name} (${kind === "cuda" ? "CUDA" : kind === "vulkan" ? "Vulkan" : kind})`;
+}
 
 function downloadBlock(id, d, compact = false) {
   if (!d) return "";
   if (DL_ACTIVE.has(d.state)) {
     const pct = d.total ? Math.min(100, d.done / d.total * 100) : 0;
-    const what = d.state === "verifying" ? "Checking the download" : d.state === "queued" ? "Waiting" : `Downloading ${Math.round(pct)}%`;
+    const what = { verifying: "Checking the download", queued: "Waiting", unpacking: "Unpacking", converting: "Converting for faster-whisper" }[d.state]
+      || `Downloading ${Math.round(pct)}%`;
     return `<div class="dl"><div class="progress"><i style="width:${pct.toFixed(1)}%"></i></div>
       <div class="dl-row"><span>${what}${d.total ? ` · ${bytes(d.done)} of ${bytes(d.total)}` : ""}</span>
       <button type="button" class="linkish" data-dl-cancel="${esc(id)}">Cancel</button></div></div>`;
@@ -166,6 +180,8 @@ function renderTop() {
   const pills = [`<span class="pill accent" title="${esc(ready.map((m) => m.title).join(", "))}">${ICON.laptop} ${local} local${hosted ? ` · ${ICON.cloud} ${hosted} hosted` : ""} ready</span>`];
   if (st.power === "power-saver") pills.push(`<button class="pill warn" data-open-settings="power" title="Local models run 3–5× slower in power-saver mode">${ICON.bolt} Power-saver: slower</button>`);
   else if (st.power === "performance") pills.push(`<span class="pill ok">${ICON.bolt} Performance mode</span>`);
+  const gpu = st.gpu?.devices?.[0];
+  if (gpu && st.settings?.device !== "cpu") pills.push(`<button class="pill ok" data-open-settings="speed" title="Local models use ${esc(gpuName(gpu.name))} where they can">${ICON.gpu} GPU: ${esc(gpuShort(gpu.name))}</button>`);
   const active = S.jobs.filter((j) => ACTIVE.has(j.status)).length;
   if (active) pills.push(`<span class="pill accent"><span class="dot pulse"></span>${active} in progress</span>`);
   if (downloading()) pills.push(`<button class="pill accent" data-open-settings="models">${ICON.download} Downloading</button>`);
@@ -229,11 +245,13 @@ function formDefaults() {
 function estimateText(m, seconds, short = false) {
   if (!m) return "";
   if (m.kind === "hosted") return short ? "Usually a few minutes, plus the upload" : `${esc(m.service)} usually takes a few minutes, plus the upload`;
-  const slow = S.status.power === "power-saver";
-  if (!seconds) return `About <b>${m.rtf}×</b> the recording's length here${slow ? " (more in power-saver mode)" : ""}`;
-  const t = seconds * (m.rtf || 1) * (slow ? 3.5 : 1);
+  const sp = m.speed || { rtf: m.rtf };
+  const slow = S.status.power === "power-saver" && !sp.measured;  // a measured speed already includes it
+  const where = sp.runs_on === "gpu" ? " on the graphics card" : "";
+  if (!seconds) return `About <b>${sp.rtf}×</b> the recording's length here${where}${slow ? " (more in power-saver mode)" : ""}`;
+  const t = seconds * (sp.rtf || 1) * (slow ? 3.5 : 1);
   if (short) return `About <b>${human(t)}</b> here${slow ? " (power-saver)" : ""}`;
-  return `About <b>${human(t)}</b> on this computer${slow ? " in power-saver mode — switch to performance in Settings for about 3–5× faster" : ""}`;
+  return `About <b>${human(t)}</b> on this computer${where}${sp.measured ? " (measured on earlier runs)" : ""}${slow ? " in power-saver mode. Performance mode (Settings) is about 3–5× faster" : ""}`;
 }
 
 function speakerHint(m, speakers) {
@@ -590,6 +608,7 @@ function renderJob() {
         <dt>Model</dt><dd>${esc(j.model_title || j.model)}</dd>
         <dt>Language</dt><dd>${esc({ ar: "Arabic + English", en: "English", auto: "Auto-detect" }[opts.language] || opts.language || "")}${j.detected_language ? ` (${esc(j.detected_language)})` : ""}</dd>
         <dt>Speakers</dt><dd>${esc(opts.speakers === "none" ? "No labels" : opts.speakers === "auto" ? "Auto-detect" : opts.speakers)}</dd>
+        ${j.device ? `<dt>Ran on</dt><dd>${esc(deviceLabel(j.device))}</dd>` : ""}
         ${opts.prompt ? `<dt>Vocabulary</dt><dd dir="auto">${esc(opts.prompt)}</dd>` : ""}
         ${j.source_name ? `<dt>File</dt><dd dir="auto">${esc(j.source_name)}</dd>` : ""}
         ${S.edited ? `<dt>Edited</dt><dd>yes — exports use your edits</dd>` : ""}
@@ -946,21 +965,71 @@ function renderSettings(focus) {
       <p>${m.key_url ? `Get a key: <a href="${esc(m.key_url)}" target="_blank" rel="noopener noreferrer">${esc(m.key_url.replace(/^https:\/\//, ""))}</a>. ` : ""}${esc((m.facts || []).slice(-1)[0] || "")}.</p>
     </div>`;
   }).join("");
-  const p = st.power;
   const local = st.models.filter((m) => m.kind === "local" && m.download);
-  const items = [...local.map((m) => [m.id, m.title, m.download]), ...(st.voiceprints ? [["voiceprints", "Voiceprint model (speaker labels)", st.voiceprints]] : [])];
-  const modelRows = items.map(([id, title, d]) => {
+  const items = [...local.map((m) => [m.id, m.title, m.download, m.hub]), ...(st.voiceprints ? [["voiceprints", "Voiceprint model (speaker labels)", st.voiceprints]] : [])];
+  const modelRows = items.map(([id, title, d, hub]) => {
     const cached = !d.installed && model(id)?.ready;  // found elsewhere, e.g. the Hugging Face cache
     const pill = d.installed ? `<span class="pill ok">Downloaded</span>` : cached ? `<span class="pill ok">Ready</span>` : `<span class="pill warn">Not downloaded</span>`;
     const actions = cached && !DL_ACTIVE.has(d.state) ? `<span class="hint" style="margin:0">Uses the copy already in the Hugging Face cache</span>`
-      : downloadBlock(id, d, true) + (d.installed && !DL_ACTIVE.has(d.state) ? `<span class="hint" style="margin:0">${bytes(d.size)}</span><button type="button" class="btn btn-sm btn-ghost btn-danger" data-dl-remove="${esc(id)}">Delete</button>` : "");
-    return `<div class="key-row"><div class="top"><b>${esc(title)}</b>${pill}</div><div class="dl-actions">${actions}</div></div>`;
+      : downloadBlock(id, d, true) + (d.installed && !DL_ACTIVE.has(d.state) ? `<span class="hint" style="margin:0">${bytes(d.on_disk || d.size)}</span><button type="button" class="btn btn-sm btn-ghost btn-danger" data-dl-remove="${esc(id)}">Delete</button>` : "");
+    const from = hub ? `<div class="hint" style="margin:0 0 6px">From <a href="https://huggingface.co/${esc(hub.repo)}" target="_blank" rel="noopener noreferrer">${esc(hub.repo)}</a> · ${esc(hub.label || hub.kind)}</div>` : "";
+    const forget = hub && !DL_ACTIVE.has(d.state) ? `<button type="button" class="btn btn-sm btn-ghost" data-forget-model="${esc(id)}">Remove from the app</button>` : "";
+    return `<div class="key-row"><div class="top"><b>${esc(title)}</b>${pill}</div>${from}<div class="dl-actions">${actions}${forget}</div></div>`;
   }).join("");
+
+  // Speed: graphics card, power mode, threads
+  const set = st.settings || {};
+  const gpu = st.gpu || {};
+  const devices = gpu.devices || [];
+  const best = devices[0];
+  const nvidia = (gpu.cuda_devices || 0) > 0;
+  const cudaReady = !!gpu.cuda_libs || !!st.cuda?.installed;
+  let gpuText;
+  if (!st.gpu && st.gpu_probing) gpuText = "Looking for a graphics card…";
+  else if (gpu.error) gpuText = `Couldn't check the graphics card: ${esc(gpu.error)}`;
+  else if (!devices.length && !nvidia) gpuText = "No graphics card that can help was found, so everything runs on the processor.";
+  else if (set.device === "cpu") gpuText = `Off: everything runs on the processor. Found: ${devices.map((d) => esc(gpuName(d.name))).join(", ")}.`;
+  else {
+    const mem = (d) => d.type === "igpu" ? "shared memory" : d.memory ? `${Math.round(d.memory / 2 ** 30)} GB` : "";
+    gpuText = `${devices.map((d) => `<b>${esc(gpuName(d.name))}</b>${mem(d) ? ` (${mem(d)})` : ""}`).join(", ")}<br>`
+      + (best ? `Cohere runs on ${esc(gpuName(best.name))} through Vulkan. ` : "")
+      + (nvidia ? (cudaReady ? "Whisper models run on the NVIDIA GPU through CUDA." : "Whisper models can run on the NVIDIA GPU once NVIDIA's libraries are downloaded:")
+        : "Whisper models run on the processor (they can only use NVIDIA GPUs).");
+  }
+  const cudaRow = nvidia && st.cuda && set.device !== "cpu" && !cudaReady
+    ? `<div class="set-sub">${downloadBlock("cuda", st.cuda)}<span class="hint" style="margin:0">cuBLAS from NVIDIA, ${bytes(st.cuda.on_disk)} on disk</span></div>` : "";
+  const p = st.power;
+  const powerRows = p ? `
+      <div class="set-row">
+        <div class="set-text"><b>Power mode</b><span class="hint">Local models run about 3–5× slower in power-saver mode.</span></div>
+        <div class="seg">${["performance", "balanced", "power-saver"].map((x) => `<button type="button" class="${p === x ? "on" : ""}" data-power="${x}">${x === "performance" ? ICON.bolt + " " : ""}${x[0].toUpperCase() + x.slice(1).replace("-s", "-s")}</button>`).join("")}</div>
+      </div>
+      <label class="set-row">
+        <div class="set-text"><b>Performance mode while transcribing</b><span class="hint">Switch to performance while a local model runs, and back to ${esc(p === "performance" ? "the previous mode" : p)} when it's done.</span></div>
+        <input type="checkbox" class="switch" data-setting="performance_while_running" ${set.performance_while_running ? "checked" : ""}>
+      </label>` : "";
+  const threads = set.threads || 10, cores = st.cpu_threads || threads;
   $("#settingsBody").innerHTML = `
     <section>
       <h3>Models on this computer</h3>
       ${modelRows || '<p class="hint">No downloadable models are configured.</p>'}
-      <p class="hint">Stored under <code class="mono">${esc(st.home)}</code>. Downloads resume if the connection drops and are checked against a fixed checksum before use.</p>
+      ${hubBlock()}
+      <p class="hint">Downloads resume if the connection drops and are checked against a pinned checksum before use.</p>
+    </section>
+    <section id="set-speed">
+      <h3>Speed</h3>
+      <div class="set-list">
+        <label class="set-row">
+          <div class="set-text"><b>${ICON.gpu} Use the graphics card</b><span class="hint">${gpuText}</span></div>
+          <input type="checkbox" class="switch" data-setting="device" ${set.device !== "cpu" ? "checked" : ""} ${!devices.length && !nvidia ? "disabled" : ""}>
+        </label>
+        ${cudaRow}
+        ${powerRows}
+        <div class="set-row">
+          <div class="set-text"><b>Processor threads</b><span class="hint">How many of this computer's ${cores} threads the local models use.</span></div>
+          <div class="num"><input type="number" min="1" max="${cores}" value="${Math.min(threads, cores)}" data-setting="threads" aria-label="Processor threads"><span>of ${cores}</span></div>
+        </div>
+      </div>
     </section>
     <section>
       <h3>API keys for hosted models</h3>
@@ -968,31 +1037,49 @@ function renderSettings(focus) {
       <p class="hint">${ICON.lock.replace("<svg", '<svg style="width:13px;height:13px;vertical-align:-2px"')} Keys are saved in <code class="mono">${esc(st.storage.dir)}/secrets.json</code>, readable only by your user, and are sent only to their own service. A recording is uploaded only when you pick a hosted model and confirm.</p>
     </section>
     <section>
-      <h3>Power mode</h3>
-      <p class="hint" style="margin:0 0 10px">Local models run about 3–5× slower in power-saver mode. Now: <b>${esc(p || "unknown")}</b>.</p>
-      <div class="actions">
-        <button class="btn${p === "performance" ? " btn-primary" : ""}" data-power="performance" ${p ? "" : "disabled"}>${ICON.bolt} Performance</button>
-        <button class="btn${p === "balanced" ? " btn-primary" : ""}" data-power="balanced" ${p ? "" : "disabled"}>Balanced</button>
-        <button class="btn${p === "power-saver" ? " btn-primary" : ""}" data-power="power-saver" ${p ? "" : "disabled"}>Power-saver</button>
+      <h3>About</h3>
+      <div class="about">
+        <img src="/static/icon.svg" alt="" width="44" height="44">
+        <div class="about-text">
+          <b>Tafrigh ${esc(st.version || "")}</b>
+          <span>Transcripts of Egyptian Arabic–English meetings, made on your own computer.</span>
+          <span class="links"><a href="https://github.com/MohammedEl-sayedAhmed/arabic-stt" target="_blank" rel="noopener noreferrer">${ICON.external} Project page</a>
+            <a href="https://github.com/MohammedEl-sayedAhmed/arabic-stt/releases" target="_blank" rel="noopener noreferrer">${ICON.external} Releases</a></span>
+        </div>
       </div>
-      <p class="hint">To switch automatically while local jobs run and back afterwards, set <code class="mono">performance_while_running = true</code> in <code class="mono">app/config.toml</code> (now: ${st.performance_while_running ? "on" : "off"}).</p>
-    </section>
-    <section>
-      <h3>This app</h3>
-      <dl class="kv">
-        <dt>Data folder</dt><dd><code>${esc(st.storage.dir)}</code> (${st.storage.free_gb} GB free)</dd>
-        <dt>Settings file</dt><dd><code>app/config.toml</code> — models, port, threads, defaults</dd>
-        <dt>Local models</dt><dd>${st.models.filter((m) => m.kind === "local").map((m) => `${esc(m.title)}: ${m.ready ? "ready" : esc(m.reason)}`).join("<br>")}</dd>
-        <dt>Speaker labels</dt><dd>${st.speakers_ready ? "TitaNet-small voiceprints, on this computer" : "voiceprint model not downloaded"}</dd>
-      </dl>
+      <div class="set-list">
+        <div class="set-row">
+          <div class="set-text"><b>Your data</b><span class="hint">${st.storage.jobs} transcription${st.storage.jobs === 1 ? "" : "s"} · ${bytes(st.storage.used_mb * 1e6)} · ${st.storage.free_gb} GB free on this disk</span>
+            <code class="mono path">${esc(st.storage.dir)}</code></div>
+          <button type="button" class="btn btn-sm" id="openFolder">${ICON.folder} Open folder</button>
+        </div>
+      </div>
+      <p class="hint">Models are kept in <code class="mono">${esc(st.home)}/models</code>. The port, defaults and model list are set in <code class="mono">app/config.toml</code>; your own changes can go in <code class="mono">${esc(st.storage.dir)}/config.toml</code>.</p>
     </section>`;
   $$("[data-key-form]").forEach((form) => (form.onsubmit = (e) => { e.preventDefault(); saveKey(form.dataset.keyForm, $("[data-key]", form).value); }));
   $$("[data-clear-key]").forEach((b) => (b.onclick = () => confirm("Remove the saved key?") && saveKey(b.dataset.clearKey, "")));
   $$("[data-power]").forEach((b) => (b.onclick = async () => {
     try { await api.post("/api/power", { profile: b.dataset.power }); await refreshStatus(); renderSettings(); toast(`Power mode: ${b.dataset.power}`); } catch (e) { toast(e.message, "error"); }
   }));
-  if (focus && focus !== "power") { const el = $(`[data-key="${focus}"]`); if (el) setTimeout(() => el.focus(), 50); }
+  $$("input[data-setting]").forEach((el) => (el.onchange = async () => {
+    const key = el.dataset.setting;
+    const value = key === "device" ? (el.checked ? "auto" : "cpu") : key === "threads" ? parseInt(el.value, 10) : el.checked;
+    if (key === "threads" && !(value >= 1 && value <= cores)) { el.value = threads; return; }
+    try { S.status = await api.post("/api/settings", { [key]: value }); renderTop(); renderSettings(); if (S.route.name === "new") renderModelGrid(); toast("Saved"); }
+    catch (e) { toast(e.message, "error"); }
+  }));
+  const open = $("#openFolder");
+  if (open) open.onclick = async () => { try { await api.post("/api/open-folder"); } catch (e) { toast(e.message, "error"); } };
+  bindHub();
+  $$("[data-forget-model]").forEach((b) => (b.onclick = () => forgetModel(b.dataset.forgetModel)));
+  if (focus === "speed") setTimeout(() => $("#set-speed")?.scrollIntoView({ block: "start" }), 50);
+  else if (focus && focus !== "power") { const el = $(`[data-key="${focus}"]`); if (el) setTimeout(() => el.focus(), 50); }
 }
+
+// Adding models from Hugging Face (Settings → Models): filled in by the importer.
+function hubBlock() { return ""; }
+function bindHub() {}
+async function forgetModel(_id) {}
 
 async function removeDownload(id) {
   if (!confirm("Delete this model's files from this computer? You can download them again later.")) return;

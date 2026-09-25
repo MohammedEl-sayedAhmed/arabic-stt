@@ -27,8 +27,11 @@ language = "ar"             # "ar", "en" or "auto"
 threads = 10                # CPU threads for the local models
 voiceprint_model = "models/diarization/nemo_en_titanet_small.onnx"
 # Switch the laptop to the performance power profile while local jobs run, and back afterwards
-# (Linux, powerprofilesctl). Power-saver makes local models about 3-5x slower.
+# (Linux, powerprofilesctl). Power-saver makes local models about 3-5x slower. Also a switch in Settings.
 performance_while_running = false
+# "auto": use a graphics card when one works (Cohere through Vulkan on any GPU; Whisper on NVIDIA GPUs
+# once the NVIDIA libraries below are downloaded), else the CPU. "cpu": never. Also a switch in Settings.
+device = "auto"
 
 # Files the app downloads (Settings → Models), pinned to a revision and checked by size and SHA-256.
 [[local.voiceprint_files]]
@@ -37,10 +40,46 @@ path = "models/diarization/nemo_en_titanet_small.onnx"
 size = 40257283
 sha256 = "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e"
 
+# NVIDIA's cuBLAS (and NVRTC, which it can use) for the Whisper models on an NVIDIA GPU, taken from
+# NVIDIA's pip packages. Settings offers the download only when an NVIDIA GPU is found; only the listed
+# files are unpacked from each package, which is then deleted.
+[[local.cuda_files]]
+platform = "win32"
+url = "https://files.pythonhosted.org/packages/20/e2/fc9a0e985249d873150276d5afb02e39a66817fedbf1a385724393e505ed/nvidia_cublas_cu12-12.9.2.10-py3-none-win_amd64.whl"
+path = "models/nvidia-cuda/nvidia_cublas_cu12-12.9.2.10-py3-none-win_amd64.whl"
+size = 553162896
+sha256 = "623f43027d40d44ceadf0043f002bd25cf353e8f13ce90b9a87057019f560661"
+unpack = { "nvidia/cublas/bin/cublas64_12.dll" = 102518272, "nvidia/cublas/bin/cublasLt64_12.dll" = 668673536 }
+
+[[local.cuda_files]]
+platform = "win32"
+url = "https://files.pythonhosted.org/packages/52/de/823919be3b9d0ccbf1f784035423c5f18f4267fb0123558d58b813c6ec86/nvidia_cuda_nvrtc_cu12-12.9.86-py3-none-win_amd64.whl"
+path = "models/nvidia-cuda/nvidia_cuda_nvrtc_cu12-12.9.86-py3-none-win_amd64.whl"
+size = 76408187
+sha256 = "72972ebdcf504d69462d3bcd67e7b81edd25d0fb85a2c46d3ea3517666636349"
+unpack = { "nvidia/cuda_nvrtc/bin/nvrtc64_120_0.dll" = 89832960, "nvidia/cuda_nvrtc/bin/nvrtc-builtins64_129.dll" = 7217664 }
+
+[[local.cuda_files]]
+platform = "linux"
+url = "https://files.pythonhosted.org/packages/cb/c0/0a517bfe63ccd3b92eb254d264e28fca3c7cab75d07daea315250fb1bf73/nvidia_cublas_cu12-12.9.2.10-py3-none-manylinux_2_27_x86_64.whl"
+path = "models/nvidia-cuda/nvidia_cublas_cu12-12.9.2.10-py3-none-manylinux_2_27_x86_64.whl"
+size = 581240110
+sha256 = "e4f53a8ca8c5d6e8c492d0d0a3d565ecb59a751b19cfdaa4f6da0ab2104c1702"
+unpack = { "nvidia/cublas/lib/libcublas.so.12" = 105140976, "nvidia/cublas/lib/libcublasLt.so.12" = 749210000 }
+
+[[local.cuda_files]]
+platform = "linux"
+url = "https://files.pythonhosted.org/packages/b8/85/e4af82cc9202023862090bfca4ea827d533329e925c758f0cde964cb54b7/nvidia_cuda_nvrtc_cu12-12.9.86-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl"
+path = "models/nvidia-cuda/nvidia_cuda_nvrtc_cu12-12.9.86-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl"
+size = 89568129
+sha256 = "210cf05005a447e29214e9ce50851e83fc5f4358df8b453155d5e1918094dcb4"
+unpack = { "nvidia/cuda_nvrtc/lib/libnvrtc.so.12" = 106244480, "nvidia/cuda_nvrtc/lib/libnvrtc-builtins.so.12.9" = 7202760 }
+
 # ---------------------------------------------------------------------------------------------
 # Models. kind = "local" runs on this computer through transcribe.py; kind = "hosted" uploads the
 # recording to the service (the app asks for confirmation every time).
-# rtf = processing time / audio length measured on the test laptop in performance mode, for estimates.
+# rtf = processing time / audio length measured on the test laptop in performance mode, for estimates
+# (rtf_gpu: the same on its integrated GPU). Once a model has run here, the app uses its measured speed.
 # ---------------------------------------------------------------------------------------------
 
 [[models]]
@@ -89,6 +128,7 @@ tagline = "Arabic-heavy meetings, fastest"
 facts = ["13.4% WER on the public Egyptian set", "43.8% different from ElevenLabs on real meetings",
          "Fewest errors on Arabic words", "English kept: 77% / 46%"]
 rtf = 0.3
+rtf_gpu = 0.15
 prompt = false
 
 [[models.files]]

@@ -5,15 +5,20 @@ and every request that changes something must carry the X-Tafrigh header, which 
 open in the same browser cannot send (no cross-site requests).
 """
 import json
+import os
 import re
 import shutil
+import statistics
+import subprocess
+import sys
 import threading
+import time
 import urllib.parse
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import engines
+from . import __version__, engines
 from . import transcript as T
 from .config import FROZEN, power_profile, set_power_profile
 from .downloads import Downloads
@@ -44,30 +49,96 @@ class App:
         self.server = None
         self.desktop = False    # set by the desktop app
         self.on_quit = None     # the desktop app closes its window instead of just stopping the server
+        self.gpu = None         # what transcribe.py can use here; found in the background at start
+        self.gpu_probing = False
+        self.used = (0.0, None)  # (time, bytes) of the last count of the transcriptions' size
+        self.probe_gpu()
 
-    def model_info(self, model):
+    def probe_gpu(self):
+        if self.gpu_probing:
+            return
+        self.gpu_probing = True
+
+        def run():
+            try:
+                self.gpu = engines.gpu_info(self.cfg)
+            finally:
+                self.gpu_probing = False
+        threading.Thread(target=run, daemon=True, name="tafrigh-gpu").start()
+
+    def cuda_ready(self):
+        items = self.cfg.download_items()
+        return bool((self.gpu or {}).get("cuda_libs")) or ("cuda" in items and self.downloads.status("cuda")["installed"])
+
+    def runs_on(self, model):
+        """Where a local model is expected to run: "gpu" or "cpu"."""
+        gpu = self.gpu or {}
+        if model["kind"] != "local" or self.cfg.setting("device") == "cpu":
+            return "cpu"
+        if model["engine"] in ("cohere", "gguf") and gpu.get("devices"):
+            return "gpu"
+        if model["engine"] == "whisper" and gpu.get("cuda_devices") and self.cuda_ready():
+            return "gpu"
+        return "cpu"
+
+    def speed(self, model, jobs):
+        """The processing time / audio length to expect: measured on this computer (the median of the last
+        runs on the same kind of device and power profile), else the config's figure."""
+        where, power = self.runs_on(model), power_profile()
+        past = [j["rtf"] for j in jobs if j.get("model") == model["id"] and j.get("status") == "done" and j.get("rtf")
+                and j.get("kind") == "local" and (j.get("audio_s") or 0) >= 60 and j.get("power") == power
+                and device_class(j.get("device")) == where][:5]
+        if past:
+            return {"rtf": round(statistics.median(past), 3), "measured": True, "runs_on": where}
+        rtf = model.get("rtf_gpu") if where == "gpu" and model.get("rtf_gpu") else model.get("rtf")
+        return {"rtf": rtf, "measured": False, "runs_on": where}
+
+    def model_info(self, model, jobs=None):
         ready, reason = self.cfg.availability(model)
-        keys = ("id", "kind", "title", "tagline", "facts", "service", "key_url", "rtf", "prompt")
+        keys = ("id", "kind", "engine", "title", "tagline", "facts", "service", "key_url", "rtf", "prompt", "hub")
         items = self.cfg.download_items()
         return {**{k: model.get(k) for k in keys}, "ready": ready, "reason": reason,
+                "speed": self.speed(model, self.store.list() if jobs is None else jobs) if model["kind"] == "local" else None,
                 "key_source": self.cfg.key_source(model) if model["kind"] == "hosted" else None,
                 "download": self.downloads.status(model["id"]) if model["id"] in items else None}
+
+    def used_bytes(self):
+        """Disk space of all transcriptions (audio copies, transcripts, logs), counted at most every 30 s."""
+        at, size = self.used
+        if size is None or time.time() - at > 30:
+            size = sum(f.stat().st_size for f in self.store.root.rglob("*") if f.is_file())
+            self.used = (time.time(), size)
+        return size
 
     def status(self):
         jobs = self.store.list()
         items = self.cfg.download_items()
+        gpu = self.gpu or {}
+        if gpu.get("cuda_devices") and not gpu.get("cuda_libs") and "cuda" in items \
+                and self.downloads.status("cuda")["installed"]:
+            self.probe_gpu()  # the NVIDIA libraries were just downloaded: check them again
         return {
-            "app": "tafrigh",
+            "app": "tafrigh", "version": __version__,
             "desktop": self.desktop, "frozen": FROZEN, "home": str(self.cfg.home),
-            "models": [self.model_info(m) for m in self.cfg.models.values()],
+            "models": [self.model_info(m, jobs) for m in self.cfg.models.values()],
             "voiceprints": self.downloads.status("voiceprints") if "voiceprints" in items else None,
+            "cuda": self.downloads.status("cuda") if "cuda" in items else None,
+            "gpu": self.gpu, "gpu_probing": self.gpu_probing,
             "defaults": self.cfg.defaults,
+            "settings": self.cfg.settings(),
+            "cpu_threads": os.cpu_count(),
             "speakers_ready": self.cfg.speakers_ready(),
             "power": power_profile(),
-            "performance_while_running": bool(self.cfg.local.get("performance_while_running")),
-            "storage": {"dir": str(self.cfg.storage), "free_gb": round(shutil.disk_usage(self.cfg.storage).free / 1e9, 1)},
+            "performance_while_running": bool(self.cfg.setting("performance_while_running")),
+            "storage": {"dir": str(self.cfg.storage), "free_gb": round(shutil.disk_usage(self.cfg.storage).free / 1e9, 1),
+                        "used_mb": round(self.used_bytes() / 1e6), "jobs": len(jobs)},
             "active": sum(1 for j in jobs if j["status"] in ACTIVE),
         }
+
+
+def device_class(device):
+    """"gpu" or "cpu" from a job's device, e.g. "vulkan: Intel(R) Iris(R) Xe Graphics" (older jobs have none)."""
+    return "gpu" if (device or "").split(":")[0] in ("vulkan", "cuda", "metal", "rocm") else "cpu"
 
 
 def summary(job):
@@ -411,12 +482,34 @@ class Handler(BaseHTTPRequestHandler):
         self.json({"path": str(path.resolve()), "name": path.name, "size": path.stat().st_size,
                    "seconds": probe_seconds(path)})
 
+    def settings(self, _params):
+        p = self.body_json()
+        values = {k: p[k] for k in self.app.cfg.SETTINGS if k in p}
+        try:
+            self.app.cfg.save_settings(**values)
+        except ValueError as e:
+            raise ApiError(400, str(e))
+        self.json(self.app.status())
+
+    def open_folder(self, _params):
+        """Show the data folder in the file manager (only that folder; the path isn't taken from the request)."""
+        folder = str(self.app.cfg.storage)
+        try:
+            if os.name == "nt":
+                os.startfile(folder)  # noqa: S606 — our own folder
+            else:
+                subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", folder],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as e:
+            raise ApiError(500, f"could not open the folder: {e}")
+        self.json({"opened": folder})
+
     def download(self, _params, item_id):
         items = self.app.cfg.download_items()
         if item_id not in items:
             raise ApiError(404, "nothing to download with that name")
         wanted = [item_id]
-        if item_id != "voiceprints" and "voiceprints" in items:  # speaker labels need it too
+        if item_id in self.app.cfg.models and "voiceprints" in items:  # speaker labels need it too
             wanted.append("voiceprints")
         try:
             self.app.downloads.start(wanted)
@@ -431,7 +524,7 @@ class Handler(BaseHTTPRequestHandler):
     def remove_download(self, _params, item_id):
         if item_id not in self.app.cfg.download_items():
             raise ApiError(404, "nothing to remove with that name")
-        if any(j["status"] in ACTIVE and (j["model"] == item_id or item_id == "voiceprints") and j["kind"] == "local"
+        if any(j["status"] in ACTIVE and (j["model"] == item_id or item_id in ("voiceprints", "cuda")) and j["kind"] == "local"
                for j in self.app.store.list()):
             raise ApiError(409, "a transcription is using it; wait until it has finished")
         try:
@@ -478,6 +571,8 @@ ROUTES = [
     ("GET", rf"/api/jobs/{ID}/export/(\w+)", Handler.export),
     ("POST", r"/api/keys", Handler.save_key),
     ("POST", r"/api/power", Handler.power),
+    ("POST", r"/api/settings", Handler.settings),
+    ("POST", r"/api/open-folder", Handler.open_folder),
     ("POST", r"/api/probe", Handler.probe),
     ("POST", r"/api/downloads/([\w-]+)", Handler.download),
     ("POST", r"/api/downloads/([\w-]+)/cancel", Handler.cancel_download),

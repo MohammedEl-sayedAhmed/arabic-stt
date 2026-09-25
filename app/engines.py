@@ -39,6 +39,21 @@ def read_json(path):
 # Local models: transcribe.py in a subprocess (its own process group, so cancel stops it cleanly)
 # ---------------------------------------------------------------------------------------------
 
+def gpu_info(cfg, timeout=90):
+    """What transcribe.py finds on this computer ({"devices": [...], "cuda_devices", "cuda_libs"}), from a
+    short run of the model process, so the heavy GPU libraries never load into the app itself."""
+    env = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8", "PYTHONPATH": str(ROOT)}
+    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    try:
+        r = subprocess.run(worker_command(cfg) + ["--gpu-info", "--cuda-libs", str(cfg.cuda_dir())], cwd=ROOT, env=env,
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
+                           creationflags=flags)
+        line = next((x for x in reversed(r.stdout.splitlines()) if x.startswith("{")), None)
+        return json.loads(line) if line else {"error": (r.stderr or r.stdout).strip()[-300:] or f"exit {r.returncode}"}
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
+        return {"error": str(e)}
+
+
 def worker_command(cfg):
     """How to start transcribe.py: the desktop build runs itself with --transcribe."""
     if FROZEN:
@@ -48,8 +63,9 @@ def worker_command(cfg):
 
 def local_command(cfg, model, audio, out_dir, progress_file, options):
     cmd = worker_command(cfg) + [
-        str(audio), "--engine", model["engine"], "--out", str(out_dir), "--threads", str(cfg.local.get("threads", 10)),
-        "--language", options.get("language", "ar"), "--progress-file", str(progress_file)]
+        str(audio), "--engine", model["engine"], "--out", str(out_dir), "--threads", str(cfg.setting("threads")),
+        "--language", options.get("language", "ar"), "--progress-file", str(progress_file),
+        "--device", cfg.setting("device"), "--cuda-libs", str(cfg.cuda_dir())]
     whisper = cfg.whisper_source(model) if model["engine"] == "whisper" else None
     if model["engine"] == "whisper":
         cmd += ["--whisper-model", whisper or model["whisper_model"]]
@@ -143,7 +159,7 @@ def run_local(cfg, model, job_dir, job, on_progress, cancelled, register=None):
         raise EngineError("\n".join(tail) or f"transcribe.py exited with code {proc.returncode}")
     meta = next((read_json(p) for p in out_dir.glob("*.meta.json")), None) or {}
     return {"lines": partial_lines(job_dir),
-            "meta": {k: meta[k] for k in ("peak_rss_mb", "voiceprint_model") if k in meta}}
+            "meta": {k: meta[k] for k in ("peak_rss_mb", "voiceprint_model", "device") if k in meta}}
 
 
 # ---------------------------------------------------------------------------------------------

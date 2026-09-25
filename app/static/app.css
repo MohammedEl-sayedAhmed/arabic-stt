@@ -490,3 +490,59 @@ dialog::backdrop { background: rgba(10, 14, 20, .45); backdrop-filter: blur(2px)
 .dl-actions .dl { flex: 1; min-width: 220px; margin-top: 0; }
 .mc-foot .btn { margin-top: 6px; }
 .mc-foot .mc-missing { display: block; }
+
+/* ---------- settings: rows with switches, segmented buttons, about ---------- */
+.set-list { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 10px; }
+.set-row {
+  display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.set-list > :first-child { border-top: 0; }
+label.set-row { cursor: pointer; }
+.set-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.set-text b { display: flex; align-items: center; gap: 7px; font-size: 14px; }
+.set-text b svg { width: 16px; height: 16px; color: var(--accent); }
+.set-text .hint { margin: 0; line-height: 1.45; }
+.set-text .path { margin-top: 4px; overflow-wrap: anywhere; color: var(--muted); }
+.set-sub { display: flex; flex-direction: column; gap: 6px; padding: 0 14px 12px 37px; background: var(--surface); }
+.set-sub .btn { align-self: flex-start; }
+.switch {
+  appearance: none; -webkit-appearance: none; flex: none; width: 40px; height: 24px; border-radius: 12px; margin: 0;
+  background: var(--border-strong); position: relative; cursor: pointer; transition: background .15s;
+}
+.switch::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .15s;
+}
+.switch:checked { background: var(--accent); }
+.switch:checked::after { transform: translateX(16px); }
+.switch:disabled { opacity: .45; cursor: not-allowed; }
+.seg { display: inline-flex; flex: none; border: 1px solid var(--border-strong); border-radius: 9px; overflow: hidden; }
+.seg button {
+  display: inline-flex; align-items: center; gap: 5px; border: 0; border-left: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text); padding: 6px 11px; font: inherit; font-size: 13px; cursor: pointer;
+}
+.seg button:first-child { border-left: 0; }
+.seg button svg { width: 14px; height: 14px; }
+.seg button.on { background: var(--accent); color: var(--accent-text); }
+.seg button:not(.on):hover { background: var(--surface-2); }
+.num { display: inline-flex; align-items: center; gap: 8px; flex: none; color: var(--muted); font-size: 13px; }
+.num input { width: 64px; height: 32px; padding: 0 8px; }
+.about { display: flex; gap: 14px; align-items: center; margin-bottom: 12px; }
+.about img { flex: none; border-radius: 11px; }
+.about-text { display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; color: var(--muted); }
+.about-text b { color: var(--text); font-size: 15px; }
+.about-text .links { display: flex; gap: 14px; margin-top: 3px; }
+.about-text .links a { display: inline-flex; align-items: center; gap: 4px; font-weight: 550; text-decoration: none; }
+.about-text .links svg { width: 13px; height: 13px; }
+.hub { border: 1px dashed var(--border-strong); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+.hub .row { display: flex; gap: 8px; }
+.hub .row input { flex: 1; min-width: 0; }
+.hub-found { margin-top: 10px; font-size: 13px; }
+.hub-found .kv { margin: 6px 0 10px; }
+.hub-found.error { color: var(--danger); }
+@media (max-width: 560px) {
+  .set-row { flex-wrap: wrap; }
+  .seg { width: 100%; }
+  .seg button { flex: 1; justify-content: center; }
+}

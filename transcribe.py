@@ -20,6 +20,12 @@ Engines:
            llama-server on 127.0.0.1: bench/serve.sh r2t2|qwen3asr|audar 8081
   cohere   Cohere Transcribe Arabic (GGUF) run in process by transcribe.cpp
 
+Devices (--device auto, the default): Cohere runs on a GPU through transcribe.cpp (Vulkan, so
+NVIDIA, AMD and Intel graphics all work), preferring a discrete GPU; Whisper runs on an NVIDIA GPU
+through CTranslate2's CUDA support once NVIDIA's cuBLAS is available (--cuda-libs, or the pip
+package nvidia-cublas-cu12). Anything that fails on the GPU falls back to the CPU. --device cpu
+never touches the GPU; --device gpu fails instead of falling back. --gpu-info prints what is found.
+
 Usage:
   .venv/bin/python transcribe.py path/to/call.wav
   .venv/bin/python transcribe.py meeting.wav --speakers 2
@@ -65,6 +71,10 @@ COHERE_MODEL = str(MODELS / "cohere-transcribe-arabic-07-2026-gguf" / "cohere-tr
 # makes fewer errors on Arabic words). Falls back to large-v3 if not downloaded.
 WHISPER_CS = MODELS / "whisper-medium-arabic-codeswitched-ct2"
 DEFAULT_WHISPER = str(WHISPER_CS) if WHISPER_CS.exists() else "large-v3"
+# NVIDIA's cuBLAS (and the NVRTC it may use) for Whisper on CUDA: where the app puts them, in load order
+CUDA_LIBS = MODELS / "nvidia-cuda"
+CUDA_NAMES = {"win32": ["nvrtc64_120_0.dll", "cublasLt64_12.dll", "cublas64_12.dll"],
+              "linux": ["libnvrtc.so.12", "libcublasLt.so.12", "libcublas.so.12"]}
 
 
 def split_at_pauses(audio):
@@ -140,14 +150,125 @@ def speaker_lines(engine, audio, timeline, on_chunk=None):
     return lines, words
 
 
+# ---------------------------------------------------------------------------------------------
+# GPUs. transcribe.cpp (Cohere) reaches any GPU through Vulkan; CTranslate2 (Whisper) only NVIDIA
+# GPUs through CUDA, and it needs NVIDIA's cuBLAS, which isn't bundled (the app downloads it).
+# ---------------------------------------------------------------------------------------------
+
+def gpu_devices():
+    """The GPUs transcribe.cpp can run on, best first: discrete before integrated, then the most memory."""
+    try:
+        import transcribe_cpp
+        devices = transcribe_cpp.backends()
+    except Exception:  # noqa: BLE001 — no GPU runtime at all
+        return []
+    gpus = [d for d in devices if d.device_type in ("gpu", "igpu") and d.kind in ("vulkan", "cuda", "rocm", "metal")]
+    return sorted(gpus, key=lambda d: (d.device_type != "gpu", -(d.memory_total or 0)))
+
+
+def cuda_device_count():
+    try:
+        import ctranslate2
+        return ctranslate2.get_cuda_device_count()
+    except Exception:  # noqa: BLE001 — no NVIDIA driver
+        return 0
+
+
+_cuda_libs = {}
+
+
+def load_cuda_libs(folder=None):
+    """Load NVIDIA's cuBLAS (and NVRTC, if there) by full path, so that CTranslate2's later load by name
+    finds it: from `folder`, the app's download folder, or the pip package nvidia-cublas-cu12. Returns
+    the folder used ("system" if cuBLAS was already findable), or None."""
+    import ctypes
+
+    if folder in _cuda_libs:
+        return _cuda_libs[folder]
+    names = CUDA_NAMES.get("win32" if os.name == "nt" else sys.platform)
+    if not names:
+        return None
+    folders = [Path(folder)] if folder else []
+    folders.append(CUDA_LIBS)
+    try:
+        import nvidia.cublas  # noqa: F401 — the pip packages' namespace
+        import nvidia
+        for root in nvidia.__path__:
+            folders += [Path(root) / pkg / sub for pkg in ("cublas", "cuda_nvrtc") for sub in ("bin", "lib")]
+    except ImportError:
+        pass
+    found = None
+    for d in folders:
+        if not (d / names[-1]).is_file():
+            continue
+        if os.name == "nt":
+            os.add_dll_directory(str(d))
+            os.environ["PATH"] = f"{d}{os.pathsep}{os.environ.get('PATH', '')}"
+        try:
+            for name in names:
+                lib = next((x / name for x in [d, *folders] if (x / name).is_file()), None)
+                if lib is None and name == names[0]:
+                    continue  # NVRTC is optional
+                ctypes.CDLL(str(lib), mode=getattr(ctypes, "RTLD_GLOBAL", 0))
+            found = str(d)
+            break
+        except OSError as e:
+            print(f"could not load cuBLAS from {d}: {e}", file=sys.stderr, flush=True)
+    if found is None:
+        try:
+            ctypes.CDLL(names[-1])
+            found = "system"
+        except OSError:
+            pass
+    _cuda_libs[folder] = found
+    return found
+
+
+def whisper_on_gpu(args):
+    """(WhisperModel on an NVIDIA GPU, a description), after one second of silence ran on it, or (None, None)."""
+    if cuda_device_count() < 1 or not load_cuda_libs(args.cuda_libs):
+        return None, None
+    for compute in ("int8_float16", "float16"):
+        try:
+            model = WhisperModel(args.whisper_model, device="cuda", compute_type=compute, local_files_only=True)
+            segments, _ = model.transcribe(np.zeros(SR, dtype=np.float32), language="ar", beam_size=1,
+                                           without_timestamps=True, max_new_tokens=4)
+            list(segments)
+            return model, f"cuda: {nvidia_gpu_name()} ({compute})"
+        except Exception as e:  # noqa: BLE001 — anything here means: use the CPU
+            print(f"Whisper can't use the NVIDIA GPU with {compute} ({type(e).__name__}: {e})", file=sys.stderr,
+                  flush=True)
+    return None, None
+
+
+def nvidia_gpu_name():
+    return next((d.description for d in gpu_devices() if "nvidia" in d.description.lower()), "NVIDIA GPU")
+
+
+def gpu_info(cuda_libs=None):
+    """What the engines can use here, for --gpu-info and the app."""
+    cuda = cuda_device_count()
+    return {"devices": [{"name": d.description, "kind": d.kind, "type": d.device_type, "memory": d.memory_total}
+                        for d in gpu_devices()],
+            "cuda_devices": cuda, "cuda_libs": load_cuda_libs(cuda_libs) if cuda else None}
+
+
 class Whisper:
     def __init__(self, args):
         self.name = "whisper-" + Path(args.whisper_model).name
-        self.model = WhisperModel(args.whisper_model, device="cpu", compute_type="int8",
-                                  cpu_threads=args.threads, local_files_only=True)
+        self.source, self.threads = args.whisper_model, args.threads
+        self.model, self.device = (None, "cpu") if args.device == "cpu" else whisper_on_gpu(args)
+        if self.model is None:
+            if args.device == "gpu":
+                sys.exit("--device gpu: Whisper needs an NVIDIA GPU with CUDA and cuBLAS (see --gpu-info)")
+            self.model, self.device = self.cpu_model(), "cpu"
         self.language = None if args.language == "auto" else args.language
         default_prompt = STYLE_PROMPT if Path(args.whisper_model).name.endswith("large-v3") else None
         self.prompt = default_prompt if args.prompt is None else (args.prompt or None)
+
+    def cpu_model(self):
+        return WhisperModel(self.source, device="cpu", compute_type="int8", cpu_threads=self.threads,
+                            local_files_only=True)
 
     def __call__(self, audio):
         return " ".join(w for _, _, w in self.words(audio))
@@ -155,13 +276,20 @@ class Whisper:
     def words(self, audio):
         """(start, end, word) with times in seconds from the start of `audio` (under 30 s,
         ending with the TAIL silence)."""
-        segments, _ = self.model.transcribe(audio, language=self.language, beam_size=5, initial_prompt=self.prompt,
-                                            condition_on_previous_text=False, without_timestamps=True,
-                                            word_timestamps=True)
-        # Keep only the first decoding window. With word timestamps faster-whisper would go on to
-        # decode from the last word's end; on a chunk under 30 s that remainder is silence, where
-        # Whisper invents "شكراً لكم". Not advancing the generator also skips that extra work.
-        s = next(iter(segments), None)
+        try:
+            segments, _ = self.model.transcribe(audio, language=self.language, beam_size=5,
+                                                initial_prompt=self.prompt, condition_on_previous_text=False,
+                                                without_timestamps=True, word_timestamps=True)
+            # Keep only the first decoding window. With word timestamps faster-whisper would go on to
+            # decode from the last word's end; on a chunk under 30 s that remainder is silence, where
+            # Whisper invents "شكراً لكم". Not advancing the generator also skips that extra work.
+            s = next(iter(segments), None)
+        except RuntimeError as e:  # e.g. the GPU ran out of memory: carry on on the CPU
+            if self.device == "cpu":
+                raise
+            print(f"Whisper failed on the GPU ({e}); continuing on the CPU", file=sys.stderr, flush=True)
+            self.model, self.device = self.cpu_model(), "cpu (after a GPU error)"
+            return self.words(audio)
         words = [(w.start, w.end, w.word.strip()) for w in (s.words or [])] if s is not None and s.seek == 0 else []
         words = [w for w in words if w[2]]
         # Whisper sometimes stops early and skips the end of a chunk; transcribe what's left.
@@ -207,11 +335,35 @@ class Cohere:
     def __init__(self, args):
         import transcribe_cpp
 
-        path = Path(args.cohere_model)
-        self.name = path.stem
-        self.model = transcribe_cpp.Model(path, backend="cpu")
-        self.session = self.model.session(n_threads=args.threads)
+        self.path, self.threads = Path(args.cohere_model), args.threads
+        self.name = self.path.stem
         self.language = "ar" if args.language == "auto" else args.language
+        self.model = None
+        if args.device != "cpu":
+            for dev in gpu_devices():  # the best GPU first; each is checked on a second of silence
+                try:
+                    self.model = transcribe_cpp.Model(self.path, backend=dev.kind, device=dev)
+                    self.session = self.model.session(n_threads=args.threads)
+                    try:
+                        self.session.run(np.zeros(SR, dtype=np.float32), language=self.language)
+                    except transcribe_cpp.errors.OutputTruncated:
+                        pass  # it ran; silence can make the decoder ramble
+                    self.device = f"{dev.kind}: {dev.description}"
+                    break
+                except Exception as e:  # noqa: BLE001 — a broken driver must not stop the run
+                    print(f"Cohere can't use {dev.description} ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
+                    self.model = None
+            if self.model is None and args.device == "gpu":
+                sys.exit("--device gpu: no GPU that transcribe.cpp can use (see --gpu-info)")
+        if self.model is None:
+            self.use_cpu("cpu")
+
+    def use_cpu(self, label):
+        import transcribe_cpp
+
+        self.model = transcribe_cpp.Model(self.path, backend="cpu")
+        self.session = self.model.session(n_threads=self.threads)
+        self.device = label
 
     def __call__(self, audio):
         import transcribe_cpp
@@ -226,6 +378,13 @@ class Cohere:
                 return f"{self(audio[:cut])} {self(audio[cut:])}".strip()
             partial = getattr(e, "partial_result", None)
             text = trim_loop(partial.text if partial else "")
+        except transcribe_cpp.errors.TranscribeError as e:  # e.g. out of GPU memory: carry on on the CPU
+            if self.device == "cpu" or isinstance(e, transcribe_cpp.errors.InvalidArgument):
+                raise
+            print(f"Cohere failed on the GPU ({type(e).__name__}: {e}); continuing on the CPU", file=sys.stderr,
+                  flush=True)
+            self.use_cpu("cpu (after a GPU error)")
+            return self(audio)
         # On hesitant phone speech it adds notes such as (تأتأة) "stutter" or (غير مفهوم) "unclear".
         return re.sub(r"\s*\([^()]*\)", "", text).strip()
 
@@ -287,8 +446,13 @@ def line(x):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("audio")
+    ap.add_argument("audio", nargs="?")
     ap.add_argument("--engine", choices=list(ENGINES), default="whisper")
+    ap.add_argument("--device", choices=["auto", "cpu", "gpu"], default="auto",
+                    help="auto (default): a GPU when one works, else the CPU; cpu; gpu: fail rather than use the CPU")
+    ap.add_argument("--cuda-libs", metavar="DIR", help="folder with NVIDIA's cuBLAS for Whisper on CUDA "
+                                                       "(default: models/nvidia-cuda, or the nvidia-cublas-cu12 package)")
+    ap.add_argument("--gpu-info", action="store_true", help="print the GPUs the engines can use, as JSON, and exit")
     ap.add_argument("--language", default="ar", help="ar, en or auto (default: ar; Cohere can't detect, so auto = ar)")
     ap.add_argument("--prompt", help="style/vocabulary hint: Whisper's initial prompt (default for large-v3: "
                                      "an Egyptian code-switched sentence; '' for none) or Qwen3-ASR's context")
@@ -309,6 +473,11 @@ def main():
                     help="cohere/llama: forced-align the text to get word times (align.py), so with --speakers "
                          "each word gets its own speaker instead of the audio being cut at speaker changes")
     args = ap.parse_args()
+    if args.gpu_info:
+        print(json.dumps(gpu_info(args.cuda_libs), ensure_ascii=False))
+        return
+    if not args.audio:
+        ap.error("the audio file is required")
     if args.speakers is not None and args.speakers < 0:
         ap.error("--speakers must be 0 (estimate) or the number of speakers")
     if args.engine == "cohere" and args.prompt:
@@ -332,7 +501,7 @@ def main():
     if args.align and not hasattr(engine, "words"):
         import align
         engine = Aligned(engine, align.Aligner(args.align, threads=args.threads))
-    print(f"{args.audio}: {len(audio) / SR / 60:.1f} min, engine {engine.name}\n")
+    print(f"{args.audio}: {len(audio) / SR / 60:.1f} min, engine {engine.name} on {engine.device}\n")
     t0 = time.time()
     timeline = None
     if args.speakers is not None:
@@ -387,6 +556,7 @@ def main():
         "aligner": engine.aligner.name if isinstance(engine, Aligned) else None,
         "align_failures": engine.aligner.failures if isinstance(engine, Aligned) else None,
         "align_skipped_chunks": engine.skipped if isinstance(engine, Aligned) else None,
+        "device": getattr(engine, "device", "cpu"),
         "seconds": round(took, 1), "rtf": round(took / (len(audio) / SR), 3),
         "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024) if resource else None,
     }, ensure_ascii=False, indent=1), encoding="utf-8")
