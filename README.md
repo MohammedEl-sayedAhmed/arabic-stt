@@ -131,3 +131,12 @@ Their audio, transcripts and results stay in the git-ignored `data/` and `result
 | `bench/samples/` | the pinned clip lists of the public test sets |
 | `models/`, `tools/`, `data/`, `app_data/` | downloaded models, llama.cpp binaries, test audio, the app's transcriptions and keys (git-ignored) |
 | `results/` | per-clip outputs and scores on the public sets (`results/poc/`, `results/meetings/` are private) |
+
+## Licence
+
+The code and docs in this repository are under the [MIT licence](LICENSE). The models the app
+downloads keep their own licences: the whisper-medium code-switching fine-tune and Whisper large-v3
+(MIT; check the fine-tune's card for its training data), Cohere Transcribe Arabic and the Whisper
+tokenizer (Apache-2.0), and NVIDIA TitaNet via sherpa-onnx (CC-BY-4.0). The desktop build bundles
+third-party packages under their own licences, including the FFmpeg libraries that come with PyAV
+(LGPL). The hosted services (ElevenLabs, Speechmatics) are used under their own terms.
