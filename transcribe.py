@@ -28,6 +28,7 @@ import argparse
 import base64
 import io
 import json
+import os
 import re
 import resource
 import sys
@@ -266,20 +267,30 @@ def main():
     ap.add_argument("--out", default=str(Path(__file__).resolve().parent / "results" / "poc"),
                     help="output folder (default: results/poc)")
     ap.add_argument("--threads", type=int, default=10)
+    ap.add_argument("--progress-file", help="keep this JSON file updated with the current stage (used by the app)")
     args = ap.parse_args()
     if args.speakers is not None and args.speakers < 0:
         ap.error("--speakers must be 0 (estimate) or the number of speakers")
     if args.engine == "cohere" and args.prompt:
         print("note: --prompt has no effect with --engine cohere", file=sys.stderr)
 
+    def report(stage, **extra):
+        if args.progress_file:  # written whole and renamed, so a reader never sees half a file
+            tmp = args.progress_file + ".tmp"
+            Path(tmp).write_text(json.dumps({"stage": stage, **extra}))
+            os.replace(tmp, args.progress_file)
+
+    report("decoding")
     audio = decode_audio(args.audio, sampling_rate=SR)
     if not len(audio):
         sys.exit(f"{args.audio}: no audio")
+    report("loading", audio_s=round(len(audio) / SR, 2))
     engine = ENGINES[args.engine](args)
     print(f"{args.audio}: {len(audio) / SR / 60:.1f} min, engine {engine.name}\n")
     t0 = time.time()
     timeline = None
     if args.speakers is not None:
+        report("speakers", audio_s=round(len(audio) / SR, 2))
         timeline = speakers.diarize(audio, args.speakers or None, min(args.threads, 4), args.voiceprint_model)
         if not len(timeline.centers):
             print("not enough speech for voiceprints; transcribing without speaker labels", flush=True)
@@ -300,10 +311,13 @@ def main():
         if words:  # word-level timings, so speaker models can be compared without re-transcribing
             (out / f"{stem}.words.json").write_text(json.dumps(words, ensure_ascii=False))
 
-    def progress(i, n, lines):
+    def progress(i, n, lines, quiet=False):
         save(lines)  # a crash or kill hours in keeps everything transcribed so far
-        print(f"  chunk {i}/{n} ({time.time() - t0:.0f} s)", flush=True)
+        report("transcribing", done=i, total=n, elapsed=round(time.time() - t0, 1), audio_s=round(len(audio) / SR, 2))
+        if not quiet:
+            print(f"  chunk {i}/{n} ({time.time() - t0:.0f} s)", flush=True)
 
+    report("transcribing", done=0, total=None, elapsed=round(time.time() - t0, 1), audio_s=round(len(audio) / SR, 2))
     lines, words = [], []
     if timeline is None:
         chunks = split_at_pauses(audio)
@@ -312,8 +326,7 @@ def main():
             if text:
                 lines.append({"start": round(a / SR, 2), "end": round(b / SR, 2), "speaker": None, "text": text})
                 print(line(lines[-1]), flush=True)
-            if i % 10 == 0:
-                save(lines)
+            progress(i, len(chunks), lines, quiet=True)
     else:
         lines, words = speaker_lines(engine, audio, timeline, progress)
         print()

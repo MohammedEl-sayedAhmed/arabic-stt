@@ -1,6 +1,7 @@
 # Private: the recordings and everything transcribed from them
 audio-test/
 data/
+app_data/
 
 # results/ holds only public test-set outputs; everything else there (results/poc/, results/meetings/,
 # runs on private sets) stays local
@@ -45,6 +46,7 @@ models/
 tools/
 .venv/
 __pycache__/
+.playwright-mcp/
 *.part
 *.part[0-9]
 *.joining

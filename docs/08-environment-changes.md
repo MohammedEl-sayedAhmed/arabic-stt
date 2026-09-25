@@ -24,6 +24,7 @@ The Whisper large-v3 weights were already in `~/.cache/huggingface` before this 
 | `models/diarization/` | 0.3 GB | voiceprint models: TitaNet-small (the default, the only one `--speakers` needs); TitaNet-large, WeSpeaker ResNet34 (first default) and ResNet152, 3D-Speaker CAM++ (used only by `bench/compare_voiceprints.py`); an unused pyannote segmentation model |
 | `data/` | ~0.4 GB | public test clips (Perle, ArzEn, Mixat) in three conditions, chunks of your test calls, and the 10-minute meeting excerpts |
 | `results/poc/`, `results/meetings/` | small | transcripts of your calls and meetings (private) |
+| `app_data/` | ~50 MB per hour of recordings | the app's transcriptions (16 kHz audio copies, transcripts, logs) and saved API keys (private; delete a transcription in the app, or the folder) |
 
 **Deleted during the work:** the R2T2 and Qwen3-ASR model files (4.7 GB), after their benchmarks were
 complete, when free disk space fell to 3.9 GB. `bench/fetch_models.py` (no arguments) re-downloads

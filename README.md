@@ -4,6 +4,7 @@ Transcribe a recorded call spoken in (Egyptian) Arabic with English tech terms, 
 speaking by voice, and keep all audio on this machine.
 
 **Findings, trials and recommendation: [docs/README.md](docs/README.md).**
+**The app: `./app.sh` — see [docs/09-app.md](docs/09-app.md).**
 
 ## Setup (Linux, CPU only)
 
@@ -45,7 +46,20 @@ Optional extras:
   Audar: `audarai/Audar-ASR-V1-Turbo:Audar-ASR-V1-Turbo-Q4_K_M.gguf` and
   `audarai/Audar-ASR-V1-Turbo:mmproj-Audar-ASR-V1-Turbo.gguf`.
 
-## Transcribe a recording
+## Use the app
+
+```sh
+./app.sh          # opens Tafrigh at http://127.0.0.1:8765
+```
+
+Drop a recording (audio or video), pick a model — whisper-medium, Cohere or Whisper large-v3 on this
+laptop, or ElevenLabs / Speechmatics with your API key (the recording is uploaded only after you
+confirm) — and choose speaker labels. The transcript plays back with the audio, and can be searched,
+corrected (rename or merge speakers, edit lines) and exported as text, subtitles, Markdown or JSON.
+Models, port, threads and defaults are set in [`app/config.toml`](app/config.toml); everything the
+app stores stays in the git-ignored `app_data/`. Details: [docs/09-app.md](docs/09-app.md).
+
+## Transcribe a recording (command line)
 
 ```sh
 .venv/bin/python transcribe.py path/to/call.wav --speakers 2
@@ -101,9 +115,11 @@ Their audio, transcripts and results stay in the git-ignored `data/` and `result
 
 | Path | What |
 |---|---|
-| `transcribe.py`, `speakers.py` | the proof of concept |
+| `app.sh`, `app/` | the app: web server, job runner, model clients, interface, `config.toml` |
+| `transcribe.py`, `speakers.py` | the proof of concept (the app runs local models through it) |
+| `tests/` | app tests (`.venv/bin/python -m unittest discover -s tests`) |
 | `docs/` | full write-up of findings, trials, results, research and recommendation |
 | `bench/` | model download, data prep, benchmark runners, scoring, llama-server launcher |
 | `bench/samples/` | the pinned clip lists of the public test sets |
-| `models/`, `tools/`, `data/` | downloaded models, llama.cpp binaries, test audio (git-ignored) |
+| `models/`, `tools/`, `data/`, `app_data/` | downloaded models, llama.cpp binaries, test audio, the app's transcriptions and keys (git-ignored) |
 | `results/` | per-clip outputs and scores on the public sets (`results/poc/`, `results/meetings/` are private) |

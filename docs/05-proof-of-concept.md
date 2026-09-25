@@ -1,7 +1,9 @@
 # 5. Proof of concept — how to run it
 
 Everything below runs offline on this laptop. Commands are run from the project folder; setup is in
-the [README](../README.md#setup-linux-cpu-only).
+the [README](../README.md#setup-linux-cpu-only). For everyday use there is also a local app with the
+same models plus ElevenLabs and Speechmatics — see [the app](09-app.md); this page covers the
+command line it builds on.
 
 ## Transcribe a call with speaker labels
 
@@ -25,6 +27,7 @@ crash or kill hours into a long recording keeps what was done.
 | `--voiceprint-model FILE` | another speaker-embedding ONNX model for `--speakers` |
 | `--language ar` | default; `en` is also accepted; `auto` lets Whisper and the llama-server models detect the language — Cohere cannot detect it, so `auto` means Arabic there |
 | `--out DIR` | output folder |
+| `--progress-file FILE` | keep a small JSON file updated with the current stage and chunk count (the app uses it) |
 
 ## What happens inside
 

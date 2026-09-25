@@ -1,0 +1,111 @@
+# Tafrigh (تفريغ) — settings for the local transcription app.
+#
+# Start it with ./app.sh and open http://127.0.0.1:8765.
+# Personal overrides can go in app_data/config.toml (same layout, git-ignored): a [[models]] entry
+# there with the same id replaces fields of the one below. API keys are entered in the app
+# (Settings), which saves them to app_data/secrets.json readable only by you, or come from the
+# environment variables named in key_env.
+
+[server]
+host = "127.0.0.1"          # local only: the app has no login, so don't expose it on a network
+port = 8765
+open_browser = true
+
+[storage]
+dir = "app_data"            # one folder per transcription: 16 kHz audio, transcript, log (git-ignored)
+keep_original = false       # also keep the uploaded file (a video can be 100x the size of the audio)
+max_upload_gb = 4
+
+[defaults]
+model = "whisper-medium"
+speakers = "auto"           # "none", "auto" (estimate the number) or a number
+language = "ar"             # "ar", "en" or "auto"
+
+[local]
+python = ".venv/bin/python"
+threads = 10                # CPU threads for the local models
+voiceprint_model = "models/diarization/nemo_en_titanet_small.onnx"
+# Switch the laptop to the performance power profile while local jobs run, and back afterwards.
+# Power-saver makes local models about 3-5x slower.
+performance_while_running = false
+
+# ---------------------------------------------------------------------------------------------
+# Models. kind = "local" runs on this laptop through transcribe.py; kind = "hosted" uploads the
+# recording to the service (the app asks for confirmation every time).
+# rtf = processing time / audio length measured on this laptop in performance mode, for estimates.
+# ---------------------------------------------------------------------------------------------
+
+[[models]]
+id = "whisper-medium"
+kind = "local"
+engine = "whisper"
+whisper_model = "models/whisper-medium-arabic-codeswitched-ct2"
+title = "whisper-medium code-switching"
+tagline = "Keeps English terms in English"
+facts = ["18.5% WER on the public Egyptian set", "48.8% different from ElevenLabs on your meetings",
+         "English kept: 90% / 57%", "Word timestamps"]
+rtf = 0.55
+prompt = true               # accepts a vocabulary / style hint
+setup = "README: Setup → the whisper-medium fine-tune (0.8 GB)"
+
+[[models]]
+id = "cohere"
+kind = "local"
+engine = "cohere"
+cohere_model = "models/cohere-transcribe-arabic-07-2026-gguf/cohere-transcribe-arabic-07-2026-Q4_K_M.gguf"
+title = "Cohere Transcribe Arabic"
+tagline = "Arabic-heavy meetings, fastest"
+facts = ["13.4% WER on the public Egyptian set", "43.8% different from ElevenLabs on your meetings",
+         "Fewest errors on Arabic words", "English kept: 77% / 46%"]
+rtf = 0.3
+prompt = false
+setup = "README: Setup → Optional: Cohere Transcribe Arabic (1.6 GB)"
+
+[[models]]
+id = "large-v3"
+kind = "local"
+engine = "whisper"
+whisper_model = "large-v3"  # stock Whisper from the Hugging Face cache; gets the Egyptian style hint
+title = "Whisper large-v3 + hint"
+tagline = "Stock Whisper, slow"
+facts = ["20.8% WER on the public Egyptian set", "English kept: 88%", "Slower than real time here"]
+rtf = 1.8
+prompt = true
+setup = ".venv/bin/hf download Systran/faster-whisper-large-v3 (3 GB)"
+
+[[models]]
+id = "elevenlabs"
+kind = "hosted"
+engine = "elevenlabs"
+title = "ElevenLabs Scribe"
+tagline = "What Mojaz uses: best on your meetings"
+facts = ["13.1% WER on Perle's Egyptian subset (published)", "Speaker labels built in",
+         "4.5 h a month free, then $0.22/h", "Trains on your audio unless you opt out"]
+service = "ElevenLabs"
+base_url = "https://api.elevenlabs.io"
+key_env = "ELEVENLABS_API_KEY"
+key_url = "https://elevenlabs.io/app/settings/api-keys"
+api_model = "scribe_v2"
+tag_audio_events = false    # true adds (laughter), (applause), ... to the text
+delete_after = true         # delete the transcript from your ElevenLabs history once fetched
+prompt = true               # sent as key terms (ElevenLabs charges about 20% more for those requests)
+rtf = 0.05
+
+[[models]]
+id = "speechmatics"
+kind = "hosted"
+engine = "speechmatics"
+title = "Speechmatics"
+tagline = "Arabic–English bilingual model"
+facts = ["Arabic–English bilingual language pack", "Speaker labels built in",
+         "$100 free credit (about 250 h), then $0.40/h", "Doesn't train on your audio unless you opt in"]
+service = "Speechmatics"
+base_url = "https://eu1.asr.api.speechmatics.com/v2"   # EU; US: us1.asr..., Australia: au1.asr...
+key_env = "SPEECHMATICS_API_KEY"
+key_url = "https://portal.speechmatics.com/settings/api-keys"
+language = "ar_en"          # the bilingual pack; "ar" for Arabic only
+api_model = "enhanced"      # "enhanced" ($0.40/h) or "standard" ($0.24/h)
+speaker_sensitivity = 0.5   # 0-1, higher finds more speakers (batch jobs can't be told how many)
+delete_after = true         # delete the job (audio and transcript) from Speechmatics once fetched
+prompt = true               # sent as custom vocabulary
+rtf = 0.15
