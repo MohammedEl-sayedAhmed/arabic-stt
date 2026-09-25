@@ -114,7 +114,15 @@ On this Linux laptop:
 - A real model download (the 40 MB voiceprint model) through the build, with checksum; every other
   pinned URL was checked (the small files downloaded and verified, the large ones by published size).
 
-On Windows: see the results of the GitHub Actions run below.
+On Windows (GitHub Actions, `windows-latest`, 2026-09-25): all checks passed — the 20 unit tests,
+the self-test from source and of the built `Tafrigh.exe`, the **real-model test** (whisper-medium and
+the voiceprint model downloaded in 15 s; the speech sample transcribed in 13 s: *"and so my fellow
+americans, ask not what your country can do for you…"*), the **native window** (it opened, loaded the
+app and closed, through Edge WebView2), and the installer (`Tafrigh-0.1.0-setup.exe`, 77 MB). The
+first Windows run found one real bug: reading a job's status file while another thread replaced it
+failed on Windows (never on Linux); such reads are now retried. The whole run took about 4 minutes.
+
+Not tested on Windows yet: the native open/save dialogs and a long local transcription by hand.
 
 ## Not done yet (for a product)
 
