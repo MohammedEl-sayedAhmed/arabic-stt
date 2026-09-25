@@ -27,8 +27,57 @@ from pathlib import Path
 
 from . import engines
 from . import transcript as T
-from .config import Config
+from .config import FROZEN, ROOT, Config
 from .server import make_server, slug
+
+WM_CLASS = "Tafrigh"  # the window class on Linux, which the desktop matches to tafrigh.desktop for the icon
+LAUNCHER = """[Desktop Entry]
+Type=Application
+Name=Tafrigh
+GenericName=Meeting transcription
+Comment=Transcribe recordings with speaker labels, on this computer or with a hosted service
+Exec={exec}
+Icon={icon}
+Terminal=false
+Categories=AudioVideo;Audio;Office;
+StartupNotify=true
+StartupWMClass={wm_class}
+"""
+
+
+def app_icon():
+    """The icon file for the window: an .ico on Windows (from source; the built .exe carries its own), else PNG."""
+    ico = ROOT / "desktop" / "tafrigh.ico"
+    if os.name == "nt":
+        return str(ico) if ico.exists() else None
+    png = ROOT / "app" / "static" / "icon-512.png"
+    return str(png) if png.exists() else None
+
+
+def launch_command():
+    """How the desktop menu should start the desktop app: the build itself, or Python from source."""
+    if FROZEN:
+        return f'"{sys.executable}"'
+    return f"sh -c 'cd \"{ROOT}\" && exec \"{sys.executable}\" -m app.desktop'"
+
+
+def install_launcher():
+    """Linux: keep ~/.local/share/applications/tafrigh.desktop current, so the application menu lists Tafrigh
+    and the taskbar shows its icon for the app's window. Returns the file, or None elsewhere."""
+    if not sys.platform.startswith("linux"):
+        return None
+    apps = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "applications"
+    dest = apps / "tafrigh.desktop"
+    text = LAUNCHER.format(exec=launch_command(), icon=app_icon() or "audio-x-generic", wm_class=WM_CLASS)
+    try:
+        if not dest.exists() or dest.read_text(encoding="utf-8") != text:
+            apps.mkdir(parents=True, exist_ok=True)
+            dest.write_text(text, encoding="utf-8")
+            if shutil.which("update-desktop-database"):
+                subprocess.run(["update-desktop-database", str(apps)], capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return dest
 
 RECORDINGS = ("Recordings (*.mp3;*.m4a;*.wav;*.ogg;*.opus;*.flac;*.aac;*.amr;*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
               "All files (*.*)")
@@ -144,7 +193,7 @@ def native_window(url, app, title="Tafrigh"):
         app.on_quit = window.destroy
     try:
         storage = str(app.cfg.storage / "webview") if app else None
-        webview.start(private_mode=False, storage_path=storage)
+        webview.start(private_mode=False, storage_path=storage, icon=app_icon())
     except Exception as e:  # e.g. Linux without GTK WebKit or Qt: fall back to a browser window
         print(f"no native window ({type(e).__name__}: {e}); using a browser window", file=sys.stderr)
         if app:
@@ -170,10 +219,12 @@ def browser_candidates():
 
 def app_mode_browser(url, profile):
     """A Chromium-family browser showing only the app (--app), or None if there is none."""
+    # its own profile makes it a separate browser process, so --class names only this window (Linux, X11)
+    extra = [f"--class={WM_CLASS}"] if sys.platform.startswith("linux") else []
     for exe in browser_candidates():
         try:
             return subprocess.Popen([exe, f"--app={url}", f"--user-data-dir={profile}", "--no-first-run",
-                                     "--no-default-browser-check", "--window-size=1280,860"],
+                                     "--no-default-browser-check", "--window-size=1280,860", *extra],
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except OSError:
             continue
@@ -197,6 +248,7 @@ def main(argv=None):
         sys.exit(run(window=args.window, report=args.report, models=args.models))
 
     cfg = Config()
+    install_launcher()
     if sys.stderr is None:  # a windowed build has no console: keep messages in a log file
         cfg.storage.mkdir(parents=True, exist_ok=True)
         sys.stdout = sys.stderr = open(cfg.storage / "tafrigh.log", "a", encoding="utf-8", buffering=1)

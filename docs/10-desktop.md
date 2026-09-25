@@ -33,6 +33,10 @@ Tafrigh picks the first of these that works:
 4. If no window of any kind can be opened, the server keeps running and Tafrigh shows its address
    (in a message box on Windows), so any browser can use it.
 
+On Linux the desktop app keeps `~/.local/share/applications/tafrigh.desktop` current, so Tafrigh is
+in the application menu and its window shows the Tafrigh icon: the browser window gets the window class
+`Tafrigh` (`--class`), which the entry names. On Windows the built `Tafrigh.exe` carries the icon.
+
 Closing the window quits the app, and so does *Settings → Quit*. `--browser` skips the native window,
 `--server` (or `--no-window`) runs only the server, and `--port N` picks the port (the default is
 8765, or any free one). The Windows installer also adds a *Tafrigh (browser window)* shortcut, which
@@ -82,7 +86,8 @@ iscc desktop/installer.iss           # Windows only (Inno Setup 6): dist/Tafrigh
 
 Build on the system you are building for, since PyInstaller doesn't cross-compile. The build is one
 folder, about 470 MB on Linux (CTranslate2, onnxruntime, sherpa-onnx, the FFmpeg libraries,
-transcribe.cpp with its CPU and Vulkan backends, numpy); models are not included. The same executable
+transcribe.cpp with its CPU and Vulkan backends, numpy); models and NVIDIA's CUDA libraries are not
+included, and the app downloads them when asked. The same executable
 runs the model worker (`Tafrigh --transcribe …`), so each transcription still gets its own process.
 
 The GitHub Actions workflow [`.github/workflows/desktop.yml`](../.github/workflows/desktop.yml)
@@ -147,9 +152,9 @@ hand.
 - Linux packages. There is no AppImage or .deb yet.
 - Windows before 10 may lack WebView2, and the installer doesn't bundle its bootstrapper; Tafrigh
   then opens in a browser window.
-- GPU. Everything runs on the CPU for now. The bundled transcribe.cpp already has a Vulkan backend,
-  and on the test laptop's integrated Intel GPU it ran Cohere at 0.15× real time against 0.41× on the
-  CPU (performance mode, a 50-second public clip, the same text). Whisper on NVIDIA GPUs would need
-  CUDA and NVIDIA's cuBLAS and cuDNN libraries.
+- GPU on real NVIDIA hardware. Cohere runs on any GPU through the bundled Vulkan backend, and Whisper on
+  NVIDIA GPUs once the NVIDIA libraries are downloaded ([the command line](05-command-line.md#gpu)). The
+  Vulkan path was measured on an integrated Intel GPU; the CUDA path is covered by tests with stand-ins
+  but hasn't run on an NVIDIA card yet.
 - Size: about 470 MB unpacked, which could shrink by dropping the unused CPU variants of
   transcribe.cpp.

@@ -61,8 +61,11 @@ def main():
     ap.add_argument("--whisper-model", default=DEFAULT_WHISPER)
     ap.add_argument("--cohere-model", default=COHERE_MODEL)
     ap.add_argument("--threads", type=int, default=10)
+    ap.add_argument("--device", choices=["cpu", "gpu"], default="cpu",
+                    help="cpu (default, as the published results) or gpu (see transcribe.py --device)")
     ap.add_argument("--limit", type=int)
     args = ap.parse_args()
+    args.cuda_libs = None
     if args.engine == "cohere":
         if args.prompt:
             ap.error("--prompt has no effect with --engine cohere")
@@ -71,12 +74,14 @@ def main():
     engine = ENGINES[args.engine](args)
     prompt = getattr(engine, "prompt", None) or getattr(engine, "context", None) or ""  # what the engine uses
     config = (args.language + (f"-p{hashlib.sha1(prompt.encode()).hexdigest()[:6]}" if prompt else "")
-              + ("-clip" if args.mode == "clip" else ""))
+              + ("-clip" if args.mode == "clip" else "") + ("-gpu" if args.device == "gpu" else ""))
     out_dir = ROOT / "results" if args.set in PUBLIC_SETS else ROOT / "results" / "meetings" / "bench"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{args.set}.{args.audio}.{engine.name}.{config}.jsonl"
     meta = {"engine": args.engine, "model": engine.name, "language": args.language, "prompt": prompt or None,
             "mode": args.mode, "threads": args.threads}
+    if args.device == "gpu":  # older result files have no device: they ran on the CPU
+        meta["device"] = getattr(engine, "device", "gpu")
     if prompt:
         meta["label"] = ({"ar": "Arabic forced", "auto": "auto-detect"}.get(args.language, args.language)
                          + " + " + LABELS.get(prompt, "custom prompt"))

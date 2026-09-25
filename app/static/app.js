@@ -127,6 +127,10 @@ const spkColor = (sid) => (sid ? `var(--s${((parseInt(sid, 10) - 1) % 8 + 8) % 8
 const spkName = (sid) => (sid == null ? "" : (S.job?.speaker_names || {})[sid] || `Speaker ${sid}`);
 // Inside the desktop app's native window: open/save dialogs and the system browser for links.
 const desktopApi = () => (window.pywebview && window.pywebview.api) || null;
+const EXPORT_TYPES = { txt: ["Text", "text/plain"], srt: ["Subtitles", "application/x-subrip"], vtt: ["Web subtitles", "text/vtt"],
+  md: ["Markdown", "text/markdown"], json: ["JSON", "application/json"] };
+// the same file name the server suggests (server.py slug): letters, digits, _ and -, spaces to -
+const fileSlug = (t) => (t || "").replace(/[^\p{L}\p{N}_\s-]/gu, "").trim().replace(/\s+/g, "-").slice(0, 80) || "transcript";
 const DL_ACTIVE = new Set(["queued", "downloading", "verifying", "unpacking", "converting"]);
 const downloading = () => (S.status?.models || []).some((m) => m.download && DL_ACTIVE.has(m.download.state))
   || [S.status?.voiceprints, S.status?.cuda].some((d) => d && DL_ACTIVE.has(d.state));
@@ -682,11 +686,32 @@ function bindJob() {
   $$("[data-menu]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); toggleMenu(b.dataset.menu); }));
   $$("[data-rerun]").forEach((b) => (b.onclick = () => rerun(b.dataset.rerun)));
   $$("#exportMenu a").forEach((a) => (a.onclick = async (e) => {
-    const d = desktopApi();
-    if (!d || !d.save_export) return;  // in a browser the link downloads the file
+    const fmt = a.dataset.fmt, d = desktopApi();
+    if (d && d.save_export) {  // the native window: its own Save dialog
+      e.preventDefault();
+      closeMenus();
+      try { const saved = await d.save_export(j.id, fmt); if (saved) toast(`Saved ${saved}`); } catch (err) { toast(err.message, "error"); }
+      return;
+    }
+    if (!window.showSaveFilePicker) return;  // other browsers: the link downloads the file
     e.preventDefault();
     closeMenus();
-    try { const saved = await d.save_export(j.id, a.dataset.fmt); if (saved) toast(`Saved ${saved}`); } catch (err) { toast(err.message, "error"); }
+    let handle;
+    try {  // ask first, while the click still counts as the user's action
+      const [description, mime] = EXPORT_TYPES[fmt];
+      handle = await window.showSaveFilePicker({ suggestedName: `${fileSlug(j.title)}.${fmt}`, types: [{ description, accept: { [mime]: [`.${fmt}`] } }] });
+    } catch (err) {
+      if (err.name !== "AbortError") location.href = a.href;  // the picker isn't allowed here: download instead
+      return;
+    }
+    try {
+      const r = await fetch(a.href);
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      const out = await handle.createWritable();
+      await out.write(await r.blob());
+      await out.close();
+      toast(`Saved ${handle.name}`);
+    } catch (err) { toast(`Could not save: ${err.message}`, "error"); }
   }));
   const copy = $("#copyBtn");
   if (copy) copy.onclick = async () => {

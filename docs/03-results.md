@@ -70,6 +70,13 @@ reference words, neither gap in overall WER is proven. Two things are clear in e
 Cohere makes about a third as many errors on Arabic words, and whisper-medium keeps far more
 English terms in English (87–90% against 72–77%).
 
+### On a graphics card
+
+Cohere on the test laptop's integrated Intel Iris Xe, through transcribe.cpp's Vulkan backend, gave
+exactly the same text as on the CPU for all 40 Perle clips, so the same 13.4%, at 0.15 times real
+time instead of 0.36 (performance mode). On a 50-second clip in power-saver mode the gap was wider:
+0.14 against 0.60. The Whisper models can't use this GPU: CTranslate2 only runs on NVIDIA GPUs.
+
 ## Phone audio
 
 | Model | 16 kHz | Through 8 kHz | G.711 telephone | English kept (G.711) |
