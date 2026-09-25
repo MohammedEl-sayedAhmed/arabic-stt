@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Score transcribe.py output on a real meeting against its reference transcript.
 
-The reference is a Mojaz/ElevenLabs transcript with one turn per line, either "[[S#]] text"
+The reference is an ElevenLabs transcript with one turn per line, either "[[S#]] text"
 (optionally mapped to people with --map) or "Name: text" (names given with --speakers). It has
 no timestamps, so everything is measured on the text:
 

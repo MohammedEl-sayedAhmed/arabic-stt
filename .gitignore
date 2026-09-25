@@ -11,9 +11,8 @@ results/*
 !results/mixat.*
 !results/summary.json
 
-# Private: never commit the Mojaz meetings dataset or anything derived from it
-*[Mm][Oo][Jj][Aa][Zz]*
-*[Mm][Uu][Jj][Aa][Zz]*
+# Private: never commit the meetings dataset or anything derived from it (the dataset's own
+# name pattern is kept in .git/info/exclude, which is not shared)
 *.named.txt
 *.elevenlabs.txt
 *.speakers.*

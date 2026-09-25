@@ -8,7 +8,7 @@
 | Power profile set to **performance** during test runs | power-saver ran the CPU at 0.4–1.2 GHz | `powerprofilesctl set power-saver` (restored at the end of each test session) |
 | gh CLI's active account switched to the personal one | your git-guard hook requires it to push from `playground/` | `gh auth switch` (with two accounts it switches to the other one) |
 | Claude memory notes in `~/.claude/projects/…stt-mvp/memory/` | remember this project's goal, constraints and privacy rules | delete that folder |
-| **New folder `~/Desktop/mojaz-meetings-dataset/`** (274 MB) | the private meetings evaluation set: audio chunks + ElevenLabs references, built read-only from `~/Desktop/mojaz-meetings/` and ClickUp | delete the folder; your originals were not touched |
+| **New folder for the private meetings dataset** (274 MB, outside the project) | the private meetings evaluation set: audio chunks + ElevenLabs references, built read-only from your saved transcripts and the meeting platform | delete the folder; your originals were not touched |
 
 The Whisper large-v3 weights were already in `~/.cache/huggingface` before this work and were reused.
 
@@ -35,7 +35,7 @@ them. Audar (1.9 GB) can also go if you don't plan to use it.
 - No audio was sent to any external service. Models ran locally; the llama.cpp server listened on
   `127.0.0.1` only.
 - Network use was downloads only: models, the public test sets, meeting recordings from your own
-  ClickUp docs (read-only), and a Whisper tokenizer file.
+  meeting platform (read-only), and a Whisper tokenizer file.
 - The research agents used public web pages only (no accounts, no keys, no uploads).
 - The repository excludes all audio, the meeting dataset, and every transcript of your calls and
   meetings; the docs contain only aggregate numbers for them.

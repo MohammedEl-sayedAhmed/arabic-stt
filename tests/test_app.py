@@ -104,7 +104,7 @@ class HostedParsers(unittest.TestCase):
                          [("1", "تمام, deploy."), ("2", "okay «sprint"), (None, "hmm")])
 
     def test_split_terms(self):
-        self.assertEqual(engines.split_terms("ClickUp, Jira\nbackend، deploy"), ["ClickUp", "Jira", "backend", "deploy"])
+        self.assertEqual(engines.split_terms("GitHub, Jira\nbackend، deploy"), ["GitHub", "Jira", "backend", "deploy"])
 
 
 class MockServices(BaseHTTPRequestHandler):
@@ -224,7 +224,7 @@ class Api(unittest.TestCase):
 
     def test_2_elevenlabs_upload_flow(self):
         self.call("POST", "/api/keys", {"model": "elevenlabs", "key": "el-key"})
-        params = "model=elevenlabs&speakers=2&language=ar&prompt=ClickUp,%20Jira&name=tone.wav&title=Tone"
+        params = "model=elevenlabs&speakers=2&language=ar&prompt=GitHub,%20Jira&name=tone.wav&title=Tone"
         status, body, _ = self.call("POST", f"/api/jobs?{params}", raw=self.wav.read_bytes(),
                                     headers={"Content-Type": "audio/wav"})
         self.assertEqual(status, 400, "a hosted model needs the upload confirmed")
@@ -240,7 +240,7 @@ class Api(unittest.TestCase):
         self.assertEqual(sent["diarize"], ["true"])
         self.assertEqual(sent["num_speakers"], ["2"])
         self.assertEqual(sent["language_code"], ["ar"])
-        self.assertEqual(sent["keyterms"], ["ClickUp", "Jira"])
+        self.assertEqual(sent["keyterms"], ["GitHub", "Jira"])
         self.assertTrue(sent["file"][0].startswith(b"fLaC"), "the upload is the 16 kHz FLAC")
         self.assertIn(("delete", "/v1/speech-to-text/transcripts/tr_123"), MockServices.calls)
         folder = self.cfg.storage / "jobs" / job["id"]

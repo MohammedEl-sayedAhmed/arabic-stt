@@ -20,11 +20,11 @@ meetings, 2–17% per meeting) against ~6% for ElevenLabs' own labels.
 
 ## What to use
 
-**For meeting minutes you will rely on: keep using ElevenLabs** — which is what your Mojaz app
-already does. Set Mojaz's **output language to English** (or a transcribe-only profile) so English
-stays in English; with output language Arabic, Mojaz's translation stage Arabizes every English term
+**For meeting minutes you will rely on: keep using ElevenLabs** — which is what your meeting-minutes
+app already does. Set its **output language to English** (or a transcribe-only profile) so English
+stays in English; with output language Arabic, its translation stage Arabizes every English term
 (verified on one full meeting from your dataset: 1 Latin-script word left out of 4,149). Hosted alternatives if you
-need one outside Mojaz: **ElevenLabs Scribe v2** directly (free tier, $0.22/h, turn off "use my data
+need one outside that app: **ElevenLabs Scribe v2** directly (free tier, $0.22/h, turn off "use my data
 for training"), or **Speechmatics** (`ar_en`, $100 free credit, does not train on your audio). A
 second benchmark ranks Scribe near the bottom on *single-language* Saudi speech, so try any hosted
 service on one non-sensitive call first; compress long WAVs to FLAC/Opus (several APIs cap uploads

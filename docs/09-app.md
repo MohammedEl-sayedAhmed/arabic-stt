@@ -46,7 +46,7 @@ entry has an `id`, `kind` (`local` or `hosted`), the engine settings, and the te
 | **whisper-medium code-switching** (default) | local | keeping English terms in English (90% on the public set, 57% on your meetings) | `whisper_model` folder; accepts a vocabulary hint |
 | **Cohere Transcribe Arabic** | local | Arabic-heavy meetings; fewest Arabic-word errors; fastest (~0.3× real time) | `cohere_model` GGUF path |
 | **Whisper large-v3 + hint** | local | stock Whisper (slow here) | `whisper_model = "large-v3"`; gets the Egyptian style hint, your terms are added to it |
-| **ElevenLabs Scribe** | hosted | minutes you rely on — what Mojaz uses | `api_model = "scribe_v2"`, `tag_audio_events`, `delete_after`, API key |
+| **ElevenLabs Scribe** | hosted | minutes you rely on — what your meeting-minutes app uses | `api_model = "scribe_v2"`, `tag_audio_events`, `delete_after`, API key |
 | **Speechmatics** | hosted | Arabic–English bilingual pack (`ar_en`), doesn't train on your audio | `language`, `api_model` (enhanced/standard), `speaker_sensitivity`, `base_url` region, `delete_after`, API key |
 
 Other settings: `[server]` (host, port — keep it on 127.0.0.1), `[storage]` (data folder, keep the

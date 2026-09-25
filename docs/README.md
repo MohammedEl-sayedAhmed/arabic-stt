@@ -15,8 +15,8 @@ asked whether **R2T2** could do it instead of ElevenLabs.
   real time on meetings). The WER gap between them is not statistically proven.
 - **On your real meetings both are far behind ElevenLabs**: they disagree with its transcripts on
   **44–49% of the words** — mostly by dropping or Arabizing English terms and dropping fast
-  exchanges. For minutes you rely on, keep using ElevenLabs (as Mojaz already does, with output
-  language English); use the local tools for private or offline drafts.
+  exchanges. For minutes you rely on, keep using ElevenLabs (as your meeting-minutes app already does,
+  with output language English); use the local tools for private or offline drafts.
 - **Speaker labels by voice work locally**: with the TitaNet-small voiceprint model (now the default)
   **11–12% of words** go to the wrong person on real meetings — 8–9% pooled over the five
   2–3-person meetings (2–11% on four of them, 17% on a 2-person one where ElevenLabs' own labels are

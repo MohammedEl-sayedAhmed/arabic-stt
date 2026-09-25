@@ -144,7 +144,7 @@ id = "elevenlabs"
 kind = "hosted"
 engine = "elevenlabs"
 title = "ElevenLabs Scribe"
-tagline = "What Mojaz uses: best on your meetings"
+tagline = "What your meeting-minutes app uses"
 facts = ["13.1% WER on Perle's Egyptian subset (published)", "Speaker labels built in",
          "4.5 h a month free, then $0.22/h", "Trains on your audio unless you opt out"]
 service = "ElevenLabs"

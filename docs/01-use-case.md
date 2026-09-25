@@ -30,8 +30,8 @@ normal 16 kHz audio (measured in [results](03-results.md#phone-quality-and-telep
 
 **Meetings with reference transcripts** (a separate, private dataset built for this evaluation, kept
 outside the repository): 6 internal meetings from August–September 2026, 9 h 51 min in total, 2–9
-participants, recorded by ClickUp or a local recorder at 16 kHz. Each comes with the ElevenLabs
-transcript made through the Mojaz app, verified to be verbatim (English kept in Latin script), with
+participants, recorded by the meeting platform or a local recorder at 16 kHz. Each comes with the
+ElevenLabs transcript made through your meeting-minutes app, verified to be verbatim (English kept in Latin script), with
 speakers resolved to real people by hand. This allows scoring **both** transcription and speaker
 labels on real meetings — see [results](03-results.md#your-meetings).
 

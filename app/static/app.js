@@ -325,7 +325,7 @@ function renderNew() {
     </div>
     ${m?.prompt ? `<div class="field">
       <label for="promptInput">Vocabulary <span class="opt">optional</span></label>
-      <textarea id="promptInput" dir="auto" rows="2" placeholder="Names and terms, comma-separated: ClickUp, Jira, backend, deployment">${esc(f.prompt)}</textarea>
+      <textarea id="promptInput" dir="auto" rows="2" placeholder="Names and terms, comma-separated: Jira, GitHub, backend, deployment">${esc(f.prompt)}</textarea>
       <p class="hint">${{ elevenlabs: "Sent as key terms (up to 5 words each). ElevenLabs charges about 20% more for requests with key terms.",
         speechmatics: "Sent as custom vocabulary (up to 6 words per term)." }[m.id] || "Given to Whisper as a hint. Plausible but untested; leave empty if unsure."}</p>
     </div>` : ""}

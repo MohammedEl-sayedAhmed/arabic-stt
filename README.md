@@ -102,7 +102,7 @@ SET=perle sh bench/run_configs.sh cohere:wav16k:ar whisper:g711:ar large-v3:phon
 As in `transcribe.py`, large-v3 gets the Egyptian style hint automatically; results already in
 `results/` are skipped, so the command above only fills in what is missing.
 
-Private meeting recordings in the Mojaz format (described in `bench/prepare_private_meetings.py`)
+Private meeting recordings with reference transcripts (layout in `bench/prepare_private_meetings.py`)
 are cut into 10-minute excerpts, transcribed with `transcribe.py`, then scored. For each excerpt
 `mK`, `N` is its `n_speakers` in `data/private-meetings/manifest.jsonl`:
 

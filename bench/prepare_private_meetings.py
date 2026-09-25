@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cut evaluation excerpts from a private meetings dataset (Mojaz format) into data/private-meetings/.
+"""Cut evaluation excerpts from a private meetings dataset (layout below) into data/private-meetings/.
 
 The dataset folder holds one directory per meeting with partNN.mp3 audio and partNN.named.txt
 reference transcripts ("Name: text" per turn), plus a manifest.json at the top:
