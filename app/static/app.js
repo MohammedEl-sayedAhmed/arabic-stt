@@ -69,11 +69,25 @@ const ICON = {
 };
 
 function toast(msg, kind = "") {
-  const el = document.createElement("div");
+  const box = $("#toasts"), el = document.createElement("div");
   el.className = `toast ${kind}`;
   el.textContent = msg;
-  $("#toasts").append(el);
-  setTimeout(() => el.remove(), kind === "error" ? 7000 : 3500);
+  box.append(el);
+  raiseToasts(box);
+  setTimeout(() => {
+    el.remove();
+    if (!box.children.length && box.hidePopover) try { box.hidePopover(); } catch { /* already hidden */ }
+  }, kind === "error" ? 7000 : 3500);
+}
+
+// Show the toasts in the top layer (a popover), above a modal dialog and its blurred backdrop. Showing it
+// again puts it above a dialog opened after it. Browsers without popovers keep it under dialogs.
+function raiseToasts(box) {
+  if (!box.showPopover) return;
+  try {
+    if (box.matches(":popover-open")) box.hidePopover();
+    box.showPopover();
+  } catch { /* not supported here */ }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -644,7 +658,10 @@ function speakerRow(sid, stats) {
   return `<div class="spk" style="--c:${spkColor(sid)}">
     <span class="sw"></span><input type="text" dir="auto" data-name="${esc(sid)}" value="${esc((S.job.speaker_names || {})[sid] || "")}" placeholder="Speaker ${esc(sid)}" aria-label="Name for speaker ${esc(sid)}">
     <div class="share-bar"><i style="width:${share.toFixed(1)}%"></i></div>
-    <div class="share"><span>${human(stats.talk[sid])} · ${Math.round(share)}%</span>${others.length ? `<select data-merge="${esc(sid)}" aria-label="Merge speaker ${esc(sid)} into another" ${ACTIVE.has(S.job.status) ? "disabled" : ""}><option value="">Merge into…</option>${others.map((o) => `<option value="${esc(o)}">${esc(spkName(o))}</option>`).join("")}</select>` : ""}</div>
+    <div class="share"><span>${human(stats.talk[sid])} · ${Math.round(share)}%</span>${others.length ? `<div class="menu-wrap">
+      <button type="button" class="merge-btn" data-menu="merge-${esc(sid)}" aria-haspopup="menu" aria-label="Merge ${esc(spkName(sid))} into another speaker" ${ACTIVE.has(S.job.status) ? "disabled" : ""}>Merge into ${ICON.chevron}</button>
+      <div class="menu merge-menu" id="merge-${esc(sid)}" role="menu">${others.map((o) => `<button type="button" role="menuitem" data-merge-from="${esc(sid)}" data-merge-into="${esc(o)}"><span class="sw" style="background:${spkColor(o)}"></span>${esc(spkName(o))}</button>`).join("")}</div>
+    </div>` : ""}</div>
   </div>`;
 }
 
@@ -757,10 +774,11 @@ function bindJob() {
     inp.onchange = save;
     inp.onkeydown = (e) => e.key === "Enter" && inp.blur();
   });
-  $$("[data-merge]").forEach((sel) => (sel.onchange = async () => {
-    if (!sel.value) return;
-    if (!confirm(`Merge ${spkName(sel.dataset.merge)} into ${spkName(sel.value)}? All their lines move over.`)) { sel.value = ""; return; }
-    try { const r = await api.patch(`/api/jobs/${j.id}`, { merge: { from: sel.dataset.merge, into: sel.value } }); applyJob(r); renderJob(); toast("Speakers merged"); } catch (e) { toast(e.message, "error"); }
+  $$("[data-merge-into]").forEach((b) => (b.onclick = async () => {
+    const from = b.dataset.mergeFrom, into = b.dataset.mergeInto;
+    closeMenus();
+    if (!confirm(`Merge ${spkName(from)} into ${spkName(into)}? All their lines move over.`)) return;
+    try { const r = await api.patch(`/api/jobs/${j.id}`, { merge: { from, into } }); applyJob(r); renderJob(); toast("Speakers merged"); } catch (e) { toast(e.message, "error"); }
   }));
   const search = $("#lineSearch");
   if (search) {
@@ -1082,8 +1100,10 @@ function renderSettings(focus) {
         <div class="about-text">
           <b>Tafrigh ${esc(st.version || "")}</b>
           <span>Transcripts of Egyptian Arabic–English meetings, made on your own computer.</span>
-          <span class="links"><a href="https://github.com/MohammedEl-sayedAhmed/arabic-stt" target="_blank" rel="noopener noreferrer">${ICON.external} Project page</a>
-            <a href="https://github.com/MohammedEl-sayedAhmed/arabic-stt/releases" target="_blank" rel="noopener noreferrer">${ICON.external} Releases</a></span>
+          <span>By Mohammed El-sayed Ahmed. Free software under the AGPL-3.0; commercial licences are available.</span>
+          <span class="links"><a href="https://github.com/MohammedEl-sayedAhmed/arabic-stt" target="_blank" rel="noopener noreferrer">${ICON.external} Source code</a>
+            <a href="https://github.com/MohammedEl-sayedAhmed/arabic-stt/releases" target="_blank" rel="noopener noreferrer">${ICON.external} Releases</a>
+            <a href="https://github.com/MohammedEl-sayedAhmed/arabic-stt/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">${ICON.external} Licence</a></span>
         </div>
       </div>
       <div class="set-list">
