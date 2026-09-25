@@ -15,6 +15,7 @@ import threading
 import time
 import types
 import unittest
+import urllib.error
 import urllib.request
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -144,7 +145,7 @@ class GpuChoiceTests(unittest.TestCase):
 class FakeWhisperModel:
     """Records how it was created; transcribe() returns one segment with two words, or fails on CUDA."""
     made = []
-    fail_on_cuda = False
+    fail_on_cuda = None  # None, "load" or "run"
 
     def __init__(self, source, device="cpu", compute_type="default", **kwargs):
         if device == "cuda" and FakeWhisperModel.fail_on_cuda == "load":
@@ -166,7 +167,7 @@ def whisper_args(device="auto"):
 
 class WhisperDeviceTests(unittest.TestCase):
     def setUp(self):
-        FakeWhisperModel.made, FakeWhisperModel.fail_on_cuda = [], False
+        FakeWhisperModel.made, FakeWhisperModel.fail_on_cuda = [], None
         self.patches = [mock.patch.object(transcribe, "WhisperModel", FakeWhisperModel),
                         mock.patch.object(transcribe, "nvidia_gpu_name", return_value="NVIDIA RTX A1000")]
         for p in self.patches:

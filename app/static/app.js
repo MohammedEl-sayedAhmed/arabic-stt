@@ -69,11 +69,25 @@ const ICON = {
 };
 
 function toast(msg, kind = "") {
-  const el = document.createElement("div");
+  const box = $("#toasts"), el = document.createElement("div");
   el.className = `toast ${kind}`;
   el.textContent = msg;
-  $("#toasts").append(el);
-  setTimeout(() => el.remove(), kind === "error" ? 7000 : 3500);
+  box.append(el);
+  raiseToasts(box);
+  setTimeout(() => {
+    el.remove();
+    if (!box.children.length && box.hidePopover) try { box.hidePopover(); } catch { /* already hidden */ }
+  }, kind === "error" ? 7000 : 3500);
+}
+
+// Show the toasts in the top layer (a popover), above a modal dialog and its blurred backdrop. Showing it
+// again puts it above a dialog opened after it. Browsers without popovers keep it under dialogs.
+function raiseToasts(box) {
+  if (!box.showPopover) return;
+  try {
+    if (box.matches(":popover-open")) box.hidePopover();
+    box.showPopover();
+  } catch { /* not supported here */ }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -127,6 +141,20 @@ const spkColor = (sid) => (sid ? `var(--s${((parseInt(sid, 10) - 1) % 8 + 8) % 8
 const spkName = (sid) => (sid == null ? "" : (S.job?.speaker_names || {})[sid] || `Speaker ${sid}`);
 // Inside the desktop app's native window: open/save dialogs and the system browser for links.
 const desktopApi = () => (window.pywebview && window.pywebview.api) || null;
+// A line's direction from its mix of scripts rather than its first letter: Egyptian speech often opens
+// with an English word ("order", "the project") and goes on in Arabic, which dir="auto" lays out left to
+// right. Mostly Arabic words (a word with an Arabic prefix like الـdata counts as Arabic) means rtl.
+const AR_LETTER = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+const LATIN_LETTER = /[A-Za-z\u00C0-\u024F]/;
+function mixDir(text) {
+  let ar = 0, la = 0;
+  for (const w of String(text || "").split(/\s+/)) {
+    if (AR_LETTER.test(w)) ar++;
+    else if (LATIN_LETTER.test(w)) la++;
+  }
+  if (!ar && !la) return "auto";
+  return ar && ar >= 0.3 * (ar + la) ? "rtl" : "ltr";
+}
 const EXPORT_TYPES = { txt: ["Text", "text/plain"], srt: ["Subtitles", "application/x-subrip"], vtt: ["Web subtitles", "text/vtt"],
   md: ["Markdown", "text/markdown"], json: ["JSON", "application/json"] };
 // the same file name the server suggests (server.py slug): letters, digits, _ and -, spaces to -
@@ -228,7 +256,7 @@ function renderSidebar() {
     const activeCls = S.route.name === "job" && S.route.id === j.id ? " active" : "";
     const bar = ACTIVE.has(j.status) ? `<div class="bar"><i style="width:${jobPercent(j).toFixed(1)}%"></i></div>` : "";
     return `${head}<a class="job-item${activeCls}" href="#/job/${j.id}">
-      <span class="t" dir="auto">${esc(j.title || "Untitled")}</span>${statusLabel(j)}
+      <span class="t" dir="${mixDir(j.title || "Untitled")}">${esc(j.title || "Untitled")}</span>${statusLabel(j)}
       <span class="d">${j.kind === "hosted" ? ICON.cloud.replace("<svg", '<svg style="width:13px;height:13px"') : ""}${esc(j.model_title || j.model)}${j.audio_s ? ` · ${clock(j.audio_s)}` : ""}</span>
       ${bar}</a>`;
   }).join("");
@@ -343,7 +371,7 @@ function renderNew() {
       </div>
       <div class="field">
         <label for="titleInput">Title</label>
-        <input type="text" id="titleInput" dir="auto" value="${esc(f.title)}" placeholder="${esc(src ? src.name.replace(/\.[^.]+$/, "") : "Meeting title")}">
+        <input type="text" id="titleInput" dir="${mixDir(f.title)}" data-mixdir value="${esc(f.title)}" placeholder="${esc(src ? src.name.replace(/\.[^.]+$/, "") : "Meeting title")}">
       </div>
     </div>
     ${m?.prompt ? `<div class="field">
@@ -581,7 +609,7 @@ function renderJob() {
   view.innerHTML = `
   <div class="job-head">
     <div class="title-row">
-      <h1 class="job-title" id="jobTitle" contenteditable="plaintext-only" spellcheck="false" dir="auto" title="Click to rename">${esc(j.title || "Untitled")}</h1>
+      <h1 class="job-title" id="jobTitle" contenteditable="plaintext-only" spellcheck="false" dir="${mixDir(j.title || "Untitled")}" data-mixdir title="Click to rename">${esc(j.title || "Untitled")}</h1>
     </div>
     <div class="meta">${meta}</div>
     <div class="actions">
@@ -631,7 +659,10 @@ function speakerRow(sid, stats) {
   return `<div class="spk" style="--c:${spkColor(sid)}">
     <span class="sw"></span><input type="text" dir="auto" data-name="${esc(sid)}" value="${esc((S.job.speaker_names || {})[sid] || "")}" placeholder="Speaker ${esc(sid)}" aria-label="Name for speaker ${esc(sid)}">
     <div class="share-bar"><i style="width:${share.toFixed(1)}%"></i></div>
-    <div class="share"><span>${human(stats.talk[sid])} · ${Math.round(share)}%</span>${others.length ? `<select data-merge="${esc(sid)}" aria-label="Merge speaker ${esc(sid)} into another" ${ACTIVE.has(S.job.status) ? "disabled" : ""}><option value="">Merge into…</option>${others.map((o) => `<option value="${esc(o)}">${esc(spkName(o))}</option>`).join("")}</select>` : ""}</div>
+    <div class="share"><span>${human(stats.talk[sid])} · ${Math.round(share)}%</span>${others.length ? `<div class="menu-wrap">
+      <button type="button" class="merge-btn" data-menu="merge-${esc(sid)}" aria-haspopup="menu" aria-label="Merge ${esc(spkName(sid))} into another speaker" ${ACTIVE.has(S.job.status) ? "disabled" : ""}>Merge into ${ICON.chevron}</button>
+      <div class="menu merge-menu" id="merge-${esc(sid)}" role="menu">${others.map((o) => `<button type="button" role="menuitem" data-merge-from="${esc(sid)}" data-merge-into="${esc(o)}"><span class="sw" style="background:${spkColor(o)}"></span>${esc(spkName(o))}</button>`).join("")}</div>
+    </div>` : ""}</div>
   </div>`;
 }
 
@@ -667,7 +698,7 @@ function renderLines() {
     }
     return `<div class="line${first ? " first" : ""}" data-i="${i}" style="--c:${spkColor(x.speaker)}">
       <button class="ts" data-t="${x.start}" title="Play from here" ${S.hasAudio ? "" : "disabled"}>${clock(x.start)}</button>
-      ${who}<p class="text" dir="auto"${S.editing ? ' contenteditable="plaintext-only"' : ""}>${S.editing ? esc(x.text) : highlight(x.text)}</p>
+      ${who}<p class="text" dir="${mixDir(x.text)}" data-mixdir${S.editing ? ' contenteditable="plaintext-only"' : ""}>${S.editing ? esc(x.text) : highlight(x.text)}</p>
     </div>`;
   }).join("");
   const note = S.partial && ACTIVE.has(j.status) ? `<div class="partial-note">Transcript so far — it updates as the model works.</div>` : "";
@@ -744,10 +775,11 @@ function bindJob() {
     inp.onchange = save;
     inp.onkeydown = (e) => e.key === "Enter" && inp.blur();
   });
-  $$("[data-merge]").forEach((sel) => (sel.onchange = async () => {
-    if (!sel.value) return;
-    if (!confirm(`Merge ${spkName(sel.dataset.merge)} into ${spkName(sel.value)}? All their lines move over.`)) { sel.value = ""; return; }
-    try { const r = await api.patch(`/api/jobs/${j.id}`, { merge: { from: sel.dataset.merge, into: sel.value } }); applyJob(r); renderJob(); toast("Speakers merged"); } catch (e) { toast(e.message, "error"); }
+  $$("[data-merge-into]").forEach((b) => (b.onclick = async () => {
+    const from = b.dataset.mergeFrom, into = b.dataset.mergeInto;
+    closeMenus();
+    if (!confirm(`Merge ${spkName(from)} into ${spkName(into)}? All their lines move over.`)) return;
+    try { const r = await api.patch(`/api/jobs/${j.id}`, { merge: { from, into } }); applyJob(r); renderJob(); toast("Speakers merged"); } catch (e) { toast(e.message, "error"); }
   }));
   const search = $("#lineSearch");
   if (search) {
@@ -1069,8 +1101,10 @@ function renderSettings(focus) {
         <div class="about-text">
           <b>Tafrigh ${esc(st.version || "")}</b>
           <span>Transcripts of Egyptian Arabic–English meetings, made on your own computer.</span>
-          <span class="links"><a href="https://github.com/MohammedEl-sayedAhmed/arabic-stt" target="_blank" rel="noopener noreferrer">${ICON.external} Project page</a>
-            <a href="https://github.com/MohammedEl-sayedAhmed/arabic-stt/releases" target="_blank" rel="noopener noreferrer">${ICON.external} Releases</a></span>
+          <span>By Mohammed El-sayed Ahmed. Free software under the AGPL-3.0; commercial licences are available.</span>
+          <span class="links"><a href="https://github.com/MohammedEl-sayedAhmed/arabic-stt" target="_blank" rel="noopener noreferrer">${ICON.external} Source code</a>
+            <a href="https://github.com/MohammedEl-sayedAhmed/arabic-stt/releases" target="_blank" rel="noopener noreferrer">${ICON.external} Releases</a>
+            <a href="https://github.com/MohammedEl-sayedAhmed/arabic-stt/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">${ICON.external} Licence</a></span>
         </div>
       </div>
       <div class="set-list">
@@ -1294,6 +1328,11 @@ $("#themeBtn").onclick = () => {
 $("#menuToggle").onclick = () => $("#sidebar").classList.toggle("open");
 $("#jobSearch").oninput = renderSidebar;
 
+// keep the direction right while a line, title or name is being typed
+document.addEventListener("input", (e) => {
+  const el = e.target.closest && e.target.closest("[data-mixdir]");
+  if (el) el.dir = mixDir(el.value ?? el.textContent);
+});
 document.addEventListener("keydown", (e) => {
   const typing = e.target.closest("input, textarea, select, button, [contenteditable]");
   if (e.key === "Escape") closeMenus();
