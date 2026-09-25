@@ -27,7 +27,7 @@ The best hosted option is **ElevenLabs Scribe v2** (independent benchmark: 13.1%
 | 3 | [Results](03-results.md) | method, all benchmark tables, reading of your call, caveats |
 | 4 | [Speaker labels](04-speaker-labels.md) | how voice-based separation works, what failed first, limits |
 | 5 | [Proof of concept](05-proof-of-concept.md) | how to run it, options, speed, files |
-| 6 | [Market research](06-market-research.md) | hosted and open options, free tiers, privacy ([full cited report](research/market-research-report.md)) |
+| 6 | [Market research](06-market-research.md) | hosted and open options, free tiers, privacy ([workflow report](research/market-research-report.md), [second pass on hosted APIs](research/hosted-apis-report.md)) |
 | 7 | [Recommendation](07-recommendation.md) | what to use, next steps |
 | 8 | [Environment changes](08-environment-changes.md) | what was installed/changed on this laptop and how to undo it |
 | — | [Result tables](results-tables.md) | every configuration on every test set (generated) |

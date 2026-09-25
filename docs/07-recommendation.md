@@ -26,8 +26,13 @@ letters. Its strength — low-latency live streaming — is irrelevant for recor
   Arabic–English (13.1% on Perle's full benchmark vs 45.9% next-best), speaker labels built in.
   Free tier (between 30 min and 4.5 h a month — their pages disagree), then $0.22/h. **Turn off
   "use my data for training"** in Profile → Data use.
-- **Speechmatics** (`ar_en`) — $100 free credit without a card, does not train on your audio by
-  default, deletes files after 7 days. Accuracy on Egyptian unverified: test it on one call.
+- **Speechmatics** (`ar_en`, or Melia 1 at $0.129/h) — $100 free credit without a card (~775 h of
+  Melia 1), does not train on your audio by default, deletes files after 7 days. Accuracy on
+  Egyptian unverified: test it on one call.
+- Caution: a second benchmark on *single-language* Saudi speech ranks Scribe near the bottom
+  ([details](06-market-research.md#second-independent-research-pass)); its advantage is on
+  code-switched speech. Compare hosted services on one of your own (non-sensitive) calls before
+  committing. Compress long WAVs to FLAC/Opus first — several APIs cap uploads at 25 MB.
 
 ## Suggested next steps
 
