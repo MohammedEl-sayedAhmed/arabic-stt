@@ -60,6 +60,7 @@ const ICON = {
   down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
   chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="m6 9 6 6 6-6"/></svg>',
   bolt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
+  layers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg>',
   gpu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="9" cy="12" r="2.5"/><circle cx="16" cy="12" r="2.5"/><path d="M6 18v2M18 18v2"/></svg>',
   folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
   external: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
@@ -662,19 +663,70 @@ function speakerRow(sid, stats) {
 // How the transcript was made (recording, model, run, computer), worded by the server (app/report.py).
 // The main lines show; the rest are under More details. Older transcriptions simply have fewer lines.
 // The lines that name hardware or a system get the vendors' logos (brands.js).
+// The Details panel: where and how fast it ran on top, then the recording, the model and the computer,
+// each with the brand's logo where there is one; every value is under "All details" and in Copy details.
 function detailsPanel() {
   const groups = S.detailGroups || [];
   if (!groups.length) return "";
-  const branded = new Set(["Ran on", "Computer", "Processor", "Graphics", "System"]);
-  const logos = (r) => (branded.has(r.label) && typeof brandIcons === "function" ? brandIcons(r.value) : "");
-  const block = (more) => groups.map((g) => {
-    const rows = g.rows.filter((r) => r.more === more);
-    return rows.length ? `<h4>${esc(g.title)}</h4><dl class="kv">${rows.map((r) => `<dt>${esc(r.label)}</dt><dd dir="${mixDir(r.value)}">${logos(r)}${esc(r.value)}</dd>`).join("")}</dl>` : "";
+  const d = S.details;
+  const rows = (more) => groups.map((g) => {
+    const list = g.rows.filter((r) => more === null || r.more === more);
+    return list.length ? `<h4>${esc(g.title)}</h4><dl class="kv">${list.map((r) => `<dt>${esc(r.label)}</dt><dd dir="${mixDir(r.value)}">${esc(r.value)}</dd>`).join("")}</dl>` : "";
   }).join("");
-  const more = block(true);
-  return `<div class="panel job-details"><h3>Details</h3>${block(false)}
-    ${more ? `<details class="more" id="moreDetails"${S.moreDetails ? " open" : ""}><summary>More details</summary>${more}</details>` : ""}
-    <button type="button" class="btn btn-sm" id="copyDetails">${ICON.copy} Copy details</button></div>`;
+  const copy = `<button type="button" class="btn btn-sm" id="copyDetails">${ICON.copy} Copy details</button>`;
+  if (!d || !d.run) {  // an older job: the plain list
+    const more = rows(true);
+    return `<div class="panel job-details"><h3>Details</h3>${rows(false)}
+      ${more ? `<details class="more" id="moreDetails"${S.moreDetails ? " open" : ""}><summary>More details</summary>${more}</details>` : ""}${copy}</div>`;
+  }
+  const rec = d.recording || {}, mod = d.model || {}, run = d.run || {}, pc = d.computer || {};
+  const value = (label) => { for (const g of groups) for (const r of g.rows) if (r.label === label) return r.value; return ""; };
+  const [kind, ...rest] = String(run.device || "").split(":");
+  let device, where, fallback;
+  if (mod.kind === "hosted") { device = mod.service || mod.title; where = "Hosted service"; fallback = ICON.cloud; }
+  else if (rest.length) {
+    device = gpuName(rest.join(":").replace(/\s*\((int8_float16|float16)\)\s*$/, ""));
+    where = `Graphics card · ${{ vulkan: "Vulkan", cuda: "CUDA", metal: "Metal", rocm: "ROCm" }[kind] || kind}`;
+    fallback = ICON.gpu;
+  } else { device = gpuName(pc.cpu) || "Processor"; where = kind.startsWith("cpu (") ? "Processor (the graphics card failed)" : "Processor"; fallback = ICON.cpu; }
+  const stats = [
+    run.rtf != null ? [`${Number(run.rtf).toFixed(2)}×`, "real time"] : null,
+    run.seconds != null ? [human(run.seconds), rec.duration ? `for ${clock(rec.duration)}` : "took"] : null,
+    run.peak_memory_mb ? [bytes(run.peak_memory_mb * 1e6), "memory"] : null,
+  ].filter(Boolean);
+  const audio = value("Audio").split(/,\s*/).filter(Boolean);
+  const recChips = [rec.extension && rec.extension.toUpperCase(), ...audio, rec.size && bytes(rec.size)].filter(Boolean);
+  const quant = /(?:^|[-_.])((?:I?Q\d(?:_[A-Z0-9]+)*)|F16|BF16|F32)(?=\.gguf$)/i.exec(mod.file || "");
+  const engine = { cohere: "transcribe.cpp", gguf: "transcribe.cpp", whisper: "faster-whisper", llama: "llama.cpp" }[mod.engine] || mod.service || "";
+  const modChips = [engine, quant && `GGUF ${quant[1].toUpperCase()}`, mod.api_model].filter(Boolean);
+  const chips = (list) => list.length ? `<div class="chips">${list.map((c) => `<span class="chip" dir="auto">${esc(c)}</span>`).join("")}</div>` : "";
+  const line = (text, icon, sub) => text ? `<div class="det-row">${logoTile(text, icon, true)}<div><div dir="${mixDir(text)}">${esc(text)}</div>${sub ? `<div class="det-sub">${esc(sub)}</div>` : ""}</div></div>` : "";
+  const maker = pc.manufacturer && typeof brandFor === "function" && brandFor(pc.manufacturer)
+    ? BRANDS[brandFor(pc.manufacturer)].title : pc.manufacturer;  // "LENOVO" -> "Lenovo"
+  const machine = [maker, pc.model].filter(Boolean).join(" ");
+  const os = String(pc.os || "").replace(/\s*\(.*\)\s*$/, "");
+  const said = [value("Language"), value("Speakers") && `Speakers: ${value("Speakers")}`].filter(Boolean).join(" · ");
+  return `<div class="panel job-details fancy"><h3>Details</h3>
+    <div class="det-hero">
+      <div class="det-dev">${logoTile(device, fallback)}<div><div class="det-main" dir="${mixDir(device)}">${esc(device)}</div><div class="det-sub">${esc(where)}</div></div></div>
+      ${stats.length ? `<div class="det-stats">${stats.map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("")}</div>` : ""}
+    </div>
+    ${rec.name ? `<section class="det-sec"><h4>${ICON.wave} Recording</h4><div class="det-main" dir="auto">${esc(rec.name)}</div>${chips(recChips)}</section>` : ""}
+    <section class="det-sec"><h4>${ICON.layers} Model</h4><div class="det-main">${esc(mod.title || S.job.model_title || "")}</div>${chips(modChips)}${said ? `<div class="det-sub">${esc(said)}</div>` : ""}</section>
+    ${machine || pc.cpu ? `<section class="det-sec"><h4>${ICON.laptop} Computer</h4>
+      ${line(machine, ICON.laptop, "")}${line(gpuName(pc.cpu), ICON.cpu, pc.threads ? `${pc.threads} threads${pc.ram_gb ? ` · ${Math.round(pc.ram_gb)} GB RAM` : ""}` : "")}${line(os, ICON.laptop, pc.arch || "")}</section>` : ""}
+    <details class="more" id="moreDetails"${S.moreDetails ? " open" : ""}><summary>All details</summary>${rows(null)}</details>
+    ${copy}</div>`;
+}
+
+// A brand's logo on a tinted tile (brands.js), or the given icon when no brand is named in the text.
+function logoTile(text, icon, small = false) {
+  const slug = typeof brandFor === "function" ? brandFor(text) : null;
+  const b = slug && BRANDS[slug];
+  const cls = `logo-tile${small ? " small" : ""}`;
+  if (!b) return `<span class="${cls} plain">${icon}</span>`;
+  const plain = Object.keys(SURFACES).filter((t) => contrast(b.hex, SURFACES[t]) < 3).map((t) => ` plain-${t}`).join("");
+  return `<span class="${cls}${plain}" style="--brand:#${b.hex}" title="${esc(b.title)}"><svg viewBox="0 0 24 24" role="img" aria-label="${esc(b.title)}"><path d="${b.path}"/></svg></span>`;
 }
 
 function detailsText() {
@@ -919,6 +971,7 @@ function applyJob(r) {
   S.hasAudio = r.has_audio;
   S.log = r.log || "";
   S.detailGroups = r.detail_groups || [];
+  S.details = r.details || null;
 }
 
 async function loadJob(id) {
