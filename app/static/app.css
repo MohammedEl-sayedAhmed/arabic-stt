@@ -370,12 +370,12 @@ details.path .row { display: flex; gap: 8px; margin-top: 10px; }
 .line .ts:hover { background: var(--sunken); color: var(--accent); }
 .line .who { font-weight: 650; font-size: 13.5px; color: var(--c, var(--muted)); display: flex; align-items: center; gap: 6px; }
 .line .text {
-  margin: 1px 0 0; font-size: 16px; line-height: 1.75; unicode-bidi: plaintext; overflow-wrap: anywhere;
+  margin: 1px 0 0; font-size: 16px; line-height: 1.75; unicode-bidi: isolate; overflow-wrap: anywhere; text-align: start;
   font-family: var(--font-ar);
 }
 .line .text:dir(ltr) { font-family: var(--font); }
-.line .text[contenteditable="true"] { outline: none; border-radius: 6px; padding: 0 4px; margin-left: -4px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
-.line .text[contenteditable="true"]:focus { box-shadow: inset 0 0 0 2px var(--accent); background: var(--surface); }
+.line .text[contenteditable] { outline: none; border-radius: 6px; padding: 0 4px; margin-left: -4px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
+.line .text[contenteditable]:focus { box-shadow: inset 0 0 0 2px var(--accent); background: var(--surface); }
 .line select { font-size: 12.5px; padding: 1px 22px 1px 6px; border-radius: 6px; color: var(--c); font-weight: 650; }
 .line.hidden-by-search { display: none; }
 mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }

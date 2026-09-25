@@ -127,6 +127,20 @@ const spkColor = (sid) => (sid ? `var(--s${((parseInt(sid, 10) - 1) % 8 + 8) % 8
 const spkName = (sid) => (sid == null ? "" : (S.job?.speaker_names || {})[sid] || `Speaker ${sid}`);
 // Inside the desktop app's native window: open/save dialogs and the system browser for links.
 const desktopApi = () => (window.pywebview && window.pywebview.api) || null;
+// A line's direction from its mix of scripts rather than its first letter: Egyptian speech often opens
+// with an English word ("order", "the project") and goes on in Arabic, which dir="auto" lays out left to
+// right. Mostly Arabic words (a word with an Arabic prefix like الـdata counts as Arabic) means rtl.
+const AR_LETTER = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+const LATIN_LETTER = /[A-Za-z\u00C0-\u024F]/;
+function mixDir(text) {
+  let ar = 0, la = 0;
+  for (const w of String(text || "").split(/\s+/)) {
+    if (AR_LETTER.test(w)) ar++;
+    else if (LATIN_LETTER.test(w)) la++;
+  }
+  if (!ar && !la) return "auto";
+  return ar && ar >= 0.3 * (ar + la) ? "rtl" : "ltr";
+}
 const EXPORT_TYPES = { txt: ["Text", "text/plain"], srt: ["Subtitles", "application/x-subrip"], vtt: ["Web subtitles", "text/vtt"],
   md: ["Markdown", "text/markdown"], json: ["JSON", "application/json"] };
 // the same file name the server suggests (server.py slug): letters, digits, _ and -, spaces to -
@@ -227,7 +241,7 @@ function renderSidebar() {
     const activeCls = S.route.name === "job" && S.route.id === j.id ? " active" : "";
     const bar = ACTIVE.has(j.status) ? `<div class="bar"><i style="width:${jobPercent(j).toFixed(1)}%"></i></div>` : "";
     return `${head}<a class="job-item${activeCls}" href="#/job/${j.id}">
-      <span class="t" dir="auto">${esc(j.title || "Untitled")}</span>${statusLabel(j)}
+      <span class="t" dir="${mixDir(j.title || "Untitled")}">${esc(j.title || "Untitled")}</span>${statusLabel(j)}
       <span class="d">${j.kind === "hosted" ? ICON.cloud.replace("<svg", '<svg style="width:13px;height:13px"') : ""}${esc(j.model_title || j.model)}${j.audio_s ? ` · ${clock(j.audio_s)}` : ""}</span>
       ${bar}</a>`;
   }).join("");
@@ -342,7 +356,7 @@ function renderNew() {
       </div>
       <div class="field">
         <label for="titleInput">Title</label>
-        <input type="text" id="titleInput" dir="auto" value="${esc(f.title)}" placeholder="${esc(src ? src.name.replace(/\.[^.]+$/, "") : "Meeting title")}">
+        <input type="text" id="titleInput" dir="${mixDir(f.title)}" data-mixdir value="${esc(f.title)}" placeholder="${esc(src ? src.name.replace(/\.[^.]+$/, "") : "Meeting title")}">
       </div>
     </div>
     ${m?.prompt ? `<div class="field">
@@ -580,7 +594,7 @@ function renderJob() {
   view.innerHTML = `
   <div class="job-head">
     <div class="title-row">
-      <h1 class="job-title" id="jobTitle" contenteditable="plaintext-only" spellcheck="false" dir="auto" title="Click to rename">${esc(j.title || "Untitled")}</h1>
+      <h1 class="job-title" id="jobTitle" contenteditable="plaintext-only" spellcheck="false" dir="${mixDir(j.title || "Untitled")}" data-mixdir title="Click to rename">${esc(j.title || "Untitled")}</h1>
     </div>
     <div class="meta">${meta}</div>
     <div class="actions">
@@ -666,7 +680,7 @@ function renderLines() {
     }
     return `<div class="line${first ? " first" : ""}" data-i="${i}" style="--c:${spkColor(x.speaker)}">
       <button class="ts" data-t="${x.start}" title="Play from here" ${S.hasAudio ? "" : "disabled"}>${clock(x.start)}</button>
-      ${who}<p class="text" dir="auto"${S.editing ? ' contenteditable="plaintext-only"' : ""}>${S.editing ? esc(x.text) : highlight(x.text)}</p>
+      ${who}<p class="text" dir="${mixDir(x.text)}" data-mixdir${S.editing ? ' contenteditable="plaintext-only"' : ""}>${S.editing ? esc(x.text) : highlight(x.text)}</p>
     </div>`;
   }).join("");
   const note = S.partial && ACTIVE.has(j.status) ? `<div class="partial-note">Transcript so far — it updates as the model works.</div>` : "";
@@ -1162,6 +1176,11 @@ $("#themeBtn").onclick = () => {
 $("#menuToggle").onclick = () => $("#sidebar").classList.toggle("open");
 $("#jobSearch").oninput = renderSidebar;
 
+// keep the direction right while a line, title or name is being typed
+document.addEventListener("input", (e) => {
+  const el = e.target.closest && e.target.closest("[data-mixdir]");
+  if (el) el.dir = mixDir(el.value ?? el.textContent);
+});
 document.addEventListener("keydown", (e) => {
   const typing = e.target.closest("input, textarea, select, button, [contenteditable]");
   if (e.key === "Escape") closeMenus();
