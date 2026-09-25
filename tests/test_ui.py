@@ -1,0 +1,134 @@
+"""Browser tests of the interface: what was checked by hand while building it, run for real in headless
+Chromium against a Tafrigh server with demo transcripts (see tests/ui_support.py).
+Run: .venv/bin/python -m unittest discover -s tests -p "test_ui*.py" -v
+"""
+import unittest
+
+from ui_support import UiTestCase
+
+JOB, MERGE = "20260925-230000-a1b2", "20260925-230100-b2c3"
+
+
+class TranscriptPage(UiTestCase):
+    jobs = ({"jid": JOB}, {"jid": MERGE, "title": "Two speakers"})
+
+    def job_page(self, jid=JOB):
+        self.open(f"#/job/{jid}")
+        self.page.wait_for_selector(".line .text")
+
+    def test_mixed_lines_take_their_direction_from_their_words(self):
+        self.job_page()
+        dirs = self.page.eval_on_selector_all(".line .text", "els => els.map(e => [e.dir, getComputedStyle(e).direction])")
+        # lines 1 and 2 open with an English word but are Arabic sentences; 3 and 5 are English; 6 is a time
+        self.assertEqual([d for d, _ in dirs], ["rtl", "rtl", "ltr", "rtl", "ltr", "auto"])
+        self.assertEqual([c for _, c in dirs][:5], ["rtl", "rtl", "ltr", "rtl", "ltr"])
+
+    def test_direction_follows_what_is_typed(self):
+        self.job_page()
+        self.page.click("#editBtn")
+        line = self.page.locator(".line .text").nth(4)
+        line.click()
+        self.page.keyboard.press("ControlOrMeta+A")
+        self.page.keyboard.type("تمام نبدأ ال sprint planning دلوقتي")
+        self.assertEqual(line.get_attribute("dir"), "rtl")
+        self.page.keyboard.press("ControlOrMeta+A")
+        self.page.keyboard.type("OK, let us start")
+        self.assertEqual(line.get_attribute("dir"), "ltr")
+
+    def test_merge_menu_stays_in_view_and_merges(self):
+        self.job_page(MERGE)
+        self.page.click(".merge-btn")
+        menu = self.page.locator(".merge-menu.open")
+        box = menu.bounding_box()
+        self.assertGreaterEqual(box["x"], 0)
+        self.assertLessEqual(box["x"] + box["width"], 1280)
+        self.assertFalse(self.page.evaluate("() => document.documentElement.scrollWidth > innerWidth"))
+        self.page.once("dialog", lambda d: d.accept())
+        menu.locator("button").first.click()
+        self.page.wait_for_selector(".toast >> text=Speakers merged")
+        job = self.api("GET", f"/api/jobs/{MERGE}")["json"]
+        self.assertEqual({x["speaker"] for x in job["lines"]}, {"2"})
+
+    def test_export_icons_are_small_and_export_asks_where_to_save(self):
+        # stands in for the browser's Save dialog (showSaveFilePicker) and keeps what is written
+        self.page.add_init_script("""
+            window.showSaveFilePicker = async (opts) => ({ name: opts.suggestedName, createWritable: async () => {
+                const parts = [];
+                return { write: async (b) => parts.push(b),
+                         close: async () => { window.__saved = { name: opts.suggestedName, text: await new Blob(parts).text() }; } };
+            } });""")
+        self.job_page()
+        self.page.click("[data-menu='exportMenu']")
+        width = self.page.locator("#exportMenu a svg").first.bounding_box()["width"]
+        self.assertLessEqual(width, 18)
+        self.page.click("#exportMenu a[data-fmt='txt']")
+        saved = self.page.wait_for_function("() => window.__saved").json_value()
+        self.assertEqual(saved["name"], "Sprint-review.txt")
+        self.assertIn("ال API معتمد", saved["text"])
+
+    def test_details_show_where_it_ran_with_logos(self):
+        self.job_page()
+        hero = self.page.locator(".job-details .det-hero")
+        self.assertIn("Intel Iris Xe Graphics", hero.inner_text())
+        self.assertIn("0.15×", hero.inner_text())
+        logos = self.page.eval_on_selector_all(".job-details .logo-tile svg[aria-label]", "els => els.map(e => e.getAttribute('aria-label'))")
+        self.assertEqual(logos[:1], ["Intel"])
+        self.assertIn("Lenovo", logos)
+        text = self.page.locator(".job-details").inner_text()
+        self.assertIn("Lenovo ThinkPad P16 Gen 1", text)  # the maker's own casing, not "LENOVO"
+        self.assertIn("M4A", text)
+
+    def test_playback_speed_list_is_styled_and_works(self):
+        self.job_page()
+        if not self.page.evaluate("() => CSS.supports('appearance', 'base-select')"):
+            self.skipTest("this Chromium has no customizable select")
+        self.assertEqual(self.page.evaluate("() => getComputedStyle(document.getElementById('rate')).appearance"), "base-select")
+        self.page.select_option("#rate", "1.5")
+        self.assertEqual(self.page.evaluate("() => document.getElementById('audio').playbackRate"), 1.5)
+
+
+class SettingsDialog(UiTestCase):
+    def test_toasts_show_above_the_open_dialog(self):
+        self.open()
+        self.open_settings()
+        threads = self.page.locator("input[data-setting='threads']")
+        threads.fill("2")
+        threads.dispatch_event("change")
+        toast = self.page.wait_for_selector(".toast >> text=Saved")
+        self.assertTrue(toast.is_visible())
+        # In the top layer (a popover) and shown after the dialog opened, so drawn above it and its blurred
+        # backdrop. (While a modal dialog is open everything outside it is inert, so hit-testing the toast
+        # with elementFromPoint can't show this.)
+        state = self.page.evaluate("""() => ({ dialog: document.getElementById('settings').open,
+                                              popover: document.getElementById('toasts').matches(':popover-open') })""")
+        self.assertEqual(state, {"dialog": True, "popover": True})
+        self.api("POST", "/api/settings", {"threads": 10})
+
+    def test_switches_are_saved(self):
+        self.open()
+        self.open_settings()
+        self.page.locator("input[data-setting='device']").uncheck()
+        self.page.wait_for_selector(".toast >> text=Saved")
+        self.assertEqual(self.api("GET", "/api/status")["json"]["settings"]["device"], "cpu")
+        self.page.reload()
+        self.page.wait_for_function("() => typeof S !== 'undefined' && S.status")
+        self.open_settings()
+        self.assertFalse(self.page.locator("input[data-setting='device']").is_checked())
+        self.api("POST", "/api/settings", {"device": "auto"})
+
+    def test_about_shows_the_author_and_the_licence(self):
+        self.open()
+        self.open_settings()
+        about = self.page.locator(".about-text")
+        self.assertIn("By Mohammed El-sayed Ahmed", about.inner_text())
+        self.assertIn("AGPL-3.0", about.inner_text())
+        links = about.locator("a").evaluate_all("els => els.map(a => a.href)")
+        self.assertIn("https://github.com/MohammedEl-sayedAhmed/arabic-stt", links)
+
+    def test_gpu_chip(self):
+        self.open()
+        self.assertIn("GPU: Iris Xe", self.page.locator("#topStatus").inner_text())
+
+
+if __name__ == "__main__":
+    unittest.main()
