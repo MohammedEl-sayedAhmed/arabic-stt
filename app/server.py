@@ -18,7 +18,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import __version__, engines
+from . import __version__, engines, hub
 from . import transcript as T
 from .config import FROZEN, power_profile, set_power_profile
 from .downloads import Downloads
@@ -533,6 +533,33 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(409, str(e))
         self.json(self.app.status())
 
+    # Models added from Hugging Face (app/hub.py)
+    def hub_inspect(self, _params):
+        p = self.body_json()
+        try:
+            self.json(hub.inspect(self.app.cfg, p.get("url"), p.get("file"), p.get("revision")))
+        except hub.HubError as e:
+            raise ApiError(400, str(e))
+
+    def hub_add(self, _params):
+        p = self.body_json()
+        try:
+            model = hub.add(self.app.cfg, p.get("url"), p.get("file"), p.get("revision"))
+        except hub.HubError as e:
+            raise ApiError(400, str(e))
+        self.download({}, model["id"])  # with the voiceprint model, as from a model card; replies with the status
+
+    def forget_model(self, _params, model_id):
+        if not (self.app.cfg.models.get(model_id) or {}).get("hub"):
+            raise ApiError(404, "no model added from Hugging Face with that id")
+        if any(j["status"] in ACTIVE and j["model"] == model_id for j in self.app.store.list()):
+            raise ApiError(409, "a transcription is using it; wait until it has finished")
+        if (self.app.downloads.jobs.get(model_id) or {}).get("state") == "queued" or self.app.downloads.busy(model_id):
+            raise ApiError(409, "wait until the download has finished or cancel it")
+        self.app.downloads.remove(model_id)
+        hub.forget(self.app.cfg, model_id)
+        self.json(self.app.status())
+
     def quit(self, _params):
         self.json({"bye": True})
         target = self.app.on_quit or self.app.server.shutdown
@@ -577,6 +604,9 @@ ROUTES = [
     ("POST", r"/api/downloads/([\w-]+)", Handler.download),
     ("POST", r"/api/downloads/([\w-]+)/cancel", Handler.cancel_download),
     ("DELETE", r"/api/downloads/([\w-]+)", Handler.remove_download),
+    ("POST", r"/api/hub/inspect", Handler.hub_inspect),
+    ("POST", r"/api/hub/add", Handler.hub_add),
+    ("DELETE", r"/api/models/(hf-[\w-]+)", Handler.forget_model),
     ("POST", r"/api/quit", Handler.quit),
 ]
 

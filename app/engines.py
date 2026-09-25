@@ -69,7 +69,7 @@ def local_command(cfg, model, audio, out_dir, progress_file, options):
     whisper = cfg.whisper_source(model) if model["engine"] == "whisper" else None
     if model["engine"] == "whisper":
         cmd += ["--whisper-model", whisper or model["whisper_model"]]
-    elif model["engine"] == "cohere":
+    elif model["engine"] in ("cohere", "gguf"):  # gguf: any speech model transcribe.cpp runs
         cmd += ["--cohere-model", str(cfg.path(model["cohere_model"]))]
     speakers = options.get("speakers", "none")
     if speakers != "none" and cfg.speakers_ready():

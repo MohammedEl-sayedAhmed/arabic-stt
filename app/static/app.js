@@ -264,7 +264,7 @@ function speakerHint(m, speakers) {
 function modelCard(m) {
   const f = S.form, sel = f.model === m.id;
   const badges = m.kind === "local"
-    ? `<span class="pill accent">${ICON.laptop} On this computer</span>`
+    ? `<span class="pill accent">${ICON.laptop} On this computer</span>${m.hub ? '<span class="pill">From Hugging Face</span>' : ""}`
     : `<span class="pill cloud">${ICON.cloud} Uploads to ${esc(m.service)}</span>`;
   let state = "";
   if (!m.ready && m.kind === "hosted") state = `<span class="mc-missing">Needs an API key — <button type="button" class="linkish" data-open-settings="${esc(m.id)}">add it</button></span>`;
@@ -1076,10 +1076,92 @@ function renderSettings(focus) {
   else if (focus && focus !== "power") { const el = $(`[data-key="${focus}"]`); if (el) setTimeout(() => el.focus(), 50); }
 }
 
-// Adding models from Hugging Face (Settings → Models): filled in by the importer.
-function hubBlock() { return ""; }
-function bindHub() {}
-async function forgetModel(_id) {}
+// Adding models from Hugging Face (Settings → Models). The state lives here, not in the dialog, which is
+// rebuilt on every status poll while a download runs; the caret in the link field is put back too.
+const HUB = { url: "", busy: false, found: null, error: "", caret: null };
+
+function hubBlock() {
+  const h = HUB, input = $("#hubUrl");
+  h.caret = input && document.activeElement === input ? [input.selectionStart, input.selectionEnd] : null;
+  return `<div class="hub">
+    <p class="hint" style="margin:0 0 8px"><b>Add a model from Hugging Face.</b> Paste the link to its page, or its name (org/name). Whisper models for faster-whisper or in Transformers format, and GGUF speech models for transcribe.cpp, can be added.</p>
+    <form class="row" id="hubForm"><input type="text" id="hubUrl" value="${esc(h.url)}" placeholder="https://huggingface.co/org/name" spellcheck="false" autocomplete="off" aria-label="Hugging Face link or model name">
+      <button class="btn" type="submit" ${h.busy ? "disabled" : ""}>${h.busy ? "Checking…" : "Check"}</button></form>
+    ${h.found ? hubFound(h.found) : ""}
+    ${h.error ? `<div class="hub-found error" role="alert">${esc(h.error)}</div>` : ""}
+  </div>`;
+}
+
+function hubFound(f) {
+  const file = f.choices && f.choices.length > 1
+    ? `<select id="hubFile" aria-label="Model file" ${HUB.busy ? "disabled" : ""}>${f.choices.map((c) => `<option value="${esc(c.file)}"${c.file === f.file ? " selected" : ""}>${esc(c.file)} (${bytes(c.size)})</option>`).join("")}</select>`
+    : `<code>${esc(f.file)}</code>`;
+  const action = f.problem ? `<p class="mc-missing" style="margin:0">${esc(f.problem)}</p>`
+    : f.added ? `<span class="pill ok">Already in the app</span>`
+    : `<button type="button" class="btn btn-sm btn-primary" id="hubAdd" ${HUB.busy ? "disabled" : ""}>${ICON.download} Add and download (${bytes(f.size)})</button>`;
+  return `<div class="hub-found"><dl class="kv">
+      <dt>Model</dt><dd><a href="https://huggingface.co/${esc(f.repo)}" target="_blank" rel="noopener noreferrer">${esc(f.repo)}</a></dd>
+      <dt>Kind</dt><dd>${esc(f.label)}</dd>
+      ${f.architecture ? `<dt>Architecture</dt><dd><code>${esc(f.architecture)}</code></dd>` : ""}
+      ${f.file ? `<dt>File</dt><dd>${file}</dd>` : ""}
+      <dt>Size</dt><dd>${bytes(f.size)}${f.kind === "transformers" ? ", then converted on this computer" : ""}</dd>
+      <dt>Licence</dt><dd>${esc(f.licence || "Not stated on the model page")}</dd>
+      <dt>Revision</dt><dd><code>${esc(f.revision.slice(0, 7))}</code></dd>
+    </dl>${action}</div>`;
+}
+
+function bindHub() {
+  const form = $("#hubForm"), input = $("#hubUrl");
+  if (!form) return;
+  input.oninput = () => (HUB.url = input.value);
+  form.onsubmit = (e) => { e.preventDefault(); hubCheck(); };
+  if (HUB.caret) { input.focus(); input.setSelectionRange(...HUB.caret); }
+  const file = $("#hubFile");
+  if (file) file.onchange = () => hubCheck(file.value);
+  const add = $("#hubAdd");
+  if (add) add.onclick = hubAdd;
+}
+
+const rerenderHub = () => $("#settings").open && renderSettings();
+
+async function hubCheck(file) {
+  const url = HUB.url.trim();
+  if (!url || HUB.busy) return;
+  Object.assign(HUB, { busy: true, error: "" }, file ? {} : { found: null });
+  rerenderHub();
+  try { HUB.found = await api.post("/api/hub/inspect", file ? { url, file } : { url }); }
+  catch (e) { Object.assign(HUB, { found: null, error: e.message }); }
+  HUB.busy = false;
+  rerenderHub();
+}
+
+async function hubAdd() {
+  const f = HUB.found;
+  if (!f || HUB.busy) return;
+  Object.assign(HUB, { busy: true, error: "" });
+  rerenderHub();
+  try {
+    S.status = await api.post("/api/hub/add", { url: HUB.url.trim(), file: f.file || undefined, revision: f.revision });
+    Object.assign(HUB, { url: "", found: null });
+    toast(`Added ${f.repo}. The download has started.`);
+    renderTop(); scheduleStatus();
+    if (S.route.name === "new") renderNew();
+  } catch (e) { HUB.error = e.message; }
+  HUB.busy = false;
+  rerenderHub();
+}
+
+async function forgetModel(id) {
+  const m = model(id);
+  if (!confirm(`Remove ${m ? m.title : id} from the app? Its files are deleted from this computer. You can add it again later.`)) return;
+  try {
+    S.status = await api.del(`/api/models/${id}`);
+    if (S.form.model === id) S.form.model = null;
+    renderTop(); refreshDownloadViews();
+    if (S.route.name === "new") renderNew();
+    toast("Removed");
+  } catch (e) { toast(e.message, "error"); }
+}
 
 async function removeDownload(id) {
   if (!confirm("Delete this model's files from this computer? You can download them again later.")) return;

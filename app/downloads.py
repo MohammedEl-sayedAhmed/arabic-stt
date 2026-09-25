@@ -4,7 +4,10 @@ Every file in the config has a pinned URL (a fixed Hugging Face revision or rele
 its SHA-256. A download goes to <file>.part, resumes with an HTTP Range request after a dropped
 connection, and becomes the real file only once size and checksum match. A file with `unpack` is a
 package (a wheel): the listed members are copied out next to it, checked by size, and the package is
-deleted.
+deleted. Small files from Hugging Face have no SHA-256 in its listing, only their git blob id, so
+those are checked by `git_sha1` instead. An item with `convert` (a Whisper checkpoint in Transformers
+format, added from Hugging Face) is converted for faster-whisper once downloaded (app/hub.py), and
+counts as installed when the converted model is there.
 """
 import hashlib
 import shutil
@@ -45,15 +48,24 @@ class Downloads:
         p = self.cfg.path(f["path"])
         return bool(f.get("unpack")) and p.exists() and p.stat().st_size == f["size"]
 
+    def converted(self, item):
+        """The faster-whisper model made from a downloaded checkpoint (its source files are deleted then)."""
+        folder = self.cfg.path(item["convert"]["to"]) if item.get("convert") else None
+        return folder if folder and (folder / "model.bin").exists() else None
+
     def status(self, item_id):
-        files = self.cfg.download_items()[item_id]["files"]
-        missing = [f for f in files if not self.installed(f)]
+        item = self.cfg.download_items()[item_id]
+        files, converted = item["files"], self.converted(item)
+        missing = [] if converted else [f for f in files if not self.installed(f)]
         job = dict(self.jobs.get(item_id) or {})
         partial = sum(self.part_size(f) for f in missing)
+        if converted:
+            on_disk = sum(p.stat().st_size for p in converted.iterdir() if p.is_file())
+        else:
+            on_disk = sum(sum(f["unpack"].values()) if f.get("unpack") else f["size"] for f in files)
         return {"size": sum(f["size"] for f in files),
-                "missing": sum(0 if self.package_ready(f) else f["size"] for f in missing),
-                "on_disk": sum(sum(f["unpack"].values()) if f.get("unpack") else f["size"] for f in files),
-                "installed": not missing, "partial": partial, **job}
+                "missing": sum(0 if self.package_ready(f) else f["size"] for f in missing), "on_disk": on_disk,
+                "installed": bool(converted) if item.get("convert") else not missing, "partial": partial, **job}
 
     def all_status(self):
         return {item_id: self.status(item_id) for item_id in self.cfg.download_items()}
@@ -67,7 +79,7 @@ class Downloads:
         return p.with_name(p.name + ".part")
 
     def busy(self, item_id):
-        return (self.jobs.get(item_id) or {}).get("state") in ("downloading", "verifying", "unpacking")
+        return (self.jobs.get(item_id) or {}).get("state") in ("downloading", "verifying", "unpacking", "converting")
 
     # ---- actions ---------------------------------------------------------------------------------
     def start(self, item_ids):
@@ -76,6 +88,7 @@ class Downloads:
         todo = [i for i in item_ids if i in items and not self.busy(i) and not self.status(i)["installed"]]
         unpack = sum(sum(f["unpack"].values()) for i in todo for f in items[i]["files"]
                      if f.get("unpack") and not self.installed(f))
+        unpack += sum(items[i]["convert"].get("size", 0) for i in todo if items[i].get("convert"))  # the converted copy
         need = sum(self.status(i)["missing"] - self.status(i)["partial"] for i in todo) + unpack
         root = self.cfg.home
         root.mkdir(parents=True, exist_ok=True)
@@ -99,12 +112,16 @@ class Downloads:
         """Delete an item's files (and any partial download)."""
         if self.busy(item_id):
             raise RuntimeError("wait until the download has finished or cancel it")
-        for f in self.cfg.download_items()[item_id]["files"]:
+        item = self.cfg.download_items()[item_id]
+        for f in item["files"]:
             for p in (self.cfg.path(f["path"]), self.part_path(f)):
                 p.unlink(missing_ok=True)
             for p in self.unpacked(f).values():
                 p.unlink(missing_ok=True)
                 p.with_name(p.name + ".part").unlink(missing_ok=True)
+        if item.get("convert"):  # the converted model, a conversion cut short, and the conversion's log
+            for folder in (item["convert"]["to"], item["convert"]["to"] + ".part", item["convert"]["from"]):
+                shutil.rmtree(self.cfg.path(folder), ignore_errors=True)
         self.jobs.pop(item_id, None)
 
     # ---- work --------------------------------------------------------------------------------------
@@ -116,13 +133,18 @@ class Downloads:
                 continue
             job["state"] = "downloading"
             try:
-                for f in self.cfg.download_items()[item_id]["files"]:
+                item = self.cfg.download_items()[item_id]
+                for f in item["files"]:
                     if not self.installed(f):
                         job["file"] = f["path"].rsplit("/", 1)[-1]
                         if not self.package_ready(f):
                             self.fetch(f, job, lambda: item_id in self.cancelled)
                         if f.get("unpack"):
                             self.unpack(f, job, lambda: item_id in self.cancelled)
+                if item.get("convert"):
+                    from .hub import convert  # in the model worker process: it needs transformers and torch
+                    job.update(state="converting", file=None)
+                    convert(self.cfg, item["convert"], lambda: item_id in self.cancelled)
                 job.update(state="done", file=None)
             except Cancelled:
                 job.update(state="cancelled", file=None)
@@ -168,13 +190,14 @@ class Downloads:
                         raise Cancelled()
                     time.sleep(0.5)
         job["state"] = "verifying"
-        h = hashlib.sha256()
+        # git's blob id is the SHA-1 of "blob <size>\0" and the content
+        h = hashlib.sha256() if f.get("sha256") else hashlib.sha1(b"blob %d\0" % f["size"])
         with open(part, "rb") as fh:
             for block in iter(lambda: fh.read(1 << 22), b""):
                 h.update(block)
                 if cancelled():
                     raise Cancelled()
-        if h.hexdigest() != f["sha256"]:
+        if h.hexdigest() != (f.get("sha256") or f["git_sha1"]):
             part.unlink(missing_ok=True)
             raise RuntimeError(f"{dest.name}: checksum mismatch (the download was damaged; try again)")
         replace_file(part, dest)
