@@ -1,0 +1,49 @@
+"""Run transcribe.py for the app, in its own process.
+
+From source the app starts `python -m app.worker <transcribe.py arguments>`; the desktop build
+starts itself with `--transcribe <arguments>`, which lands here too. Output goes to the job's log
+as UTF-8 (a windowed Windows build has no console, and Arabic text would not fit a code page).
+"""
+import os
+import sys
+
+
+def setup_output():
+    log = os.environ.get("TAFRIGH_LOG")
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name)
+        if stream is None:  # no console: write straight to the log
+            setattr(sys, name, open(log or os.devnull, "a", encoding="utf-8", buffering=1))
+        else:
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
+            except (AttributeError, ValueError):
+                pass
+
+
+def check_imports():
+    """For the self-test: import everything a local run needs and report versions."""
+    import importlib
+    out = {}
+    for mod in ("numpy", "av", "soundfile", "ctranslate2", "faster_whisper", "sherpa_onnx", "transcribe_cpp",
+                "speakers", "transcribe"):
+        try:
+            m = importlib.import_module(mod)
+            out[mod] = getattr(m, "__version__", "ok")
+        except Exception as e:  # noqa: BLE001 — reported, not raised
+            out[mod] = f"FAILED: {type(e).__name__}: {e}"
+    print(repr(out))
+    return 0 if not any(str(v).startswith("FAILED") for v in out.values()) else 1
+
+
+def run(argv):
+    setup_output()
+    if argv[:1] == ["--check-imports"]:
+        sys.exit(check_imports())
+    import transcribe
+    sys.argv = ["transcribe.py", *argv]
+    transcribe.main()
+
+
+if __name__ == "__main__":
+    run(sys.argv[1:])

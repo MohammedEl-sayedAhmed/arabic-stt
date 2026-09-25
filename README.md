@@ -8,7 +8,7 @@ speaking by voice, and keep all audio on this machine.
 
 ## Setup (Linux, CPU only)
 
-Prerequisites: Python 3.12, [uv](https://docs.astral.sh/uv/), `ffmpeg`, `curl`.
+Prerequisites: Python 3.12, [uv](https://docs.astral.sh/uv/), `curl`, and `ffmpeg` for the benchmark scripts (the app doesn't need it).
 
 ```sh
 uv venv .venv --python 3.12 && VIRTUAL_ENV=.venv uv pip install -r requirements.txt
@@ -49,7 +49,8 @@ Optional extras:
 ## Use the app
 
 ```sh
-./app.sh          # opens Tafrigh at http://127.0.0.1:8765
+./app.sh              # opens Tafrigh at http://127.0.0.1:8765
+./app.sh --desktop    # the same in its own window (desktop app)
 ```
 
 Drop a recording (audio or video), pick a model — whisper-medium, Cohere or Whisper large-v3 on this
@@ -57,7 +58,13 @@ laptop, or ElevenLabs / Speechmatics with your API key (the recording is uploade
 confirm) — and choose speaker labels. The transcript plays back with the audio, and can be searched,
 corrected (rename or merge speakers, edit lines) and exported as text, subtitles, Markdown or JSON.
 Models, port, threads and defaults are set in [`app/config.toml`](app/config.toml); everything the
-app stores stays in the git-ignored `app_data/`. Details: [docs/09-app.md](docs/09-app.md).
+app stores stays in the git-ignored `app_data/`. Local models can also be downloaded from inside the
+app (*Settings → Models on this computer*). Details: [docs/09-app.md](docs/09-app.md).
+
+**Desktop app (Windows and Linux):** `python desktop/build.py` builds `dist/Tafrigh/` (`Tafrigh.exe`
+on Windows) and `iscc desktop/installer.iss` a Windows installer; on Windows from source, run
+`app.cmd`. A GitHub Actions workflow builds and checks both platforms on request. Details:
+[docs/10-desktop.md](docs/10-desktop.md).
 
 ## Transcribe a recording (command line)
 
@@ -115,7 +122,8 @@ Their audio, transcripts and results stay in the git-ignored `data/` and `result
 
 | Path | What |
 |---|---|
-| `app.sh`, `app/` | the app: web server, job runner, model clients, interface, `config.toml` |
+| `app.sh`, `app.cmd`, `app/` | the app: web server, job runner, model clients and downloads, interface, desktop window, `config.toml` |
+| `desktop/`, `.github/workflows/desktop.yml` | desktop build (PyInstaller), Windows installer (Inno Setup), CI build |
 | `transcribe.py`, `speakers.py` | the proof of concept (the app runs local models through it) |
 | `tests/` | app tests (`.venv/bin/python -m unittest discover -s tests`) |
 | `docs/` | full write-up of findings, trials, results, research and recommendation |

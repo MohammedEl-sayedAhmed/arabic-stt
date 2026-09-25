@@ -47,6 +47,8 @@ tools/
 .venv/
 __pycache__/
 .playwright-mcp/
+build/
+dist/
 *.part
 *.part[0-9]
 *.joining

@@ -9,13 +9,14 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import time
 import uuid
 from pathlib import Path
 
 import requests
 
-from .config import ROOT
+from .config import FROZEN, ROOT
 from .transcript import from_transcribe_py, lines_from_words, relabel
 
 
@@ -29,7 +30,7 @@ class EngineError(Exception):
 
 def read_json(path):
     try:
-        return json.loads(Path(path).read_text())
+        return json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
 
@@ -38,13 +39,20 @@ def read_json(path):
 # Local models: transcribe.py in a subprocess (its own process group, so cancel stops it cleanly)
 # ---------------------------------------------------------------------------------------------
 
+def worker_command(cfg):
+    """How to start transcribe.py: the desktop build runs itself with --transcribe."""
+    if FROZEN:
+        return [sys.executable, "--transcribe"]
+    return [cfg.python(), "-m", "app.worker"]
+
+
 def local_command(cfg, model, audio, out_dir, progress_file, options):
-    cmd = [str(cfg.path(cfg.local["python"])), str(ROOT / "transcribe.py"), str(audio),
-           "--engine", model["engine"], "--out", str(out_dir), "--threads", str(cfg.local.get("threads", 10)),
-           "--language", options.get("language", "ar"), "--progress-file", str(progress_file)]
+    cmd = worker_command(cfg) + [
+        str(audio), "--engine", model["engine"], "--out", str(out_dir), "--threads", str(cfg.local.get("threads", 10)),
+        "--language", options.get("language", "ar"), "--progress-file", str(progress_file)]
+    whisper = cfg.whisper_source(model) if model["engine"] == "whisper" else None
     if model["engine"] == "whisper":
-        name = model["whisper_model"]
-        cmd += ["--whisper-model", str(cfg.path(name)) if "/" in name else name]
+        cmd += ["--whisper-model", whisper or model["whisper_model"]]
     elif model["engine"] == "cohere":
         cmd += ["--cohere-model", str(cfg.path(model["cohere_model"]))]
     speakers = options.get("speakers", "none")
@@ -53,7 +61,7 @@ def local_command(cfg, model, audio, out_dir, progress_file, options):
                 "--voiceprint-model", str(cfg.path(cfg.local["voiceprint_model"]))]
     hint = (options.get("prompt") or "").strip()
     if hint and model.get("prompt"):
-        if model["engine"] == "whisper" and Path(model["whisper_model"]).name == "large-v3":
+        if model["engine"] == "whisper" and Path(whisper or "").name.endswith("large-v3"):
             from transcribe import STYLE_PROMPT  # keep large-v3's Egyptian style hint, add the terms
             hint = f"{STYLE_PROMPT} {hint}"
         cmd += ["--prompt", hint]
@@ -61,7 +69,8 @@ def local_command(cfg, model, audio, out_dir, progress_file, options):
 
 
 def partial_lines(job_dir):
-    """What a running (or interrupted) local job has transcribed so far."""
+    """What a running (or interrupted) local job has transcribed so far (read_json returns None
+    while transcribe.py is rewriting the file; the next poll gets it)."""
     for p in sorted((Path(job_dir) / "engine").glob("*.json")):
         if not p.name.endswith((".words.json", ".meta.json")):
             data = read_json(p)
@@ -70,7 +79,25 @@ def partial_lines(job_dir):
     return []
 
 
+def spawn(cmd, log, env):
+    """Start a model run in its own process group, without a console window on Windows."""
+    if os.name == "nt":
+        flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+        return subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, env=env, creationflags=flags)
+    return subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
+
+
 def stop(proc):
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":  # transcribe.py starts no children, so ending the process is enough
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+        return
     try:
         os.killpg(proc.pid, signal.SIGTERM)
         proc.wait(timeout=10)
@@ -87,9 +114,11 @@ def run_local(cfg, model, job_dir, job, on_progress, cancelled, register=None):
     shutil.rmtree(out_dir, ignore_errors=True)
     progress_file.unlink(missing_ok=True)
     cmd = local_command(cfg, model, job_dir / "audio.flac", out_dir, progress_file, job.get("options") or {})
-    env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONPATH": str(ROOT)}
-    with open(log_path, "w") as log:
-        proc = subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
+    env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8",
+           "PYTHONPATH": str(ROOT), "TAFRIGH_LOG": str(log_path)}
+    log_path.write_text("", encoding="utf-8")
+    with open(log_path, "a", encoding="utf-8") as log:  # append: the worker may open it too
+        proc = spawn(cmd, log, env)
         if register:
             register(proc)
         last = None
@@ -107,7 +136,7 @@ def run_local(cfg, model, job_dir, job, on_progress, cancelled, register=None):
                 on_progress(state)
                 last = state
     if proc.returncode != 0:
-        tail = [x for x in log_path.read_text(errors="replace").splitlines() if x.strip()][-12:]
+        tail = [x for x in log_path.read_text(encoding="utf-8", errors="replace").splitlines() if x.strip()][-12:]
         if proc.returncode < 0:
             raise EngineError(f"the model process was stopped (signal {-proc.returncode}; out of memory?)\n"
                               + "\n".join(tail))
@@ -228,7 +257,7 @@ def elevenlabs(cfg, model, job_dir, job, on_progress, cancelled):
         body.close()
     check(r, "ElevenLabs")
     data = r.json()
-    (Path(job_dir) / "hosted.json").write_text(json.dumps(data, ensure_ascii=False))
+    (Path(job_dir) / "hosted.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     if model.get("delete_after", True) and data.get("transcription_id"):
         try:  # keep it out of the ElevenLabs history; the local copy is all the app needs
             requests.delete(f"{base}/v1/speech-to-text/transcripts/{data['transcription_id']}",
@@ -280,7 +309,7 @@ def speechmatics(cfg, model, job_dir, job, on_progress, cancelled):
         body.close()
     check(r, "Speechmatics")
     sm_id = r.json()["id"]
-    (Path(job_dir) / "hosted-job.txt").write_text(sm_id)
+    (Path(job_dir) / "hosted-job.txt").write_text(sm_id, encoding="utf-8")
     t0 = time.time()
     try:
         while True:
@@ -305,7 +334,7 @@ def speechmatics(cfg, model, job_dir, job, on_progress, cancelled):
                          headers=auth, timeout=120)
         check(r, "Speechmatics")
         data = r.json()
-        (Path(job_dir) / "hosted.json").write_text(json.dumps(data, ensure_ascii=False))
+        (Path(job_dir) / "hosted.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     except BaseException:
         try:  # stop and remove the job there too
             requests.delete(f"{base}/jobs/{sm_id}", params={"force": "true"}, headers=auth, timeout=30)

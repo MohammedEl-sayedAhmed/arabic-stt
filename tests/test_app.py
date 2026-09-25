@@ -313,6 +313,23 @@ class Api(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(self.call("GET", f"/api/jobs/{job['id']}")[0], 404)
 
+    def test_5_keep_alive_after_an_ignored_body(self):
+        """A POST whose handler ignores the body must not garble the next request on the connection."""
+        import http.client
+        conn = http.client.HTTPConnection("127.0.0.1", self.server.server_address[1], timeout=10)
+        try:
+            conn.request("POST", "/api/downloads/voiceprints/cancel", body=b"{}",
+                         headers={"X-Tafrigh": "1", "Content-Type": "application/json"})
+            r = conn.getresponse()
+            r.read()
+            self.assertEqual(r.status, 200)
+            conn.request("GET", "/api/status")
+            r = conn.getresponse()
+            self.assertEqual(r.status, 200)
+            self.assertEqual(json.loads(r.read())["app"], "tafrigh")
+        finally:
+            conn.close()
+
     def test_5_bad_input(self):
         self.assertEqual(self.call("POST", "/api/jobs", {"path": "/nonexistent.wav", "model": "whisper-medium"})[0], 400)
         self.assertEqual(self.call("POST", "/api/jobs", {"path": str(self.wav), "model": "nope"})[0], 400)

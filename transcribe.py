@@ -30,7 +30,6 @@ import io
 import json
 import os
 import re
-import resource
 import sys
 import time
 from pathlib import Path
@@ -42,6 +41,11 @@ from faster_whisper import WhisperModel, decode_audio
 from faster_whisper.vad import VadOptions, get_speech_timestamps
 
 import speakers
+
+try:
+    import resource  # peak memory for the .meta.json; not on Windows
+except ImportError:
+    resource = None
 
 SR = 16000
 MAX_CHUNK_S = 25
@@ -132,7 +136,7 @@ class Whisper:
         self.model = WhisperModel(args.whisper_model, device="cpu", compute_type="int8",
                                   cpu_threads=args.threads, local_files_only=True)
         self.language = None if args.language == "auto" else args.language
-        default_prompt = STYLE_PROMPT if Path(args.whisper_model).name == "large-v3" else None
+        default_prompt = STYLE_PROMPT if Path(args.whisper_model).name.endswith("large-v3") else None
         self.prompt = default_prompt if args.prompt is None else (args.prompt or None)
 
     def __call__(self, audio):
@@ -277,8 +281,11 @@ def main():
     def report(stage, **extra):
         if args.progress_file:  # written whole and renamed, so a reader never sees half a file
             tmp = args.progress_file + ".tmp"
-            Path(tmp).write_text(json.dumps({"stage": stage, **extra}))
-            os.replace(tmp, args.progress_file)
+            try:
+                Path(tmp).write_text(json.dumps({"stage": stage, **extra}), encoding="utf-8")
+                os.replace(tmp, args.progress_file)
+            except OSError:  # on Windows the app may be reading it right now; the next update will do
+                pass
 
     report("decoding")
     audio = decode_audio(args.audio, sampling_rate=SR)
@@ -306,10 +313,10 @@ def main():
     stem = f"{Path(args.audio).stem}.{engine.name}" + ("" if timeline is None else ".speakers")
 
     def save(lines, words=()):
-        (out / f"{stem}.txt").write_text("".join(line(x) + "\n" for x in lines))
-        (out / f"{stem}.json").write_text(json.dumps(lines, ensure_ascii=False, indent=1))
+        (out / f"{stem}.txt").write_text("".join(line(x) + "\n" for x in lines), encoding="utf-8")
+        (out / f"{stem}.json").write_text(json.dumps(lines, ensure_ascii=False, indent=1), encoding="utf-8")
         if words:  # word-level timings, so speaker models can be compared without re-transcribing
-            (out / f"{stem}.words.json").write_text(json.dumps(words, ensure_ascii=False))
+            (out / f"{stem}.words.json").write_text(json.dumps(words, ensure_ascii=False), encoding="utf-8")
 
     def progress(i, n, lines, quiet=False):
         save(lines)  # a crash or kill hours in keeps everything transcribed so far
@@ -339,8 +346,8 @@ def main():
         "language": args.language, "prompt": getattr(engine, "prompt", None) or getattr(engine, "context", None),
         "speakers": args.speakers, "voiceprint_model": Path(args.voiceprint_model).name if timeline else None,
         "seconds": round(took, 1), "rtf": round(took / (len(audio) / SR), 3),
-        "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024),
-    }, ensure_ascii=False, indent=1))
+        "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024) if resource else None,
+    }, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"\n{took:.0f} s to transcribe {len(audio) / SR:.0f} s of audio "
           f"({took / (len(audio) / SR):.2f}x real time). Saved {out / stem}.txt")
 

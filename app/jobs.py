@@ -10,7 +10,6 @@ import os
 import queue
 import re
 import shutil
-import subprocess
 import threading
 import time
 import uuid
@@ -20,7 +19,7 @@ from pathlib import Path
 import soundfile as sf
 
 from . import engines
-from .config import power_profile, set_power_profile
+from .config import power_profile, replace_file, set_power_profile
 
 ACTIVE = ("preparing", "queued", "running")
 ID_RE = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{4}$")
@@ -31,9 +30,9 @@ def now():
 
 
 def write_json(path, data):
-    tmp = Path(str(path) + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1))
-    os.replace(tmp, path)
+    tmp = Path(path).with_name(f"{Path(path).name}.{uuid.uuid4().hex[:6]}.tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    replace_file(tmp, path)
 
 
 class Store:
@@ -52,7 +51,7 @@ class Store:
 
     def get(self, jid):
         try:
-            return json.loads((self.dir(jid) / "job.json").read_text())
+            return json.loads((self.dir(jid) / "job.json").read_text(encoding="utf-8"))
         except (KeyError, OSError, ValueError):
             return None
 
@@ -81,7 +80,7 @@ class Store:
 
     def transcript(self, jid):
         try:
-            return json.loads((self.dir(jid) / "transcript.json").read_text())
+            return json.loads((self.dir(jid) / "transcript.json").read_text(encoding="utf-8"))
         except (KeyError, OSError, ValueError):
             return None
 
@@ -90,13 +89,50 @@ class Store:
 
 
 def probe_seconds(path):
-    """Duration of any audio/video file, from ffprobe; None if unknown."""
+    """Duration of any audio or video file, in seconds; None if unknown."""
+    import av
     try:
-        out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of",
-                              "default=nw=1:nk=1", str(path)], capture_output=True, text=True, timeout=60).stdout
-        return float(out.strip())
-    except (OSError, ValueError, subprocess.SubprocessError):
+        with av.open(str(path)) as c:
+            if c.duration:
+                return c.duration / av.time_base
+            s = next((s for s in c.streams if s.type == "audio"), None)
+            return float(s.duration * s.time_base) if s is not None and s.duration and s.time_base else None
+    except Exception:  # not a media file, or unreadable: the conversion reports the details
         return None
+
+
+def convert(source, dest, on_progress, cancelled):
+    """Decode any audio or video file to 16 kHz mono FLAC with PyAV (the FFmpeg libraries that
+    faster-whisper already ships), so no separate ffmpeg install is needed on any platform."""
+    import av
+    tmp = dest.with_name(dest.stem + ".tmp.flac")
+    try:
+        with av.open(str(source)) as container:
+            stream = next((s for s in container.streams if s.type == "audio"), None)
+            if stream is None:
+                raise engines.EngineError("the file has no audio track")
+            resampler = av.AudioResampler(format="s16", layout="mono", rate=16000)
+            last = 0.0
+            with sf.SoundFile(str(tmp), "w", samplerate=16000, channels=1, subtype="PCM_16", format="FLAC") as out:
+                for packet in container.demux(stream):  # the last packet flushes the decoder
+                    if cancelled():
+                        raise engines.Cancelled()
+                    try:
+                        frames = packet.decode()
+                    except av.error.InvalidDataError:  # a damaged packet: skip it
+                        continue
+                    for frame in frames:
+                        for f in resampler.resample(frame):
+                            out.write(f.to_ndarray().reshape(-1))
+                        if frame.time is not None and time.time() - last > 0.5:
+                            last = time.time()
+                            on_progress(frame.time)
+                for f in resampler.resample(None):
+                    out.write(f.to_ndarray().reshape(-1))
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    replace_file(tmp, dest)
 
 
 class Runner:
@@ -157,25 +193,14 @@ class Runner:
                 raise engines.EngineError("the recording is missing")
             total = probe_seconds(source)
             self.store.update(jid, status="preparing", stage="converting", done=0, total=total)
-            tmp = folder / "audio.tmp.flac"
-            with subprocess.Popen(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(source), "-vn", "-ac", "1",
-                                   "-ar", "16000", "-c:a", "flac", "-progress", "pipe:1", "-nostats", str(tmp)],
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as proc:
-                last = 0.0
-                for line in proc.stdout:
-                    if line.startswith("out_time_us=") and line.strip()[12:].isdigit() and time.time() - last > 0.5:
-                        last = time.time()
-                        self.store.update(jid, done=int(line.strip()[12:]) / 1e6)
-                    if jid in self.cancelled:
-                        proc.kill()
-                err = proc.stderr.read().strip().splitlines()[-3:]
-            if jid in self.cancelled:
-                tmp.unlink(missing_ok=True)
+            try:
+                convert(source, audio, lambda t: self.store.update(jid, done=t), lambda: jid in self.cancelled)
+            except engines.Cancelled:
                 return
-            if proc.returncode != 0 or not tmp.exists():
-                tmp.unlink(missing_ok=True)
-                raise engines.EngineError("could not read the recording: " + " ".join(err))
-            os.replace(tmp, audio)
+            except engines.EngineError:
+                raise
+            except Exception as e:
+                raise engines.EngineError(f"could not read the recording: {e}")
             if not job.get("source_path") and not self.cfg.keep_original:
                 source.unlink(missing_ok=True)
         info = sf.info(str(audio))

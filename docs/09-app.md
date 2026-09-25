@@ -10,7 +10,11 @@ transcript with speaker labels that you can play back, search, correct and expor
 ```
 
 Stop it with Ctrl+C in the terminal or **Settings → Quit Tafrigh**. Starting it again while it runs
-just opens the browser tab. In Chrome/Edge, *Install app* (address bar) opens it in its own window.
+just opens the browser tab. `./app.sh --desktop` opens it in its own window instead, and it can be
+built as a Windows / Linux desktop app — see [desktop app](10-desktop.md).
+
+Local models that aren't on the computer yet can be downloaded from the app: the model's card, or
+**Settings → Models on this computer** (resumable, checked against a pinned checksum).
 
 ## What it does
 
@@ -98,11 +102,13 @@ run one at a time; hosted jobs have their own queue and don't wait for a local o
 | `app.sh` | launcher |
 | `app/config.toml` | settings and model definitions |
 | `app/server.py` | web server and JSON API (Python standard library) |
-| `app/jobs.py` | job folders, the prepare → queue → run steps, cancel, re-run |
-| `app/engines.py` | local runs via `transcribe.py --progress-file`, the ElevenLabs and Speechmatics clients |
+| `app/jobs.py` | job folders, the prepare (PyAV conversion) → queue → run steps, cancel, re-run |
+| `app/engines.py` | local runs (`app/worker.py` → `transcribe.py --progress-file`), the ElevenLabs and Speechmatics clients |
+| `app/downloads.py` | model downloads: resumable, checked against the pinned size and SHA-256 |
+| `app/desktop.py`, `app/selftest.py` | the desktop window and the installation check ([desktop app](10-desktop.md)) |
 | `app/transcript.py` | lines from words, exports |
 | `app/static/` | the interface (HTML/CSS/JS, no build step) |
-| `tests/test_app.py` | 12 tests: helpers, API parsers, the HTTP API with mock services; `RUN_MODEL_TESTS=1` also runs whisper-medium on a public clip |
+| `tests/` | 20 tests: helpers, API parsers, the HTTP API with mock services, downloads, paths; `RUN_MODEL_TESTS=1` also runs whisper-medium on a public clip |
 
 Run the tests with `.venv/bin/python -m unittest discover -s tests -v`.
 

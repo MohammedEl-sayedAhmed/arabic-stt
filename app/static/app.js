@@ -122,6 +122,38 @@ const ACTIVE = new Set(["preparing", "queued", "running"]);
 const model = (id) => (S.status?.models || []).find((m) => m.id === id);
 const spkColor = (sid) => (sid ? `var(--s${((parseInt(sid, 10) - 1) % 8 + 8) % 8 + 1})` : "var(--faint)");
 const spkName = (sid) => (sid == null ? "" : (S.job?.speaker_names || {})[sid] || `Speaker ${sid}`);
+// Inside the desktop app's native window: open/save dialogs and the system browser for links.
+const desktopApi = () => (window.pywebview && window.pywebview.api) || null;
+const DL_ACTIVE = new Set(["queued", "downloading", "verifying"]);
+const downloading = () => (S.status?.models || []).some((m) => m.download && DL_ACTIVE.has(m.download.state))
+  || (S.status?.voiceprints && DL_ACTIVE.has(S.status.voiceprints.state));
+
+function downloadBlock(id, d, compact = false) {
+  if (!d) return "";
+  if (DL_ACTIVE.has(d.state)) {
+    const pct = d.total ? Math.min(100, d.done / d.total * 100) : 0;
+    const what = d.state === "verifying" ? "Checking the download" : d.state === "queued" ? "Waiting" : `Downloading ${Math.round(pct)}%`;
+    return `<div class="dl"><div class="progress"><i style="width:${pct.toFixed(1)}%"></i></div>
+      <div class="dl-row"><span>${what}${d.total ? ` · ${bytes(d.done)} of ${bytes(d.total)}` : ""}</span>
+      <button type="button" class="linkish" data-dl-cancel="${esc(id)}">Cancel</button></div></div>`;
+  }
+  const left = Math.max(0, d.missing - d.partial);
+  const error = d.state === "error" ? `<div class="mc-missing">${esc(d.error || "The download failed")}</div>` : "";
+  if (d.installed) return compact ? "" : `<span class="pill ok">Downloaded · ${bytes(d.size)}</span>`;
+  return `${error}<button type="button" class="btn btn-sm btn-primary" data-dl="${esc(id)}">${ICON.download} ${d.partial ? "Resume" : "Download"} (${bytes(left)})</button>`;
+}
+
+async function startDownload(id) {
+  try { S.status = await api.post(`/api/downloads/${id}`); renderTop(); refreshDownloadViews(); scheduleStatus(); }
+  catch (e) { toast(e.message, "error"); }
+}
+async function cancelDownload(id) {
+  try { S.status = await api.post(`/api/downloads/${id}/cancel`); refreshDownloadViews(); } catch (e) { toast(e.message, "error"); }
+}
+function refreshDownloadViews() {
+  if (S.route.name === "new") renderModelGrid();
+  if ($("#settings").open) renderSettings();
+}
 
 // ---------------------------------------------------------------------------------------------
 // Top bar, sidebar
@@ -136,6 +168,7 @@ function renderTop() {
   else if (st.power === "performance") pills.push(`<span class="pill ok">${ICON.bolt} Performance mode</span>`);
   const active = S.jobs.filter((j) => ACTIVE.has(j.status)).length;
   if (active) pills.push(`<span class="pill accent"><span class="dot pulse"></span>${active} in progress</span>`);
+  if (downloading()) pills.push(`<button class="pill accent" data-open-settings="models">${ICON.download} Downloading</button>`);
   $("#topStatus").innerHTML = pills.join("");
   $("#storageInfo").textContent = `${S.jobs.length} transcription${S.jobs.length === 1 ? "" : "s"} · ${st.storage.free_gb} GB free`;
 }
@@ -200,7 +233,7 @@ function estimateText(m, seconds, short = false) {
   if (!seconds) return `About <b>${m.rtf}×</b> the recording's length here${slow ? " (more in power-saver mode)" : ""}`;
   const t = seconds * (m.rtf || 1) * (slow ? 3.5 : 1);
   if (short) return `About <b>${human(t)}</b> here${slow ? " (power-saver)" : ""}`;
-  return `About <b>${human(t)}</b> on this laptop${slow ? " in power-saver mode — switch to performance in Settings for about 3–5× faster" : ""}`;
+  return `About <b>${human(t)}</b> on this computer${slow ? " in power-saver mode — switch to performance in Settings for about 3–5× faster" : ""}`;
 }
 
 function speakerHint(m, speakers) {
@@ -213,11 +246,12 @@ function speakerHint(m, speakers) {
 function modelCard(m) {
   const f = S.form, sel = f.model === m.id;
   const badges = m.kind === "local"
-    ? `<span class="pill accent">${ICON.laptop} On this laptop</span>`
+    ? `<span class="pill accent">${ICON.laptop} On this computer</span>`
     : `<span class="pill cloud">${ICON.cloud} Uploads to ${esc(m.service)}</span>`;
   let state = "";
   if (!m.ready && m.kind === "hosted") state = `<span class="mc-missing">Needs an API key — <button type="button" class="linkish" data-open-settings="${esc(m.id)}">add it</button></span>`;
-  else if (!m.ready) state = `<span class="mc-missing">Not downloaded. ${esc(m.setup ? "Setup: " : "")}<code>${esc(m.setup || m.reason)}</code></span>`;
+  else if (!m.ready && m.download) state = `<span class="mc-missing">Not downloaded yet</span>${downloadBlock(m.id, m.download)}`;
+  else if (!m.ready) state = `<span class="mc-missing">${esc(m.reason)}</span>`;
   const foot = m.ready ? `<div class="mc-foot">${estimateText(m, f.seconds, true)}</div>` : `<div class="mc-foot">${state}</div>`;
   return `<div class="model-card${m.ready ? "" : " unavailable"}" role="radio" tabindex="0" aria-checked="${sel && m.ready}" data-model="${esc(m.id)}">
     <div class="mc-badges">${badges}</div>
@@ -240,7 +274,7 @@ function renderNew() {
   const ok = src && m && m.ready && (!hosted || f.confirm) && !S.uploading;
   view.innerHTML = `
   <h1>New transcription</h1>
-  <p class="lead">Audio or video recordings of meetings and calls, in Egyptian Arabic with English terms. Local models keep everything on this laptop.</p>
+  <p class="lead">Audio or video recordings of meetings and calls, in Egyptian Arabic with English terms. Local models keep everything on this computer.</p>
 
   <div class="card">
     <div class="step-head"><span class="step-num">1</span> Recording</div>
@@ -268,7 +302,7 @@ function renderNew() {
 
   <div class="card">
     <div class="step-head"><span class="step-num">2</span> Model <span class="aside">Local models are free and private; hosted ones are usually more accurate</span></div>
-    <div class="model-grid" role="radiogroup" aria-label="Model">${st.models.map(modelCard).join("")}</div>
+    <div class="model-grid" id="modelGrid" role="radiogroup" aria-label="Model">${st.models.map(modelCard).join("")}</div>
   </div>
 
   <div class="card">
@@ -300,7 +334,7 @@ function renderNew() {
   ${hosted && m.ready ? `<div class="card consent">
     ${ICON.cloud}
     <div>
-      <p><b>This model uploads the recording to ${esc(m.service)}.</b> It leaves this laptop and is processed on their servers under their terms. ${m.id === "elevenlabs" ? "ElevenLabs may use it for training unless you opted out (Profile → Data use)." : "Speechmatics does not train on it unless you opted in; the app deletes the job there after fetching the transcript."}</p>
+      <p><b>This model uploads the recording to ${esc(m.service)}.</b> It leaves this computer and is processed on their servers under their terms. ${m.id === "elevenlabs" ? "ElevenLabs may use it for training unless you opted out (Profile → Data use)." : "Speechmatics does not train on it unless you opted in; the app deletes the job there after fetching the transcript."}</p>
       <label><input type="checkbox" id="confirmUpload" ${f.confirm ? "checked" : ""}> Upload this recording to ${esc(m.service)}</label>
     </div>
   </div>` : ""}
@@ -309,9 +343,47 @@ function renderNew() {
     <div class="estimate">${m?.ready ? estimateText(m, f.seconds) : ""}</div>
     <button class="btn btn-primary btn-lg" id="startBtn" ${ok ? "" : "disabled"}>${S.uploading ? "Uploading…" : "Start transcription"}</button>
   </div>
-  ${S.uploading ? `<div class="card" style="margin-top:14px"><div class="row" style="display:flex;justify-content:space-between;margin-bottom:8px"><b>Uploading to the app</b><span class="hint" id="uploadText" style="margin:0">${bytes(S.uploading.loaded)} of ${bytes(S.uploading.total)}</span></div><div class="progress"><i style="width:${(S.uploading.loaded / S.uploading.total * 100).toFixed(1)}%"></i></div><p class="hint">Copying the file into the app's folder on this laptop — nothing is sent anywhere else yet.</p></div>` : ""}
+  ${S.uploading ? `<div class="card" style="margin-top:14px"><div class="row" style="display:flex;justify-content:space-between;margin-bottom:8px"><b>Uploading to the app</b><span class="hint" id="uploadText" style="margin:0">${bytes(S.uploading.loaded)} of ${bytes(S.uploading.total)}</span></div><div class="progress"><i style="width:${(S.uploading.loaded / S.uploading.total * 100).toFixed(1)}%"></i></div><p class="hint">Copying the file into the app's folder on this computer — nothing is sent anywhere else yet.</p></div>` : ""}
   `;
   bindNew();
+}
+
+function renderModelGrid() {
+  const grid = $("#modelGrid");
+  if (!grid) return;
+  grid.innerHTML = S.status.models.map(modelCard).join("");
+  bindModelCards();
+}
+
+function bindModelCards() {
+  const f = S.form;
+  $$(".model-card").forEach((card) => {
+    const pick = (e) => {
+      if (e.target.closest("[data-open-settings], [data-dl], [data-dl-cancel]")) return;
+      const m = model(card.dataset.model);
+      if (!m.ready) { if (m.kind === "hosted") openSettings(m.id); return; }
+      if (f.model !== m.id) { f.model = m.id; f.confirm = false; renderNew(); }
+    };
+    card.onclick = pick;
+    card.onkeydown = (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), pick(e));
+  });
+}
+
+async function usePath(p) {
+  try {
+    const info = await api.post("/api/probe", { path: p });
+    Object.assign(S.form, { file: null, path: info, seconds: info.seconds, previewUrl: null });
+    renderNew();
+  } catch (e) { toast(e.message, "error"); }
+}
+
+async function chooseFile(input) {
+  const d = desktopApi();
+  if (d && d.pick_file) {  // native dialog: the file is read in place, not copied
+    try { const p = await d.pick_file(); if (p) await usePath(p); } catch (e) { toast(e.message, "error"); }
+    return;
+  }
+  input.click();
 }
 
 function setFile(file) {
@@ -331,8 +403,8 @@ function bindNew() {
   input.onchange = () => input.files[0] && setFile(input.files[0]);
   const drop = $("#drop");
   if (drop) {
-    drop.onclick = () => input.click();
-    drop.onkeydown = (e) => (e.key === "Enter" || e.key === " ") && input.click();
+    drop.onclick = () => chooseFile(input);
+    drop.onkeydown = (e) => (e.key === "Enter" || e.key === " ") && chooseFile(input);
     drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
     drop.ondragleave = () => drop.classList.remove("over");
     drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); e.dataTransfer.files[0] && setFile(e.dataTransfer.files[0]); };
@@ -341,28 +413,11 @@ function bindNew() {
   if (change) change.onclick = () => { if (f.previewUrl) URL.revokeObjectURL(f.previewUrl); Object.assign(f, { file: null, path: null, seconds: null, previewUrl: null }); renderNew(); };
   const pathBtn = $("#pathBtn");
   if (pathBtn) {
-    const use = async () => {
-      const p = $("#pathInput").value.trim();
-      if (!p) return;
-      try {
-        const info = await api.post("/api/probe", { path: p });
-        Object.assign(f, { file: null, path: info, seconds: info.seconds });
-        renderNew();
-      } catch (e) { toast(e.message, "error"); }
-    };
+    const use = () => { const p = $("#pathInput").value.trim(); if (p) usePath(p); };
     pathBtn.onclick = use;
     $("#pathInput").onkeydown = (e) => e.key === "Enter" && use();
   }
-  $$(".model-card").forEach((card) => {
-    const pick = (e) => {
-      if (e.target.closest("[data-open-settings]")) return;
-      const m = model(card.dataset.model);
-      if (!m.ready) { if (m.kind === "hosted") openSettings(m.id); return; }
-      if (f.model !== m.id) { f.model = m.id; f.confirm = false; renderNew(); }
-    };
-    card.onclick = pick;
-    card.onkeydown = (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), pick(e));
-  });
+  bindModelCards();
   $$("#spk button").forEach((b) => (b.onclick = () => { f.speakers = b.dataset.v; renderNew(); }));
   const spkN = $("#spkN");
   spkN.oninput = () => { const n = parseInt(spkN.value, 10); if (n >= 1 && n <= 20) { f.speakers = String(n); $$("#spk button").forEach((b) => b.setAttribute("aria-pressed", "false")); } };
@@ -476,7 +531,7 @@ function renderJob() {
     `<span>${esc(when(j.created))}</span>`,
   ].filter(Boolean).join("");
   const otherModels = (S.status?.models || []).filter((x) => x.ready);
-  const exportMenu = ["txt", "srt", "vtt", "md", "json"].map((fmt) => `<a href="/api/jobs/${j.id}/export/${fmt}" download>${ICON.download} ${{ txt: "Text (.txt)", srt: "Subtitles (.srt)", vtt: "Web subtitles (.vtt)", md: "Markdown (.md)", json: "JSON (.json)" }[fmt]}</a>`).join("");
+  const exportMenu = ["txt", "srt", "vtt", "md", "json"].map((fmt) => `<a href="/api/jobs/${j.id}/export/${fmt}" data-fmt="${fmt}" download>${ICON.download} ${{ txt: "Text (.txt)", srt: "Subtitles (.srt)", vtt: "Web subtitles (.vtt)", md: "Markdown (.md)", json: "JSON (.json)" }[fmt]}</a>`).join("");
   const rerunMenu = otherModels.map((x) => `<button data-rerun="${esc(x.id)}">${x.kind === "hosted" ? ICON.cloud : ICON.laptop} ${esc(x.title)}<span class="sub">${x.id === j.model ? "same" : x.kind === "hosted" ? "uploads" : "local"}</span></button>`).join("");
   const hasLines = S.lines.length > 0;
 
@@ -486,7 +541,7 @@ function renderJob() {
     statusCard = `<div class="card progress-card" id="progressCard">
       <div class="row"><span class="stage" id="stageLabel">${esc(si.label)}</span><span class="hint" id="stageDetail" style="margin:0">${esc(si.detail || "")}</span><span class="times" id="stageTimes">${etaText(j)}</span></div>
       <div class="progress${si.pct == null ? " indeterminate" : ""}" id="stageBar"><i style="width:${(si.pct || 0).toFixed(1)}%"></i></div>
-      <p class="note">${j.kind === "local" ? "Running on this laptop. You can leave this page; it keeps going while the app is open." : `Sent to ${esc(m?.service || "the service")}. You can leave this page.`}</p>
+      <p class="note">${j.kind === "local" ? "Running on this computer. You can leave this page; it keeps going while the app is open." : `Sent to ${esc(m?.service || "the service")}. You can leave this page.`}</p>
       <div style="margin-top:12px"><button class="btn btn-sm btn-danger" id="cancelBtn">${ICON.stop} Cancel</button></div>
     </div>`;
   } else if (["failed", "interrupted", "cancelled"].includes(j.status)) {
@@ -607,6 +662,13 @@ function bindJob() {
   };
   $$("[data-menu]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); toggleMenu(b.dataset.menu); }));
   $$("[data-rerun]").forEach((b) => (b.onclick = () => rerun(b.dataset.rerun)));
+  $$("#exportMenu a").forEach((a) => (a.onclick = async (e) => {
+    const d = desktopApi();
+    if (!d || !d.save_export) return;  // in a browser the link downloads the file
+    e.preventDefault();
+    closeMenus();
+    try { const saved = await d.save_export(j.id, a.dataset.fmt); if (saved) toast(`Saved ${saved}`); } catch (err) { toast(err.message, "error"); }
+  }));
   const copy = $("#copyBtn");
   if (copy) copy.onclick = async () => {
     try {
@@ -626,7 +688,7 @@ function bindJob() {
     try { await api.post(`/api/jobs/${j.id}/cancel`); await loadJob(j.id); } catch (e) { toast(e.message, "error"); }
   };
   $("#deleteBtn").onclick = async () => {
-    if (!confirm(`Delete “${j.title}”? Its audio and transcript are removed from this laptop.`)) return;
+    if (!confirm(`Delete “${j.title}”? Its audio and transcript are removed from this computer.`)) return;
     try { await api.del(`/api/jobs/${j.id}`); toast("Deleted"); await refreshJobs(); location.hash = "#/new"; } catch (e) { toast(e.message, "error"); }
   };
   $$("[data-name]").forEach((inp) => {
@@ -712,7 +774,7 @@ async function rerun(modelId) {
   closeMenus();
   let confirmUpload = false;
   if (m.kind === "hosted") {
-    if (!confirm(`Upload this recording to ${m.service} to transcribe it? It leaves this laptop.`)) return;
+    if (!confirm(`Upload this recording to ${m.service} to transcribe it? It leaves this computer.`)) return;
     confirmUpload = true;
   }
   try {
@@ -865,6 +927,7 @@ $("#rate").onchange = (e) => (audio.playbackRate = parseFloat(e.target.value));
 // Settings
 // ---------------------------------------------------------------------------------------------
 function openSettings(focus) {
+  if (!S.status) return;  // still starting up
   renderSettings(focus);
   $("#settings").showModal();
 }
@@ -884,7 +947,21 @@ function renderSettings(focus) {
     </div>`;
   }).join("");
   const p = st.power;
+  const local = st.models.filter((m) => m.kind === "local" && m.download);
+  const items = [...local.map((m) => [m.id, m.title, m.download]), ...(st.voiceprints ? [["voiceprints", "Voiceprint model (speaker labels)", st.voiceprints]] : [])];
+  const modelRows = items.map(([id, title, d]) => {
+    const cached = !d.installed && model(id)?.ready;  // found elsewhere, e.g. the Hugging Face cache
+    const pill = d.installed ? `<span class="pill ok">Downloaded</span>` : cached ? `<span class="pill ok">Ready</span>` : `<span class="pill warn">Not downloaded</span>`;
+    const actions = cached && !DL_ACTIVE.has(d.state) ? `<span class="hint" style="margin:0">Uses the copy already in the Hugging Face cache</span>`
+      : downloadBlock(id, d, true) + (d.installed && !DL_ACTIVE.has(d.state) ? `<span class="hint" style="margin:0">${bytes(d.size)}</span><button type="button" class="btn btn-sm btn-ghost btn-danger" data-dl-remove="${esc(id)}">Delete</button>` : "");
+    return `<div class="key-row"><div class="top"><b>${esc(title)}</b>${pill}</div><div class="dl-actions">${actions}</div></div>`;
+  }).join("");
   $("#settingsBody").innerHTML = `
+    <section>
+      <h3>Models on this computer</h3>
+      ${modelRows || '<p class="hint">No downloadable models are configured.</p>'}
+      <p class="hint">Stored under <code class="mono">${esc(st.home)}</code>. Downloads resume if the connection drops and are checked against a fixed checksum before use.</p>
+    </section>
     <section>
       <h3>API keys for hosted models</h3>
       ${keyRows}
@@ -906,7 +983,7 @@ function renderSettings(focus) {
         <dt>Data folder</dt><dd><code>${esc(st.storage.dir)}</code> (${st.storage.free_gb} GB free)</dd>
         <dt>Settings file</dt><dd><code>app/config.toml</code> — models, port, threads, defaults</dd>
         <dt>Local models</dt><dd>${st.models.filter((m) => m.kind === "local").map((m) => `${esc(m.title)}: ${m.ready ? "ready" : esc(m.reason)}`).join("<br>")}</dd>
-        <dt>Speaker labels</dt><dd>${st.speakers_ready ? "TitaNet-small voiceprints, on this laptop" : "voiceprint model not downloaded"}</dd>
+        <dt>Speaker labels</dt><dd>${st.speakers_ready ? "TitaNet-small voiceprints, on this computer" : "voiceprint model not downloaded"}</dd>
       </dl>
     </section>`;
   $$("[data-key-form]").forEach((form) => (form.onsubmit = (e) => { e.preventDefault(); saveKey(form.dataset.keyForm, $("[data-key]", form).value); }));
@@ -915,6 +992,12 @@ function renderSettings(focus) {
     try { await api.post("/api/power", { profile: b.dataset.power }); await refreshStatus(); renderSettings(); toast(`Power mode: ${b.dataset.power}`); } catch (e) { toast(e.message, "error"); }
   }));
   if (focus && focus !== "power") { const el = $(`[data-key="${focus}"]`); if (el) setTimeout(() => el.focus(), 50); }
+}
+
+async function removeDownload(id) {
+  if (!confirm("Delete this model's files from this computer? You can download them again later.")) return;
+  try { S.status = await api.del(`/api/downloads/${id}`); renderTop(); refreshDownloadViews(); toast("Deleted"); }
+  catch (e) { toast(e.message, "error"); }
 }
 
 async function saveKey(id, key) {
@@ -949,6 +1032,12 @@ function toggleMenu(id) {
 function closeMenus() { $$(".menu.open").forEach((m) => m.classList.remove("open")); }
 document.addEventListener("click", (e) => {
   if (!e.target.closest(".menu")) closeMenus();
+  const dl = e.target.closest("[data-dl]"), dlc = e.target.closest("[data-dl-cancel]"), dlr = e.target.closest("[data-dl-remove]");
+  if (dl) { e.preventDefault(); e.stopPropagation(); startDownload(dl.dataset.dl); return; }
+  if (dlc) { e.preventDefault(); e.stopPropagation(); cancelDownload(dlc.dataset.dlCancel); return; }
+  if (dlr) { e.preventDefault(); e.stopPropagation(); removeDownload(dlr.dataset.dlRemove); return; }
+  const ext = e.target.closest('a[target="_blank"]');
+  if (ext && desktopApi()) { e.preventDefault(); desktopApi().open_url(ext.href); }
   const s = e.target.closest("[data-open-settings]");
   if (s) { e.preventDefault(); e.stopPropagation(); openSettings(s.dataset.openSettings); }
 });
@@ -998,6 +1087,18 @@ function route() {
 async function refreshStatus() {
   try { S.status = await api.get("/api/status"); renderTop(); } catch (e) { /* server restarting */ }
 }
+
+let statusTimer = null;
+function scheduleStatus() {
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(async () => {
+    const was = downloading();
+    await refreshStatus();
+    if (was || downloading()) refreshDownloadViews();
+    if (was && !downloading() && S.route.name === "new") renderNew();
+    scheduleStatus();
+  }, downloading() ? 1500 : 20000);
+}
 async function refreshJobs() {
   try {
     S.jobs = (await api.get("/api/jobs")).jobs;
@@ -1020,6 +1121,6 @@ function scheduleJobs() {
   window.addEventListener("hashchange", route);
   route();
   scheduleJobs();
-  setInterval(refreshStatus, 20000);
+  scheduleStatus();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 })();

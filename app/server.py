@@ -15,7 +15,8 @@ from pathlib import Path
 
 from . import engines
 from . import transcript as T
-from .config import power_profile, set_power_profile
+from .config import FROZEN, power_profile, set_power_profile
+from .downloads import Downloads
 from .jobs import ACTIVE, Runner, Store, probe_seconds
 
 STATIC = Path(__file__).resolve().parent / "static"
@@ -39,19 +40,27 @@ class App:
         self.store = Store(cfg.storage)
         self.runner = Runner(self.store, cfg)
         self.runner.recover()
+        self.downloads = Downloads(cfg)
         self.server = None
+        self.desktop = False    # set by the desktop app
+        self.on_quit = None     # the desktop app closes its window instead of just stopping the server
 
     def model_info(self, model):
         ready, reason = self.cfg.availability(model)
-        keys = ("id", "kind", "title", "tagline", "facts", "service", "key_url", "setup", "rtf", "prompt")
+        keys = ("id", "kind", "title", "tagline", "facts", "service", "key_url", "rtf", "prompt")
+        items = self.cfg.download_items()
         return {**{k: model.get(k) for k in keys}, "ready": ready, "reason": reason,
-                "key_source": self.cfg.key_source(model) if model["kind"] == "hosted" else None}
+                "key_source": self.cfg.key_source(model) if model["kind"] == "hosted" else None,
+                "download": self.downloads.status(model["id"]) if model["id"] in items else None}
 
     def status(self):
         jobs = self.store.list()
+        items = self.cfg.download_items()
         return {
             "app": "tafrigh",
+            "desktop": self.desktop, "frozen": FROZEN, "home": str(self.cfg.home),
             "models": [self.model_info(m) for m in self.cfg.models.values()],
+            "voiceprints": self.downloads.status("voiceprints") if "voiceprints" in items else None,
             "defaults": self.cfg.defaults,
             "speakers_ready": self.cfg.speakers_ready(),
             "power": power_profile(),
@@ -147,10 +156,12 @@ class Handler(BaseHTTPRequestHandler):
             self.drain()
             self.json({"error": str(e)}, e.status)
         except (BrokenPipeError, ConnectionResetError):
-            pass
+            self.close_connection = True
         except Exception as e:  # report instead of dropping the connection
             self.drain()
             self.json({"error": f"{type(e).__name__}: {e}"}, 500)
+        finally:
+            self.drain()  # a body the handler didn't need would be read as the next request
 
     def drain(self):
         """Read an unread request body so the connection stays usable."""
@@ -262,7 +273,7 @@ class Handler(BaseHTTPRequestHandler):
                "has_audio": (folder / "audio.flac").exists()}
         if job["status"] in ("failed", "interrupted", "cancelled"):
             log = folder / "log.txt"
-            out["log"] = log.read_text(errors="replace")[-4000:] if log.exists() else ""
+            out["log"] = log.read_text(encoding="utf-8", errors="replace")[-4000:] if log.exists() else ""
         self.json(out)
 
     def lines_of(self, jid):
@@ -400,9 +411,39 @@ class Handler(BaseHTTPRequestHandler):
         self.json({"path": str(path.resolve()), "name": path.name, "size": path.stat().st_size,
                    "seconds": probe_seconds(path)})
 
+    def download(self, _params, item_id):
+        items = self.app.cfg.download_items()
+        if item_id not in items:
+            raise ApiError(404, "nothing to download with that name")
+        wanted = [item_id]
+        if item_id != "voiceprints" and "voiceprints" in items:  # speaker labels need it too
+            wanted.append("voiceprints")
+        try:
+            self.app.downloads.start(wanted)
+        except OSError as e:
+            raise ApiError(507, str(e))
+        self.json(self.app.status())
+
+    def cancel_download(self, _params, item_id):
+        self.app.downloads.cancel(item_id)
+        self.json(self.app.status())
+
+    def remove_download(self, _params, item_id):
+        if item_id not in self.app.cfg.download_items():
+            raise ApiError(404, "nothing to remove with that name")
+        if any(j["status"] in ACTIVE and (j["model"] == item_id or item_id == "voiceprints") and j["kind"] == "local"
+               for j in self.app.store.list()):
+            raise ApiError(409, "a transcription is using it; wait until it has finished")
+        try:
+            self.app.downloads.remove(item_id)
+        except RuntimeError as e:
+            raise ApiError(409, str(e))
+        self.json(self.app.status())
+
     def quit(self, _params):
         self.json({"bye": True})
-        threading.Thread(target=self.app.server.shutdown, daemon=True).start()
+        target = self.app.on_quit or self.app.server.shutdown
+        threading.Thread(target=target, daemon=True).start()
 
 
 def clean_lines(lines):
@@ -438,6 +479,9 @@ ROUTES = [
     ("POST", r"/api/keys", Handler.save_key),
     ("POST", r"/api/power", Handler.power),
     ("POST", r"/api/probe", Handler.probe),
+    ("POST", r"/api/downloads/([\w-]+)", Handler.download),
+    ("POST", r"/api/downloads/([\w-]+)/cancel", Handler.cancel_download),
+    ("DELETE", r"/api/downloads/([\w-]+)", Handler.remove_download),
     ("POST", r"/api/quit", Handler.quit),
 ]
 

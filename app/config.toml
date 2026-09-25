@@ -1,15 +1,16 @@
-# Tafrigh (تفريغ) — settings for the local transcription app.
+# Tafrigh (تفريغ) — settings for the transcription app.
 #
-# Start it with ./app.sh and open http://127.0.0.1:8765.
-# Personal overrides can go in app_data/config.toml (same layout, git-ignored): a [[models]] entry
-# there with the same id replaces fields of the one below. API keys are entered in the app
-# (Settings), which saves them to app_data/secrets.json readable only by you, or come from the
-# environment variables named in key_env.
+# Run from source: ./app.sh (browser tab) or .venv/bin/python -m app.desktop (desktop window).
+# Paths below are relative to the data folder: the project folder when run from source, a per-user
+# folder in the desktop build (%LOCALAPPDATA%\Tafrigh on Windows, ~/.local/share/tafrigh on Linux).
+# Personal overrides go in <data folder>/app_data/config.toml (same layout): a [[models]] entry there
+# with the same id replaces only the fields it lists. API keys are entered in the app (Settings),
+# which saves them to app_data/secrets.json, or come from the environment variables in key_env.
 
 [server]
 host = "127.0.0.1"          # local only: the app has no login, so don't expose it on a network
 port = 8765
-open_browser = true
+open_browser = true         # ./app.sh opens a browser tab (the desktop app opens its own window)
 
 [storage]
 dir = "app_data"            # one folder per transcription: 16 kHz audio, transcript, log (git-ignored)
@@ -22,17 +23,24 @@ speakers = "auto"           # "none", "auto" (estimate the number) or a number
 language = "ar"             # "ar", "en" or "auto"
 
 [local]
-python = ".venv/bin/python"
+# python = ""               # interpreter for local runs; default: the one running the app
 threads = 10                # CPU threads for the local models
 voiceprint_model = "models/diarization/nemo_en_titanet_small.onnx"
-# Switch the laptop to the performance power profile while local jobs run, and back afterwards.
-# Power-saver makes local models about 3-5x slower.
+# Switch the laptop to the performance power profile while local jobs run, and back afterwards
+# (Linux, powerprofilesctl). Power-saver makes local models about 3-5x slower.
 performance_while_running = false
 
+# Files the app downloads (Settings → Models), pinned to a revision and checked by size and SHA-256.
+[[local.voiceprint_files]]
+url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/nemo_en_titanet_small.onnx"
+path = "models/diarization/nemo_en_titanet_small.onnx"
+size = 40257283
+sha256 = "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e"
+
 # ---------------------------------------------------------------------------------------------
-# Models. kind = "local" runs on this laptop through transcribe.py; kind = "hosted" uploads the
+# Models. kind = "local" runs on this computer through transcribe.py; kind = "hosted" uploads the
 # recording to the service (the app asks for confirmation every time).
-# rtf = processing time / audio length measured on this laptop in performance mode, for estimates.
+# rtf = processing time / audio length measured on the test laptop in performance mode, for estimates.
 # ---------------------------------------------------------------------------------------------
 
 [[models]]
@@ -46,7 +54,30 @@ facts = ["18.5% WER on the public Egyptian set", "48.8% different from ElevenLab
          "English kept: 90% / 57%", "Word timestamps"]
 rtf = 0.55
 prompt = true               # accepts a vocabulary / style hint
-setup = "README: Setup → the whisper-medium fine-tune (0.8 GB)"
+
+[[models.files]]
+url = "https://huggingface.co/Seif-Eldeen-Sameh/whisper-medium-arabic-codeswitched-ct2/resolve/7676461a26fc6d62d1d852f54749c24d9cc383f7/model.bin"
+path = "models/whisper-medium-arabic-codeswitched-ct2/model.bin"
+size = 774731149
+sha256 = "1bbc9ac07f1dc576295805b81505681b0b6a184e268194659a04ca15733f7d4f"
+
+[[models.files]]
+url = "https://huggingface.co/Seif-Eldeen-Sameh/whisper-medium-arabic-codeswitched-ct2/resolve/7676461a26fc6d62d1d852f54749c24d9cc383f7/config.json"
+path = "models/whisper-medium-arabic-codeswitched-ct2/config.json"
+size = 2257
+sha256 = "3622a2ddc41ec0e0fd4e68c13c6830f03b90c38d89aaad184de02c8c642cf807"
+
+[[models.files]]
+url = "https://huggingface.co/Seif-Eldeen-Sameh/whisper-medium-arabic-codeswitched-ct2/resolve/7676461a26fc6d62d1d852f54749c24d9cc383f7/vocabulary.json"
+path = "models/whisper-medium-arabic-codeswitched-ct2/vocabulary.json"
+size = 1068103
+sha256 = "5ad28279db5e546349708b9a74736e2c018737ac5a600f1048f1f26c99b85b47"
+
+[[models.files]]  # the Whisper tokenizer, so the model runs offline
+url = "https://huggingface.co/openai/whisper-tiny/resolve/169d4a4341b33bc18d8881c4b69c2e104e1cc0af/tokenizer.json"
+path = "models/whisper-medium-arabic-codeswitched-ct2/tokenizer.json"
+size = 2480466
+sha256 = "27fc476bfe7f17299480be2273fc0608e4d5a99aba2ab5dec5374b4482d1a566"
 
 [[models]]
 id = "cohere"
@@ -59,19 +90,54 @@ facts = ["13.4% WER on the public Egyptian set", "43.8% different from ElevenLab
          "Fewest errors on Arabic words", "English kept: 77% / 46%"]
 rtf = 0.3
 prompt = false
-setup = "README: Setup → Optional: Cohere Transcribe Arabic (1.6 GB)"
+
+[[models.files]]
+url = "https://huggingface.co/handy-computer/cohere-transcribe-arabic-07-2026-gguf/resolve/5e6b33c211458ac69347d297abb6d47a250c328f/cohere-transcribe-arabic-07-2026-Q4_K_M.gguf"
+path = "models/cohere-transcribe-arabic-07-2026-gguf/cohere-transcribe-arabic-07-2026-Q4_K_M.gguf"
+size = 1558162848
+sha256 = "4671080cd10ffc6166e1e1b36216f9b51e1455f170d55c59cff7b81332ad4621"
 
 [[models]]
 id = "large-v3"
 kind = "local"
 engine = "whisper"
-whisper_model = "large-v3"  # stock Whisper from the Hugging Face cache; gets the Egyptian style hint
+whisper_model = "models/faster-whisper-large-v3"  # gets the Egyptian style hint automatically
+fallback = "large-v3"       # or stock large-v3 from the Hugging Face cache, if it is there
 title = "Whisper large-v3 + hint"
 tagline = "Stock Whisper, slow"
 facts = ["20.8% WER on the public Egyptian set", "English kept: 88%", "Slower than real time here"]
 rtf = 1.8
 prompt = true
-setup = ".venv/bin/hf download Systran/faster-whisper-large-v3 (3 GB)"
+
+[[models.files]]
+url = "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/edaa852ec7e145841d8ffdb056a99866b5f0a478/model.bin"
+path = "models/faster-whisper-large-v3/model.bin"
+size = 3087284237
+sha256 = "69f74147e3334731bc3a76048724833325d2ec74642fb52620eda87352e3d4f1"
+
+[[models.files]]
+url = "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/edaa852ec7e145841d8ffdb056a99866b5f0a478/config.json"
+path = "models/faster-whisper-large-v3/config.json"
+size = 2394
+sha256 = "a9306624f5ec14270a014b647e5c316b6e03a662c369758d1b90697a7b0655b9"
+
+[[models.files]]
+url = "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/edaa852ec7e145841d8ffdb056a99866b5f0a478/preprocessor_config.json"
+path = "models/faster-whisper-large-v3/preprocessor_config.json"
+size = 340
+sha256 = "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711"
+
+[[models.files]]
+url = "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/edaa852ec7e145841d8ffdb056a99866b5f0a478/tokenizer.json"
+path = "models/faster-whisper-large-v3/tokenizer.json"
+size = 2480617
+sha256 = "6d8cbd7cd0d8d5815e478dac67b85a26bbe77c1f5e0c6d76d1ce2abc0e5f21ca"
+
+[[models.files]]
+url = "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/edaa852ec7e145841d8ffdb056a99866b5f0a478/vocabulary.json"
+path = "models/faster-whisper-large-v3/vocabulary.json"
+size = 1068114
+sha256 = "c69260f2ab26d659b7c398f9a2b2b48ed0df16c3b47d7326782fd9cba71690c1"
 
 [[models]]
 id = "elevenlabs"

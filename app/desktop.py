@@ -1,0 +1,211 @@
+"""Tafrigh as a desktop app: the same local server, shown in its own window.
+
+The window, in order of preference:
+  1. pywebview: a native window using the system's web engine (Edge WebView2 on Windows, WebKit on
+     macOS, GTK WebKit or Qt on Linux), with native open/save dialogs
+  2. a Chromium-family browser (Edge, Chrome, Chromium, Brave) in app mode: its own window with no
+     tabs or address bar, and its own profile
+  3. the default browser
+Closing the window (1 or 2) quits the app, and so does Settings → Quit.
+
+From source:   .venv/bin/python -m app.desktop        (Windows: .venv\\Scripts\\python -m app.desktop)
+Desktop build: Tafrigh / Tafrigh.exe (see desktop/build.py)
+"""
+import argparse
+import json
+import os
+import shutil
+import socket
+import subprocess
+import sys
+import threading
+import time
+import urllib.request
+import webbrowser
+from pathlib import Path
+
+from . import engines
+from . import transcript as T
+from .config import Config
+from .server import make_server, slug
+
+RECORDINGS = ("Recordings (*.mp3;*.m4a;*.wav;*.ogg;*.opus;*.flac;*.aac;*.amr;*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
+              "All files (*.*)")
+
+
+def running_here(port):
+    """True if Tafrigh already answers on this port (then we just show it)."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=2) as r:
+            return json.load(r).get("app") == "tafrigh"
+    except (OSError, ValueError):
+        return False
+
+
+def pick_port(preferred):
+    for port in (preferred, 0):
+        with socket.socket() as s:
+            try:
+                s.bind(("127.0.0.1", port))
+                return s.getsockname()[1]
+            except OSError:
+                continue
+    raise OSError("no free port")
+
+
+class Api:
+    """Functions the page can call as window.pywebview.api.* (native window only).
+    Attributes starting with _ are not exposed to the page."""
+
+    def __init__(self, app):
+        self._app, self._window = app, None
+
+    def _dialog(self, kind):
+        import webview
+        if hasattr(webview, "FileDialog"):  # pywebview 5+
+            return getattr(webview.FileDialog, kind)
+        return getattr(webview, f"{kind}_DIALOG")
+
+    def pick_file(self):
+        result = self._window.create_file_dialog(self._dialog("OPEN"), allow_multiple=False, file_types=RECORDINGS)
+        return str(result[0]) if result else None
+
+    def save_export(self, job_id, fmt):
+        store = self._app.store
+        job = store.get(job_id)
+        if job is None or fmt not in T.EXPORTS:
+            return None
+        data = store.transcript(job_id)
+        lines = data["lines"] if data else engines.partial_lines(store.dir(job_id))
+        result = self._window.create_file_dialog(self._dialog("SAVE"), save_filename=f"{slug(job.get('title'))}.{fmt}")
+        path = result[0] if isinstance(result, (list, tuple)) else result
+        if not path:
+            return None
+        Path(path).write_text(T.EXPORTS[fmt][0](job, lines), encoding="utf-8")
+        return str(path)
+
+    def open_url(self, url):
+        if isinstance(url, str) and url.startswith("https://"):
+            webbrowser.open(url)
+
+    def quit(self):
+        self._window.destroy()
+
+
+def native_window(url, app, title="Tafrigh"):
+    """Show the app in a pywebview window until it is closed. False if no GUI backend is available."""
+    try:
+        import webview
+    except ImportError:
+        return False
+    api = Api(app) if app else None
+    window = webview.create_window(title, url, js_api=api, width=1280, height=860, min_size=(820, 560),
+                                   text_select=True)
+    if api:
+        api._window = window
+        app.on_quit = window.destroy
+    try:
+        storage = str(app.cfg.storage / "webview") if app else None
+        webview.start(private_mode=False, storage_path=storage)
+    except Exception as e:  # e.g. Linux without GTK WebKit or Qt: fall back to a browser window
+        print(f"no native window ({type(e).__name__}: {e}); using a browser window", file=sys.stderr)
+        if app:
+            app.on_quit = None
+        return False
+    return True
+
+
+def browser_candidates():
+    names = ["msedge", "microsoft-edge", "microsoft-edge-stable", "google-chrome", "google-chrome-stable",
+             "chrome", "chromium", "chromium-browser", "brave-browser"]
+    found = [shutil.which(n) for n in names]
+    if os.name == "nt":
+        for base in (os.environ.get("PROGRAMFILES(X86)"), os.environ.get("PROGRAMFILES"), os.environ.get("LOCALAPPDATA")):
+            if base:
+                found += [str(Path(base) / "Microsoft" / "Edge" / "Application" / "msedge.exe"),
+                          str(Path(base) / "Google" / "Chrome" / "Application" / "chrome.exe")]
+    elif sys.platform == "darwin":
+        found += ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                  "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"]
+    return [p for p in found if p and os.path.isfile(p)]
+
+
+def app_mode_browser(url, profile):
+    """A Chromium-family browser showing only the app (--app), or None if there is none."""
+    for exe in browser_candidates():
+        try:
+            return subprocess.Popen([exe, f"--app={url}", f"--user-data-dir={profile}", "--no-first-run",
+                                     "--no-default-browser-check", "--window-size=1280,860"],
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            continue
+    return None
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="tafrigh", description="Tafrigh: transcribe recordings with speaker labels.")
+    ap.add_argument("--browser", action="store_true", help="use a browser window instead of the native one")
+    ap.add_argument("--no-window", action="store_true", help="only run the server (open the printed address yourself)")
+    ap.add_argument("--port", type=int, help="default: [server] port in app/config.toml, or any free port")
+    ap.add_argument("--self-test", action="store_true", help="check this installation and exit (see app/selftest.py)")
+    ap.add_argument("--window", action="store_true", help="with --self-test: also open and close a window")
+    ap.add_argument("--report", help="with --self-test: write the results as JSON to this file")
+    ap.add_argument("--models", action="store_true",
+                    help="with --self-test: also download whisper-medium (~820 MB) and transcribe a speech sample")
+    args = ap.parse_args(argv)
+    if args.self_test:
+        from .selftest import run
+        sys.exit(run(window=args.window, report=args.report, models=args.models))
+
+    cfg = Config()
+    if sys.stderr is None:  # a windowed build has no console: keep messages in a log file
+        cfg.storage.mkdir(parents=True, exist_ok=True)
+        sys.stdout = sys.stderr = open(cfg.storage / "tafrigh.log", "a", encoding="utf-8", buffering=1)
+    preferred = args.port or cfg.server["port"]
+    if running_here(preferred):  # already running (e.g. started twice): just show it
+        url = f"http://127.0.0.1:{preferred}/"
+        if args.browser or not native_window(url, None):
+            if not app_mode_browser(url, cfg.storage / "browser-profile"):
+                webbrowser.open(url)
+        return
+
+    server, app = make_server(cfg, port=pick_port(preferred))
+    app.desktop = True
+    url = f"http://127.0.0.1:{server.server_address[1]}/"
+    threading.Thread(target=server.serve_forever, daemon=True, name="tafrigh-server").start()
+    stopped = threading.Event()
+    try:
+        if args.no_window:
+            print(f"Tafrigh is running at {url} (stop with Settings → Quit or Ctrl+C)", flush=True)
+            app.on_quit = stopped.set
+            while not stopped.wait(1):
+                pass
+            return
+        if not args.browser and native_window(url, app):
+            return
+        profile = cfg.storage / "browser-profile"
+        profile.mkdir(parents=True, exist_ok=True)
+        browser = app_mode_browser(url, profile)
+        if browser:
+            app.on_quit = lambda: (browser.terminate(), stopped.set())
+            t0 = time.time()
+            browser.wait()
+            if time.time() - t0 > 5:  # the window was closed by the user
+                return
+            # the browser handed the window to an instance that was already running: wait for Quit
+        else:
+            webbrowser.open(url)
+        print(f"Tafrigh is running at {url} (close with Settings → Quit or Ctrl+C)", flush=True)
+        app.on_quit = stopped.set
+        while not stopped.wait(1):
+            pass
+    except KeyboardInterrupt:
+        pass
+    finally:
+        app.runner.shutdown()
+        server.shutdown()
+        server.server_close()
+
+
+if __name__ == "__main__":
+    main()

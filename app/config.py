@@ -1,13 +1,46 @@
-"""Settings: app/config.toml, optional overrides in <storage>/config.toml, and API keys."""
+"""Settings: app/config.toml, optional overrides in <storage>/config.toml, and API keys.
+
+Two base folders:
+  ROOT  where the code and bundled files are (the project folder, or the unpacked desktop build)
+  home  where data and models go: the project folder when run from source, a per-user folder in
+        the desktop build (%LOCALAPPDATA%\\Tafrigh on Windows, ~/.local/share/tafrigh on Linux,
+        ~/Library/Application Support/Tafrigh on macOS); TAFRIGH_HOME overrides both
+"""
 import json
 import os
 import shutil
 import subprocess
+import sys
+import time
 import tomllib
 from pathlib import Path
 
+FROZEN = bool(getattr(sys, "frozen", False))  # running from a PyInstaller build
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG = ROOT / "app" / "config.toml"
+
+
+def home_dir():
+    if os.environ.get("TAFRIGH_HOME"):
+        return Path(os.environ["TAFRIGH_HOME"]).expanduser()
+    if not FROZEN:
+        return ROOT
+    if sys.platform == "win32":
+        return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "Tafrigh"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "Tafrigh"
+    return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "tafrigh"
+
+
+def replace_file(src, dst, tries=40):
+    """os.replace, retried: on Windows it fails while another thread or process has dst open."""
+    for i in range(tries):
+        try:
+            return os.replace(src, dst)
+        except PermissionError:
+            if i == tries - 1:
+                raise
+            time.sleep(0.05)
 
 
 def merge(base, extra):
@@ -26,13 +59,19 @@ def merge(base, extra):
     return out
 
 
+def is_path(name):
+    """A model given as a folder (models/..., ./x, C:\\x) rather than a faster-whisper name."""
+    return "/" in name or "\\" in name or name.startswith(".") or Path(name).is_absolute()
+
+
 class Config:
-    def __init__(self, path=DEFAULT_CONFIG, storage=None):
-        data = tomllib.loads(Path(path).read_text())
-        self.storage = Path(storage) if storage else ROOT / data["storage"]["dir"]
+    def __init__(self, path=None, storage=None, home=None):
+        data = tomllib.loads(Path(path or DEFAULT_CONFIG).read_text(encoding="utf-8"))
+        self.home = Path(home) if home else home_dir()
+        self.storage = Path(storage) if storage else self.path(data["storage"]["dir"])
         override = self.storage / "config.toml"
         if override.exists():
-            data = merge(data, tomllib.loads(override.read_text()))
+            data = merge(data, tomllib.loads(override.read_text(encoding="utf-8")))
         self.data = data
         self.server = data["server"]
         self.defaults = data["defaults"]
@@ -43,13 +82,17 @@ class Config:
         self.secrets_path = self.storage / "secrets.json"
 
     def path(self, value):
-        """A path from the config, relative to the project folder."""
-        return Path(value) if Path(value).is_absolute() else ROOT / value
+        """A path from the config: absolute, or relative to the data folder (home)."""
+        return Path(value) if Path(value).is_absolute() else self.home / value
+
+    def python(self):
+        """The interpreter for local model runs: [local] python if set, else the one running the app."""
+        return str(self.path(self.local["python"])) if self.local.get("python") else sys.executable
 
     # API keys: environment first, then the ones saved from the app.
     def secrets(self):
         try:
-            return json.loads(self.secrets_path.read_text())
+            return json.loads(self.secrets_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return {}
 
@@ -70,29 +113,46 @@ class Config:
             secrets.pop(model_id, None)
         self.storage.mkdir(parents=True, exist_ok=True)
         tmp = self.secrets_path.with_suffix(".tmp")
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w") as f:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)  # mode is ignored on Windows,
+        with os.fdopen(fd, "w", encoding="utf-8") as f:                    # where the folder is per-user
             json.dump(secrets, f)
-        os.replace(tmp, self.secrets_path)
+        replace_file(tmp, self.secrets_path)
+
+    def whisper_source(self, model):
+        """What to pass as --whisper-model: the model folder if downloaded, else a faster-whisper
+        name found in the Hugging Face cache (the model's `fallback`), else None."""
+        for name in (model.get("whisper_model"), model.get("fallback")):
+            if not name:
+                continue
+            if is_path(name):
+                if (self.path(name) / "model.bin").exists():
+                    return str(self.path(name))
+            else:
+                from huggingface_hub import try_to_load_from_cache
+                if isinstance(try_to_load_from_cache(f"Systran/faster-whisper-{name}", "model.bin"), str):
+                    return name
+        return None
 
     def availability(self, model):
         """(ready, reason): whether the model can run now, and what is missing if not."""
         if model["kind"] == "hosted":
             return (True, None) if self.api_key(model) else (False, "needs an API key")
         if model["engine"] == "whisper":
-            name = model["whisper_model"]
-            if "/" in name or name.startswith("."):
-                ok = (self.path(name) / "model.bin").exists()
-            else:  # a faster-whisper name such as large-v3, loaded from the Hugging Face cache
-                from huggingface_hub import try_to_load_from_cache
-                ok = isinstance(try_to_load_from_cache(f"Systran/faster-whisper-{name}", "model.bin"), str)
-            return (True, None) if ok else (False, "not downloaded")
+            return (True, None) if self.whisper_source(model) else (False, "not downloaded")
         if model["engine"] == "cohere":
             return (True, None) if self.path(model["cohere_model"]).exists() else (False, "not downloaded")
         return False, f"unknown engine {model['engine']}"
 
     def speakers_ready(self):
         return self.path(self.local["voiceprint_model"]).exists()
+
+    def download_items(self):
+        """Everything the app can download: {id: {"title", "files": [{url, path, size, sha256}]}}."""
+        items = {mid: {"title": m["title"], "files": m["files"]} for mid, m in self.models.items()
+                 if m["kind"] == "local" and m.get("files")}
+        if self.local.get("voiceprint_files"):
+            items["voiceprints"] = {"title": "Voiceprint model (speaker labels)", "files": self.local["voiceprint_files"]}
+        return items
 
 
 def power_profile():
