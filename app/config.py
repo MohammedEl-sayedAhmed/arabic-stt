@@ -134,6 +134,12 @@ class Config:
             return "environment"
         return "app" if self.secrets().get(model["id"], "").strip() else None
 
+    def region(self, model):
+        """A hosted model's region (Azure Speech keys work only in their resource's region): the
+        environment, then the one saved in Settings (next to the key), then the config."""
+        env = os.environ.get(model.get("region_env", ""), "").strip()
+        return (env or self.secrets().get(f"{model['id']}:region", "").strip() or model.get("region", "")).lower()
+
     def save_key(self, model_id, key):
         secrets = self.secrets()
         if key:

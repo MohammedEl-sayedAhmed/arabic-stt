@@ -26,7 +26,7 @@ dragged in or chosen, or a path to a file already on the computer, which is read
 copy. Each recording is converted once to 16 kHz mono FLAC (about 50 MB per hour), which all the
 models and the player use. The uploaded original is then deleted unless `keep_original = true`.
 
-There are five models, each shown with its measured strengths (see below). Local ones run through
+Each model is shown with its strengths (see below). Local ones run through
 `transcribe.py`. Hosted ones upload the recording only after you tick a confirmation box.
 Speaker labels can be off, estimated, or set to the number of people.
 
@@ -57,6 +57,10 @@ All model settings live in [`app/config.toml`](../app/config.toml). Each `[[mode
 | Whisper large-v3 + hint | local | stock Whisper (slow on this laptop) | `whisper_model = "large-v3"`; gets the Egyptian style hint, and your terms are added to it |
 | ElevenLabs Scribe | hosted | minutes people rely on; the best published result for Egyptian–English | `api_model = "scribe_v2"`, `tag_audio_events`, `delete_after`, API key |
 | Speechmatics | hosted | its Arabic–English bilingual pack (`ar_en`); doesn't train on your audio | `language`, `api_model` (enhanced or standard), `speaker_sensitivity`, `base_url` region, `delete_after`, API key |
+| Google Gemini | hosted | Gemini 3.5 Transcribe, which follows Arabic–English code-switching; free tier (which trains on your audio) | `api_model`, `language_codes`, `max_minutes`, `inline_limit_mb`, `delete_after`, API key |
+| Deepgram Nova-3 | hosted | fast Arabic-only transcripts (`ar-EG`); the app opts out of training | `api_model`, `language`, `diarize_model`, `mip_opt_out`, API key |
+| AssemblyAI | hosted | Universal-3.5 Pro, which follows code-switching | `speech_models`, `expected_languages`, `base_url` (US or EU), `delete_after`, API key |
+| Azure AI Speech | hosted | the `ar-EG` locale; Microsoft stores nothing | region (in *Settings*), `locale`, `max_speakers`, `max_minutes`, `endpoint`, API key |
 
 The other sections are `[server]` (host and port; keep it on 127.0.0.1), `[storage]` (the data
 folder, whether to keep the original, the upload limit), `[defaults]` (model, speakers, language)
@@ -64,6 +68,115 @@ and `[local]` (Python, CPU threads, voiceprint model, `performance_while_running
 overrides go in `app_data/config.toml` with the same layout, so `app/config.toml` can stay as
 shipped. A `[[models]]` entry there with the same `id` changes only the fields it lists, and
 `disabled = true` hides a model.
+
+### Gemini, Deepgram, AssemblyAI and Azure Speech
+
+These run through `app/hosted_more.py`. Their keys are entered in *Settings* like the others, or set in
+`GEMINI_API_KEY`, `DEEPGRAM_API_KEY`, `ASSEMBLYAI_API_KEY` or `AZURE_SPEECH_KEY`. An Azure key works
+only in the region of its Speech resource, so the Azure row in *Settings* also has a region field. The
+region is saved with the key in `secrets.json`; `AZURE_SPEECH_REGION` overrides it, and `region` in the
+config is the default (`westeurope`). None of the four has been measured on Egyptian speech here.
+
+- **Gemini** ([keys](https://aistudio.google.com/apikey)) uses `gemini-3.5-transcribe` through the
+  Interactions API, with `store: false` so Google doesn't keep the request. The app asks for verbatim
+  text with word times and speaker labels when they are on (up to 8; three or more is experimental).
+  For Arabic + English it sends no `language_codes`, so the model detects the language, which its
+  guide says is how it follows code-switching. With word times one request takes at most 30 minutes, so
+  longer recordings go in parts of up to 29 minutes, each cut at the quietest moment of its last two
+  minutes. Speaker numbers restart in every part, so merge them in the transcript. A part too large
+  for a 20 MB request is uploaded with the Files API and deleted after it is transcribed. The model
+  can't combine key terms with word times, so it gets no vocabulary. With a general model in
+  `api_model` (for example `gemini-3.8-flash`), the app sends instructions instead (Egyptian Arabic as
+  spoken, English terms in Latin script, your terms if `prompt = true`) and a JSON schema for segments
+  with start, end, speaker and text; those times come from the model and are less exact. The free
+  tier costs nothing, but Google uses what you send to improve its products and human reviewers may
+  read it, except for users in the EEA, Switzerland and the UK. With billing on it isn't used, and the
+  price is about $0.30 an hour ($2 per million audio tokens in, $12 per million text tokens out).
+- **Deepgram** ([keys](https://console.deepgram.com/)) gets the audio as the body of one request to
+  `/v1/listen` with `model=nova-3`, `language=ar-EG`, `smart_format`, `utterances`, `diarize_model=latest`
+  for speaker labels (`diarize=true` is deprecated), your terms as `keyterm` (up to 100) and
+  `mip_opt_out=true`, which keeps the audio out of Deepgram's model training. Nova-3 has 17 Arabic
+  codes, but its code-switching mode (`language=multi`) doesn't include Arabic, and with one language
+  set it transcribes only that language, so English terms may come out in Arabic letters or be
+  dropped. It can't detect Arabic, so auto-detect also sends `ar-EG`. There is $200 of free credit,
+  then $0.0043 a minute ($0.26 an hour) with speaker labels included, and $0.0013 a minute more with
+  key terms. Deepgram stores no transcripts.
+- **AssemblyAI** ([dashboard](https://www.assemblyai.com/dashboard/home)) gets the audio through
+  `/v2/upload`, then a transcript request with Universal-3.5 Pro (Universal-2 as the fallback),
+  language detection expecting `ar` and `en` (how Universal-3.5 Pro follows switches between
+  languages), `speaker_labels`, `speakers_expected` when you give the number (it is taken as exact)
+  and your terms as `keyterms_prompt`. The app polls until it is done, then deletes the transcript,
+  which also deletes the uploaded audio. After a cancel it deletes it at once or, if AssemblyAI
+  refuses while the job runs, tries again every 30 seconds while the app is open. New accounts get
+  $50 (up to 185 hours), then it costs $0.21 an hour, $0.02 more with speaker labels and $0.05 more
+  with key terms. AssemblyAI may train on the audio; free accounts can't opt out, paid ones can under
+  *Data controls*. Its data page says audio sent to the EU endpoint
+  (`base_url = "https://api.eu.assemblyai.com"`) isn't used for training.
+- **Azure AI Speech** ([portal](https://portal.azure.com/), *Keys and Endpoint* of the Speech resource)
+  uses fast transcription: one multipart request to
+  `https://<region>.api.cognitive.microsoft.com/speechtotext/transcriptions:transcribe?api-version=2025-10-15`
+  with the key in `Ocp-Apim-Subscription-Key`, the audio, and a definition with `locales: ["ar-EG"]`,
+  `diarization` (`maxSpeakers` is your number, or 10 for auto-detect; it must be 2 to 35) and
+  `profanityFilterMode: "None"`. With one locale it transcribes that language, with several it picks
+  one for the whole file, and its multilingual model has no Arabic, so there is no code-switching.
+  Microsoft doesn't store audio or transcripts from fast transcription. It costs $0.36 an hour and
+  isn't part of the free (F0) tier. The REST reference allows under 2 hours and 250 MB per request,
+  while the how-to guide and the quotas page say under 5 hours and 500 MB, so the app sends parts of
+  up to 115 minutes. Fast transcription runs in 22 regions, including `westeurope`, `northeurope`,
+  `francecentral`, `italynorth` and `swedencentral`, but not `uaenorth` or `qatarcentral`. Phrase
+  lists are off (`prompt = false`), because the language table lists them for `ar-SA` and `en-US`
+  but not for `ar-EG`.
+
+These details come from the providers' pages as they were on 25 September 2026: Gemini
+[transcribe](https://ai.google.dev/gemini-api/docs/transcribe),
+[Interactions API](https://ai.google.dev/gemini-api/docs/interactions) and
+[reference](https://ai.google.dev/api/interactions-api), [files](https://ai.google.dev/gemini-api/docs/files),
+[audio](https://ai.google.dev/gemini-api/docs/audio),
+[structured output](https://ai.google.dev/gemini-api/docs/structured-output),
+[models](https://ai.google.dev/gemini-api/docs/models), [pricing](https://ai.google.dev/gemini-api/docs/pricing),
+[terms](https://ai.google.dev/gemini-api/terms) and [errors](https://ai.google.dev/gemini-api/docs/api-errors);
+Deepgram [pre-recorded](https://developers.deepgram.com/docs/pre-recorded-audio),
+[API reference](https://developers.deepgram.com/reference/speech-to-text/listen-pre-recorded),
+[languages](https://developers.deepgram.com/docs/models-languages-overview),
+[language detection](https://developers.deepgram.com/docs/language-detection),
+[diarization](https://developers.deepgram.com/docs/diarization),
+[utterances](https://developers.deepgram.com/docs/utterances),
+[keyterm](https://developers.deepgram.com/docs/keyterm),
+[training opt-out](https://developers.deepgram.com/docs/the-deepgram-model-improvement-partnership-program),
+[errors](https://developers.deepgram.com/docs/errors) and [pricing](https://deepgram.com/pricing);
+AssemblyAI [models](https://www.assemblyai.com/docs/pre-recorded-audio/select-the-speech-model),
+[languages](https://www.assemblyai.com/docs/pre-recorded-audio/supported-languages),
+[code switching](https://www.assemblyai.com/docs/pre-recorded-audio/code-switching),
+[speaker labels](https://www.assemblyai.com/docs/pre-recorded-audio/label-speakers),
+[key terms](https://www.assemblyai.com/docs/pre-recorded-audio/universal-3-5-pro/prompting), the API
+reference for [upload](https://www.assemblyai.com/docs/pre-recorded-audio/api-reference/files/upload),
+[submit](https://www.assemblyai.com/docs/pre-recorded-audio/api-reference/transcripts/submit) and
+[delete](https://www.assemblyai.com/docs/pre-recorded-audio/api-reference/transcripts/delete),
+[data and training](https://www.assemblyai.com/docs/data-retention-and-model-training),
+[opt-out](https://www.assemblyai.com/docs/faq/how-to-opt-out-of-data-sharing-for-our-model-improvement-program),
+[endpoints](https://www.assemblyai.com/docs/pre-recorded-audio/select-the-region),
+[file limits](https://www.assemblyai.com/docs/faq/are-there-any-limits-on-file-size-or-file-duration-for-files-submitted-to-the-api),
+[billing](https://www.assemblyai.com/docs/billing-and-pricing) and [pricing](https://www.assemblyai.com/pricing);
+Azure [fast transcription](https://learn.microsoft.com/azure/ai-services/speech-service/fast-transcription-create),
+[REST reference](https://learn.microsoft.com/rest/api/speechtotext/transcriptions/transcribe?view=rest-speechtotext-2025-10-15),
+[diarization](https://learn.microsoft.com/azure/ai-services/speech-service/configure-language-identification-diarization),
+[regions](https://learn.microsoft.com/azure/ai-services/speech-service/regions?tabs=stt),
+[languages](https://learn.microsoft.com/azure/ai-services/speech-service/language-support?tabs=stt),
+[phrase lists](https://learn.microsoft.com/azure/ai-services/speech-service/improve-accuracy-phrase-list),
+[quotas](https://learn.microsoft.com/azure/ai-services/speech-service/speech-services-quotas-and-limits),
+[data privacy](https://learn.microsoft.com/azure/ai-foundry/responsible-ai/speech-service/speech-to-text/data-privacy-security),
+the `maxSpeakers` range in the
+[SDK reference](https://learn.microsoft.com/python/api/azure-ai-transcription/azure.ai.transcription.models.transcriptiondiarizationoptions),
+and the price from the [Azure Retail Prices API](https://prices.azure.com/api/retail/prices), because the
+[pricing page](https://azure.microsoft.com/pricing/details/speech/) loads its prices with JavaScript. The
+clients were tested against local stand-ins that follow these formats, not against the services.
+
+Not verified: whether a Gemini language hint such as `ar-EG` would do better on code-switched speech
+than detection, and what its free tier's limits are (AI Studio shows them); whether Deepgram's `keyterm`
+works for Arabic (the page names Nova-3 but no languages) and what the "pricing impacts" of
+`mip_opt_out` in its API reference are (the program page names none); whether AssemblyAI deletes a
+transcript that is still processing, and whether a key works on its EU endpoint without changes; the
+real limit per Azure request (2 or 5 hours) and how English words come out with the `ar-EG` locale.
 
 ### API keys
 
@@ -119,6 +232,7 @@ Local jobs run one at a time. Hosted jobs have their own queue and don't wait fo
 | `app/server.py` | web server and JSON API (Python standard library) |
 | `app/jobs.py` | job folders; the prepare (PyAV conversion), queue and run steps; cancel; re-run |
 | `app/engines.py` | local runs (`app/worker.py` running `transcribe.py --progress-file`), and the ElevenLabs and Speechmatics clients |
+| `app/hosted_more.py` | the Gemini, Deepgram, AssemblyAI and Azure Speech clients, and cutting long recordings at pauses |
 | `app/downloads.py` | model downloads, resumable and checked against the pinned size and SHA-256 |
 | `app/desktop.py`, `app/selftest.py` | the desktop window and the installation check ([desktop app](10-desktop.md)) |
 | `app/transcript.py` | lines from words, and the exports |

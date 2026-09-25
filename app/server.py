@@ -95,12 +95,14 @@ class App:
 
     def model_info(self, model, jobs=None):
         ready, reason = self.cfg.availability(model)
-        keys = ("id", "kind", "engine", "title", "tagline", "facts", "service", "key_url", "rtf", "prompt", "hub")
+        keys = ("id", "kind", "engine", "title", "tagline", "facts", "service", "key_url", "rtf", "prompt", "hub",
+                "privacy", "prompt_hint", "speakers_hint")
         items = self.cfg.download_items()
         return {**{k: model.get(k) for k in keys}, "ready": ready, "reason": reason,
                 "speed": self.speed(model, self.store.list() if jobs is None else jobs) if model["kind"] == "local" else None,
                 "key_source": self.cfg.key_source(model) if model["kind"] == "hosted" else None,
-                "download": self.downloads.status(model["id"]) if model["id"] in items else None}
+                "download": self.downloads.status(model["id"]) if model["id"] in items else None,
+                "region": self.cfg.region(model) if "region" in model else None}
 
     def used_bytes(self):
         """Disk space of all transcriptions (audio copies, transcripts, logs), counted at most every 30 s."""
@@ -464,7 +466,13 @@ class Handler(BaseHTTPRequestHandler):
         model = self.app.cfg.models.get(p.get("model"))
         if model is None or model["kind"] != "hosted":
             raise ApiError(400, "not a hosted model")
-        self.app.cfg.save_key(model["id"], str(p.get("key") or "").strip())
+        if "region" in p and "region" in model:  # Azure Speech: saved next to the key; empty = the config's
+            region = str(p.get("region") or "").strip().lower()
+            if region and not re.fullmatch(r"[a-z0-9]{2,40}", region):
+                raise ApiError(400, "a region is a name like westeurope")
+            self.app.cfg.save_key(f"{model['id']}:region", region)
+        if "key" in p or "region" not in p:  # a request with only a region keeps the key
+            self.app.cfg.save_key(model["id"], str(p.get("key") or "").strip())
         self.json(self.app.model_info(model))
 
     def power(self, _params):

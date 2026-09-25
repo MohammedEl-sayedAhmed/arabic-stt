@@ -288,6 +288,7 @@ function estimateText(m, seconds, short = false) {
 
 function speakerHint(m, speakers) {
   if (speakers === "none") return "One block of text with timestamps, no names.";
+  if (m?.speakers_hint) return esc(m.speakers_hint);
   if (m?.id === "speechmatics") return "Speechmatics works out the number of speakers itself; any choice here other than No labels turns labels on.";
   if (m?.id === "elevenlabs" && speakers !== "auto") return "ElevenLabs treats the number as the most speakers to find.";
   return "Labels Speaker 1, Speaker 2… by voice. Give the real number of people if you know it; auto-detect works well for larger meetings.";
@@ -376,7 +377,7 @@ function renderNew() {
     ${m?.prompt ? `<div class="field">
       <label for="promptInput">Vocabulary <span class="opt">optional</span></label>
       <textarea id="promptInput" dir="auto" rows="2" placeholder="Names and terms, comma-separated: Jira, GitHub, backend, deployment">${esc(f.prompt)}</textarea>
-      <p class="hint">${{ elevenlabs: "Sent as key terms (up to 5 words each). ElevenLabs charges about 20% more for requests with key terms.",
+      <p class="hint">${esc(m.prompt_hint) || { elevenlabs: "Sent as key terms (up to 5 words each). ElevenLabs charges about 20% more for requests with key terms.",
         speechmatics: "Sent as custom vocabulary (up to 6 words per term)." }[m.id] || "Given to Whisper as a hint. Plausible but untested; leave empty if unsure."}</p>
     </div>` : ""}
   </div>
@@ -384,7 +385,7 @@ function renderNew() {
   ${hosted && m.ready ? `<div class="card consent">
     ${ICON.cloud}
     <div>
-      <p><b>This model uploads the recording to ${esc(m.service)}.</b> It leaves this computer and is processed on their servers under their terms. ${m.id === "elevenlabs" ? "ElevenLabs may use it for training unless you opted out (Profile → Data use)." : "Speechmatics does not train on it unless you opted in; the app deletes the job there after fetching the transcript."}</p>
+      <p><b>This model uploads the recording to ${esc(m.service)}.</b> It leaves this computer and is processed on their servers under their terms. ${esc(m.privacy) || (m.id === "elevenlabs" ? "ElevenLabs may use it for training unless you opted out (Profile → Data use)." : "Speechmatics does not train on it unless you opted in; the app deletes the job there after fetching the transcript.")}</p>
       <label><input type="checkbox" id="confirmUpload" ${f.confirm ? "checked" : ""}> Upload this recording to ${esc(m.service)}</label>
     </div>
   </div>` : ""}
@@ -1017,6 +1018,7 @@ function renderSettings(focus) {
       <div class="top"><b>${esc(m.title)}</b>${src}</div>
       <form class="row" data-key-form="${esc(m.id)}"><input type="text" name="username" value="${esc(m.id)}" autocomplete="off" hidden>
         <input type="password" data-key="${esc(m.id)}" placeholder="${m.key_source ? "Replace the key" : "Paste your API key"}" autocomplete="new-password" spellcheck="false">
+        ${m.region != null ? `<input type="text" data-region value="${esc(m.region)}" placeholder="Region, e.g. westeurope" aria-label="${esc(m.service)} region" title="The region of your resource: the key works only there" autocomplete="off" spellcheck="false" style="flex:0 1 11em;min-width:7em">` : ""}
         <button class="btn" type="submit">Save</button>
         ${m.key_source === "app" ? `<button class="btn btn-ghost btn-danger" type="button" data-clear-key="${esc(m.id)}">Remove</button>` : ""}</form>
       <p>${m.key_url ? `Get a key: <a href="${esc(m.key_url)}" target="_blank" rel="noopener noreferrer">${esc(m.key_url.replace(/^https:\/\//, ""))}</a>. ` : ""}${esc((m.facts || []).slice(-1)[0] || "")}.</p>
@@ -1115,7 +1117,7 @@ function renderSettings(focus) {
       </div>
       <p class="hint">Models are kept in <code class="mono">${esc(st.home)}/models</code>. The port, defaults and model list are set in <code class="mono">app/config.toml</code>; your own changes can go in <code class="mono">${esc(st.storage.dir)}/config.toml</code>.</p>
     </section>`;
-  $$("[data-key-form]").forEach((form) => (form.onsubmit = (e) => { e.preventDefault(); saveKey(form.dataset.keyForm, $("[data-key]", form).value); }));
+  $$("[data-key-form]").forEach((form) => (form.onsubmit = (e) => { e.preventDefault(); saveKey(form.dataset.keyForm, $("[data-key]", form).value, $("[data-region]", form)?.value); }));
   $$("[data-clear-key]").forEach((b) => (b.onclick = () => confirm("Remove the saved key?") && saveKey(b.dataset.clearKey, "")));
   $$("[data-power]").forEach((b) => (b.onclick = async () => {
     try { await api.post("/api/power", { profile: b.dataset.power }); await refreshStatus(); renderSettings(); toast(`Power mode: ${b.dataset.power}`); } catch (e) { toast(e.message, "error"); }
@@ -1146,13 +1148,16 @@ async function removeDownload(id) {
   catch (e) { toast(e.message, "error"); }
 }
 
-async function saveKey(id, key) {
+async function saveKey(id, key, region) {
   key = key.trim();
+  const body = { model: id };
+  if (region !== undefined) body.region = region.trim();
+  if (key || region === undefined) body.key = key;  // with a region field, an empty key box keeps the saved key
   try {
-    await api.post("/api/keys", { model: id, key });
+    await api.post("/api/keys", body);
     await refreshStatus();
     renderSettings();
-    toast(key ? "Key saved" : "Key removed");
+    toast(key ? "Key saved" : region !== undefined ? "Region saved" : "Key removed");
     if (S.route.name === "new") renderNew();
   } catch (e) { toast(e.message, "error"); }
 }

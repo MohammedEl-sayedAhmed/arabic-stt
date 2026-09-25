@@ -388,4 +388,5 @@ HOSTED = {"elevenlabs": elevenlabs, "speechmatics": speechmatics}
 def run_hosted(cfg, model, job_dir, job, on_progress, cancelled):
     if not cfg.api_key(model):
         raise EngineError(f"no API key for {model['title']}: add it in Settings")
+    from . import hosted_more  # adds Gemini, Deepgram, AssemblyAI and Azure Speech to HOSTED
     return HOSTED[model["engine"]](cfg, model, job_dir, job, on_progress, cancelled)
