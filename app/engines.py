@@ -77,9 +77,10 @@ def local_command(cfg, model, audio, out_dir, progress_file, options):
                 "--voiceprint-model", str(cfg.path(cfg.local["voiceprint_model"]))]
     hint = (options.get("prompt") or "").strip()
     if hint and model.get("prompt"):
-        if model["engine"] == "whisper" and Path(whisper or "").name.endswith("large-v3"):
-            from transcribe import STYLE_PROMPT  # keep large-v3's Egyptian style hint, add the terms
-            hint = f"{STYLE_PROMPT} {hint}"
+        from transcribe import STYLE_PROMPT, gets_style_hint
+        name = Path(whisper or "").name if model["engine"] == "whisper" else Path(model.get("cohere_model") or "").name
+        if gets_style_hint(name) and (model["engine"] == "whisper" or (model.get("hub") or {}).get("architecture") == "whisper"):
+            hint = f"{STYLE_PROMPT} {hint}"  # keep large-v3's Egyptian style hint, add the terms
         cmd += ["--prompt", hint]
     return cmd
 

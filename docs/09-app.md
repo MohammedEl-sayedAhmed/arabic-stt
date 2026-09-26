@@ -186,8 +186,9 @@ from the app* deletes it and its files.
 the Egyptian code-switching whisper-small, and Whisper large-v3 and large-v3-turbo, in GGUF for any
 graphics card and for faster-whisper. Each entry gives what it is good for, the evidence (the
 figures from the project's tests, or *Not tested by the project*), the download size, the licence
-and which graphics cards it can use, and adds the model in one click, pinned to the revision in the file. The GGUF
-Whisper models run without the Egyptian style hint for now.
+and which graphics cards it can use, and adds the model in one click, pinned to the revision in the file. Whisper
+models in GGUF take a vocabulary like the faster-whisper ones, and large-v3 gets the Egyptian style hint
+before it; large-v3-turbo gets only your terms, since the hint was measured on large-v3 alone.
 
 | Kind | What the repository has | How it runs |
 |---|---|---|

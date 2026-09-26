@@ -506,7 +506,7 @@ def entry(found):
     m = {"id": found["id"], "kind": "local", "title": name, "tagline": f"{FAMILIES[found['architecture']]} model",
          "facts": [repo, kind_fact, f"{size_text(size)} download",
                    f"Licence: {found['licence']}" if found["licence"] else "Licence not stated"],
-         "files": found["files"], "prompt": kind != "gguf",
+         "files": found["files"], "prompt": kind != "gguf" or found["architecture"] == "whisper",  # Whisper GGUFs take terms too
          "hub": {k: found[k] for k in ("repo", "revision", "kind", "label", "file", "architecture")}}
     if kind == "gguf":
         m.update(engine="gguf", cohere_model=found["files"][0]["path"], rtf=max(0.05, round(0.2 * gb, 2)),

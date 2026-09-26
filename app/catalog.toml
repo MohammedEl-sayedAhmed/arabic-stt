@@ -66,7 +66,7 @@ architecture = "whisper"
 files = [{ file = "whisper-large-v3-turbo-Q8_0.gguf", size = 886381760 }]
 name = "Whisper large-v3-turbo for any graphics card"
 good_for = "Whisper through transcribe.cpp, which can use Intel, AMD and NVIDIA graphics cards (faster-whisper can use only NVIDIA)."
-evidence = "Not tested by the project. It runs without the Egyptian style hint, because Tafrigh doesn't pass hints to GGUF models yet. Without the hint, stock large-v3 scored 39.7% WER in the project's tests."
+evidence = "Not tested by the project, and it gets no Egyptian style hint (that was measured on large-v3 only; your own terms are still used). Without the hint, stock large-v3 scored 39.7% WER in the project's tests."
 gpu = "any"
 licence = "Apache-2.0"
 
@@ -78,7 +78,7 @@ architecture = "whisper"
 files = [{ file = "whisper-large-v3-Q8_0.gguf", size = 1668741440 }]
 name = "Whisper large-v3 for any graphics card"
 good_for = "Whisper large-v3 through transcribe.cpp, on Intel, AMD or NVIDIA graphics cards."
-evidence = "Not tested by the project. It runs without the Egyptian style hint, which took large-v3 from 39.7% to 20.8% WER in the project's tests, because Tafrigh doesn't pass hints to GGUF models yet."
+evidence = "Not tested by the project, but it gets the same Egyptian style hint, which took large-v3 from 39.7% to 20.8% WER in the project's tests."
 gpu = "any"
 licence = "Apache-2.0"
 

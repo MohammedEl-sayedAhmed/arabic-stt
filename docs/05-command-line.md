@@ -70,7 +70,7 @@ Any audio or video format that FFmpeg reads will do.
 | `--engine cohere` | Cohere Transcribe Arabic through transcribe.cpp, in the same process. Fewest errors on Arabic words, about 3 times faster than real time, no word timestamps |
 | `--cohere-model FILE` | another Cohere Transcribe GGUF |
 | `--engine llama --port 8081` | R2T2, Qwen3-ASR or Audar through a local llama-server; start it first with `THREADS=8 bench/serve.sh audar 8081` |
-| `--prompt TEXT` | a style or vocabulary hint for Whisper (`''` turns off the large-v3 default). Adding a team's jargon is plausible but untested: the one hint measured helped stock large-v3 a lot and the fine-tune not at all |
+| `--prompt TEXT` | a style or vocabulary hint for Whisper, in faster-whisper or GGUF (`''` turns off the large-v3 default). Adding a team's jargon is plausible but untested: the one hint measured helped stock large-v3 a lot and the fine-tune not at all |
 | `--voiceprint-model FILE` | another speaker-embedding ONNX model for `--speakers` |
 | `--language ar` | the default. `en` also works, and `auto` lets Whisper and the llama-server models detect the language. Cohere can't detect it, so `auto` means Arabic there |
 | `--threads N` | CPU threads (default 10) |

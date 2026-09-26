@@ -63,6 +63,12 @@ LANGUAGE_NAMES = {"ar": "Arabic", "en": "English"}
 # keeps Whisper in dialect (instead of rewriting into formal Arabic) and writes English terms in
 # English: WER 47% -> 34% on ArzEn, 40% -> 22% on Perle. The code-switching fine-tune doesn't need it.
 STYLE_PROMPT = "يعني احنا كنا بنتكلم عن ال project بتاعنا و ال deadline و ال meeting اللي جاي مع ال team."
+
+
+def gets_style_hint(name):
+    """Whether a Whisper model gets STYLE_PROMPT by default: large-v3, where it was measured (39.7% to 20.8% WER on
+    Perle), in faster-whisper form ("…/large-v3") or as a GGUF file ("whisper-large-v3-Q8_0.gguf"); not turbo."""
+    return re.search(r"large-v3(?![-_.]?turbo)", str(name).lower()) is not None
 MODELS = Path(__file__).resolve().parent / "models"
 COHERE_MODEL = str(MODELS / "cohere-transcribe-arabic-07-2026-gguf" / "cohere-transcribe-arabic-07-2026-Q4_K_M.gguf")
 # Default: keeps English terms in English best and was the most complete on the test call (Cohere
@@ -261,7 +267,7 @@ class Whisper:
                 sys.exit("--device gpu: Whisper needs an NVIDIA GPU with CUDA and cuBLAS (see --gpu-info)")
             self.model, self.device = self.cpu_model(), "cpu"
         self.language = None if args.language == "auto" else args.language
-        default_prompt = STYLE_PROMPT if Path(args.whisper_model).name.endswith("large-v3") else None
+        default_prompt = STYLE_PROMPT if gets_style_hint(Path(args.whisper_model).name) else None
         self.prompt = default_prompt if args.prompt is None else (args.prompt or None)
 
     def cpu_model(self):
@@ -357,13 +363,23 @@ class Cohere:
             self.use_cpu("cpu")
         if args.language == "auto" and self.model.capabilities.supports_language_detect:
             self.language = None  # this family can tell the language itself (Cohere can't: it gets Arabic)
+        # A Whisper GGUF takes an initial prompt, as faster-whisper does: large-v3 gets the Egyptian style
+        # hint unless --prompt is given (the app puts the hint before the user's terms). Other families have none.
+        self.prompt = None
+        if getattr(self.model, "arch", None) == "whisper":
+            default = STYLE_PROMPT if gets_style_hint(self.path.name) else None
+            self.prompt = default if args.prompt is None else (args.prompt or None)
+        elif args.prompt:
+            print(f"note: --prompt has no effect with {getattr(self.model, 'arch', 'these')} models", file=sys.stderr)
 
     def run(self, audio):
         """session.run with the language; a family that doesn't take that option runs without one from then on."""
         import transcribe_cpp
 
+        prompt = getattr(self, "prompt", None)  # None during the warm-up run, before it is set
+        extra = {"family": transcribe_cpp.WhisperRunOptions(initial_prompt=prompt)} if prompt else {}
         try:
-            return self.session.run(audio, language=self.language)
+            return self.session.run(audio, language=self.language, **extra)
         except (transcribe_cpp.errors.UnsupportedRequest, transcribe_cpp.errors.InvalidArgument) as e:
             if self.language is None:
                 raise
@@ -371,7 +387,7 @@ class Cohere:
                   flush=True)
             language, self.language = self.language, None
             try:
-                return self.session.run(audio, language=None)
+                return self.session.run(audio, language=None, **extra)
             except (transcribe_cpp.errors.UnsupportedRequest, transcribe_cpp.errors.InvalidArgument):
                 self.language = language  # the language wasn't the problem
                 raise
@@ -499,8 +515,6 @@ def main():
         ap.error("the audio file is required")
     if args.speakers is not None and args.speakers < 0:
         ap.error("--speakers must be 0 (estimate) or the number of speakers")
-    if args.engine in ("cohere", "gguf") and args.prompt:
-        print(f"note: --prompt has no effect with --engine {args.engine}", file=sys.stderr)
 
     def report(stage, **extra):
         if args.progress_file:  # written whole and renamed, so a reader never sees half a file

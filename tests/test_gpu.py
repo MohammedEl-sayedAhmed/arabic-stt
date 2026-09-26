@@ -57,20 +57,22 @@ def device(name, kind="vulkan", dtype="gpu", memory=4 << 30):
     return types.SimpleNamespace(description=name, kind=kind, device_type=dtype, memory_total=memory)
 
 
-def fake_transcribe_cpp(devices, fail_load=(), fail_run=()):
+def fake_transcribe_cpp(devices, fail_load=(), fail_run=(), arch="cohere_asr"):
     """Models load on any backend except those in fail_load; sessions on a backend in fail_run fail after
     their first (warm-up) run."""
     tc = types.SimpleNamespace()  # stands in for the module in sys.modules
     tc.errors = types.SimpleNamespace(TranscribeError=TranscribeError, OutputTruncated=OutputTruncated,
                                       InvalidArgument=InvalidArgument, UnsupportedRequest=UnsupportedRequest)
-    tc.loaded = []
+    tc.loaded, tc.prompts = [], []
+    tc.WhisperRunOptions = lambda initial_prompt=None: types.SimpleNamespace(initial_prompt=initial_prompt)
 
     class Session:
         def __init__(self, backend):
             self.backend, self.calls = backend, 0
 
-        def run(self, audio, language=None):
+        def run(self, audio, language=None, family=None):
             self.calls += 1
+            tc.prompts.append(family and family.initial_prompt)
             if self.backend in fail_run and self.calls > 1:
                 raise TranscribeError("device lost")
             return types.SimpleNamespace(text=f"text from {self.backend}")
@@ -79,7 +81,7 @@ def fake_transcribe_cpp(devices, fail_load=(), fail_run=()):
         def __init__(self, path, backend="auto", device=None):
             if backend in fail_load:
                 raise TranscribeError(f"cannot load on {backend}")
-            self.backend = backend
+            self.backend, self.arch = backend, arch
             tc.loaded.append((backend, getattr(device, "description", None)))
 
         def session(self, n_threads=4):
@@ -90,8 +92,8 @@ def fake_transcribe_cpp(devices, fail_load=(), fail_run=()):
     return tc
 
 
-def cohere_args(device="auto"):
-    return types.SimpleNamespace(cohere_model="model.gguf", threads=2, language="ar", device=device)
+def cohere_args(device="auto", model="model.gguf", prompt=None):
+    return types.SimpleNamespace(cohere_model=model, threads=2, language="ar", device=device, prompt=prompt)
 
 
 class GpuChoiceTests(unittest.TestCase):
@@ -140,6 +142,47 @@ class GpuChoiceTests(unittest.TestCase):
             self.assertEqual(engine.device, "vulkan: NVIDIA RTX A1000")
             self.assertEqual(engine(np.zeros(16000, np.float32)), "text from cpu")
         self.assertEqual(engine.device, "cpu (after a GPU error)")
+
+
+class WhisperGgufPromptTests(unittest.TestCase):
+    """A Whisper GGUF gets an initial prompt as faster-whisper does: large-v3 the Egyptian style hint."""
+
+    def prompts(self, model, prompt=None, arch="whisper"):
+        tc = fake_transcribe_cpp([], arch=arch)
+        with mock.patch.dict(sys.modules, {"transcribe_cpp": tc}):
+            engine = transcribe.Cohere(cohere_args("cpu", model, prompt))
+            engine(np.zeros(16000, np.float32))
+        return tc.prompts
+
+    def test_large_v3_gets_the_style_hint(self):
+        self.assertEqual(self.prompts("whisper-large-v3-Q8_0.gguf"), [transcribe.STYLE_PROMPT])
+
+    def test_the_apps_prompt_is_used_as_given(self):
+        hint = f"{transcribe.STYLE_PROMPT} Jira, GitHub"
+        self.assertEqual(self.prompts("whisper-large-v3-Q8_0.gguf", hint), [hint])
+        self.assertEqual(self.prompts("whisper-large-v3-Q8_0.gguf", ""), [None], "an empty prompt turns it off")
+
+    def test_turbo_and_other_families_get_no_hint(self):
+        self.assertEqual(self.prompts("whisper-large-v3-turbo-Q8_0.gguf"), [None])
+        self.assertEqual(self.prompts("whisper-large-v3-turbo-Q8_0.gguf", "Jira"), ["Jira"])
+        self.assertEqual(self.prompts("cohere-transcribe-arabic-07-2026-Q4_K_M.gguf", "Jira", arch="cohere_asr"), [None])
+
+    def test_which_names_get_the_hint(self):
+        for name, hint in (("large-v3", True), ("Systran/faster-whisper-large-v3", True), ("whisper-large-v3-Q5_K_M.gguf", True),
+                           ("faster-whisper-large-v3-turbo", False), ("whisper-large-v3_turbo.gguf", False),
+                           ("whisper-medium-arabic-codeswitched-ct2", False)):
+            self.assertEqual(transcribe.gets_style_hint(name), hint, name)
+
+    def test_the_app_puts_the_hint_before_the_terms(self):
+        cfg = Config(home=Path(tempfile.mkdtemp(prefix="tafrigh-hint-")))
+        self.addCleanup(shutil.rmtree, cfg.home, True)
+        m = {"id": "hf-x", "kind": "local", "engine": "gguf", "prompt": True, "cohere_model": "models/hf/x/whisper-large-v3-Q8_0.gguf",
+             "hub": {"architecture": "whisper"}}
+        cmd = engines.local_command(cfg, m, "in.flac", "out", "progress.json", {"prompt": "Jira, GitHub"})
+        self.assertEqual(cmd[cmd.index("--prompt") + 1], f"{transcribe.STYLE_PROMPT} Jira, GitHub")
+        turbo = {**m, "cohere_model": "models/hf/x/whisper-large-v3-turbo-Q8_0.gguf"}
+        cmd = engines.local_command(cfg, turbo, "in.flac", "out", "progress.json", {"prompt": "Jira"})
+        self.assertEqual(cmd[cmd.index("--prompt") + 1], "Jira")
 
 
 class FakeWhisperModel:
