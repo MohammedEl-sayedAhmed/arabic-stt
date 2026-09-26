@@ -39,8 +39,9 @@ results/*
 *.[Mm][Oo][Vv]
 *.[Aa][Vv][Ii]
 *.[Cc][Aa][Ff]
-# except the silent product video, made from docs/video/
-!docs/video/tafrigh.mp4
+# except the product video, made from docs/video/, in its two soundtrack versions
+!docs/video/tafrigh-tech.mp4
+!docs/video/tafrigh-bright.mp4
 
 # the video's tooling (npm install in docs/video/) and its render leftovers
 docs/video/node_modules

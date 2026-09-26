@@ -1,7 +1,17 @@
 # The Tafrigh video
 
-`tafrigh.mp4` is a 40-second product video of the app: 1920 x 1080, 30 frames a second, H.264, with no
-sound. The GIF near the top of the main README (`docs/images/tafrigh-preview.gif`) is cut from it.
+A 40-second product video of the app, 1920 x 1080, 30 frames a second, H.264, in two versions that
+differ only in the music:
+
+- `tafrigh-tech.mp4`: a darker, electronic track in A minor, with a filtered synth sequence, digital
+  bleeps and two glitch stutters (the one the main README links to);
+- `tafrigh-bright.mp4`: a brighter track in C major, with a soft pad, plucks and a gentle groove.
+
+Both tracks are original, synthesised from nothing but code (`music/tech.py` and `music/bright.py`,
+numpy and soundfile only), so they are published with the project under its licence. They share the
+video's cue points at 120 beats a minute: the drop on the logo at 4 s, the build from 30 s and the end
+card at 36 s; the tech track also stutters at 13.5 s and 21.5 s, where the video glitches. The GIF near
+the top of the main README (`docs/images/tafrigh-preview.gif`) is cut from the video.
 
 The video is a web page. `index.html` lays out every scene with the app's own colours, fonts, radii and
 shadows (see `app/static/app.css`), and one paused [GSAP](https://gsap.com) timeline in the same file
@@ -56,14 +66,23 @@ The committed MP4 is that render encoded again, smaller and ready to stream from
 
 ```sh
 ffmpeg -i renders/tafrigh-raw.mp4 -an -c:v libx264 -preset slow -crf 20 -tune animation \
-  -pix_fmt yuv420p -movflags +faststart tafrigh.mp4
+  -pix_fmt yuv420p -movflags +faststart renders/tafrigh.mp4
+```
+
+The music is made and added like this (with the project's Python, which has numpy and soundfile):
+
+```sh
+python music/tech.py renders/tech.wav        # or music/bright.py renders/bright.wav
+# bring it to -14 LUFS: measure with  ffmpeg -i renders/tech.wav -af ebur128 -f null -
+ffmpeg -i renders/tech.wav -af volume=<-14 minus the measured loudness>dB -c:a aac -b:a 192k music/tech.m4a
+ffmpeg -i renders/tafrigh.mp4 -i music/tech.m4a -map 0:v -map 1:a -c copy -shortest -movflags +faststart tafrigh-tech.mp4
 ```
 
 The GIF is 8 seconds of it (the steps, from 10 s to 18 s) at 900 pixels wide:
 
 ```sh
-ffmpeg -ss 10 -t 8 -i tafrigh.mp4 -vf "fps=15,scale=900:-1:flags=lanczos,palettegen=stats_mode=diff" renders/palette.png
-ffmpeg -ss 10 -t 8 -i tafrigh.mp4 -i renders/palette.png \
+ffmpeg -ss 10 -t 8 -i renders/tafrigh.mp4 -vf "fps=15,scale=900:-1:flags=lanczos,palettegen=stats_mode=diff" renders/palette.png
+ffmpeg -ss 10 -t 8 -i renders/tafrigh.mp4 -i renders/palette.png \
   -lavfi "fps=15,scale=900:-1:flags=lanczos[v];[v][1:v]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" \
   -loop 0 ../images/tafrigh-preview.gif
 ```
