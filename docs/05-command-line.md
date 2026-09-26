@@ -30,7 +30,7 @@ mkdir -p models/diarization && curl -L -o models/diarization/nemo_en_titanet_sma
   handy-computer/cohere-transcribe-arabic-07-2026-gguf:cohere-transcribe-arabic-07-2026-Q4_K_M.gguf
 ```
 
-The app can do the downloads instead (*Settings → Models on this computer*). Run from source, it
+The app can do the downloads instead (*Settings → Models*). Run from source, it
 keeps models in the same `models/` folder, so `transcribe.py` finds them there.
 
 Other models:

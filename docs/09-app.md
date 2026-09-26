@@ -11,13 +11,18 @@ and export.
 ./app.sh --install-launcher   # optional: adds Tafrigh to the desktop's application menu
 ```
 
-Stop it with Ctrl+C in the terminal or with *Settings → Quit Tafrigh*. Starting it again while it
-runs just opens the page. It can also be built as a Windows or Linux desktop app
+Stop it with Ctrl+C in the terminal or with *Quit Tafrigh* at the bottom of *Settings*. Starting it
+again while it runs just opens the page. It can also be built as a Windows or Linux desktop app
 ([desktop app](10-desktop.md)).
 
 Local models that aren't on the computer yet can be downloaded from the app, from the model's card
-or from *Settings → Models on this computer*. Downloads resume after a dropped connection and are
-checked against a pinned checksum.
+or from *Settings → Models*. Downloads resume after a dropped connection and are checked against a
+pinned checksum.
+
+*Settings* has five tabs. *Models* lists the models on the computer, with their downloads and
+removal. *Add models* has two views: *Recommended* and *From Hugging Face*. *Hosted services* holds
+the API keys, *Speed* the graphics card, power mode and processor threads, and *About* the version,
+the licence and the folder where the app keeps its data.
 
 ## What it does
 
@@ -158,7 +163,7 @@ All model settings live in [`app/config.toml`](../app/config.toml). Each `[[mode
 | Google Gemini | hosted | Gemini 3.5 Transcribe, which follows Arabic–English code-switching; free tier (which trains on your audio) | `api_model`, `language_codes`, `max_minutes`, `inline_limit_mb`, `delete_after`, API key |
 | Deepgram Nova-3 | hosted | fast Arabic-only transcripts (`ar-EG`); the app opts out of training | `api_model`, `language`, `diarize_model`, `mip_opt_out`, API key |
 | AssemblyAI | hosted | Universal-3.5 Pro, which follows code-switching | `speech_models`, `expected_languages`, `base_url` (US or EU), `delete_after`, API key |
-| Azure AI Speech | hosted | the `ar-EG` locale; Microsoft stores nothing | region (in *Settings*), `locale`, `max_speakers`, `max_minutes`, `endpoint`, API key |
+| Azure AI Speech | hosted | the `ar-EG` locale; Microsoft stores nothing | region (in *Settings → Hosted services*), `locale`, `max_speakers`, `max_minutes`, `endpoint`, API key |
 
 The other sections are `[server]` (host and port; keep it on 127.0.0.1), `[storage]` (the data
 folder, whether to keep the original, the upload limit), `[defaults]` (model, speakers, language)
@@ -169,19 +174,19 @@ shipped. A `[[models]]` entry there with the same `id` changes only the fields i
 
 ### Models from Hugging Face
 
-*Settings → Models on this computer* can also add a model from Hugging Face. Paste the link to the
+*Settings → Add models → From Hugging Face* adds a model from Hugging Face. Paste the link to the
 model's page or to one of its files, or its name (`org/name`), and choose *Check*. Tafrigh reads the
 model's file list from the Hugging Face API, without logging in, and shows the kind of model, its
 family, the file, the size, the licence and the revision. *Add and download* saves it and downloads
 it like the built-in models. It then has a card of its own, marked *From Hugging Face*, and *Remove
 from the app* deletes it and its files.
 
-Above that field, *Recommended models* lists the models worth trying for these meetings, from
+*Settings → Add models → Recommended* lists the models worth trying for these meetings, from
 [`app/catalog.toml`](../app/catalog.toml): the three built-in ones, Cohere at higher precision,
 the Egyptian code-switching whisper-small, and Whisper large-v3 and large-v3-turbo, in GGUF for any
 graphics card and for faster-whisper. Each entry gives what it is good for, the evidence (the
-figures from the project's tests, or *Not tested by the project*), the download size, the licence and which graphics
-cards it can use, and adds the model in one click, pinned to the revision in the file. The GGUF
+figures from the project's tests, or *Not tested by the project*), the download size, the licence
+and which graphics cards it can use, and adds the model in one click, pinned to the revision in the file. The GGUF
 Whisper models run without the Egyptian style hint for now.
 
 | Kind | What the repository has | How it runs |
@@ -208,11 +213,12 @@ download, and `DELETE /api/models/<id>` removes an added model.
 
 ### Gemini, Deepgram, AssemblyAI and Azure Speech
 
-These run through `app/hosted_more.py`. Their keys are entered in *Settings* like the others, or set in
-`GEMINI_API_KEY`, `DEEPGRAM_API_KEY`, `ASSEMBLYAI_API_KEY` or `AZURE_SPEECH_KEY`. An Azure key works
-only in the region of its Speech resource, so the Azure row in *Settings* also has a region field. The
-region is saved with the key in `secrets.json`; `AZURE_SPEECH_REGION` overrides it, and `region` in the
-config is the default (`westeurope`). None of the four has been measured on Egyptian speech by the project.
+These run through `app/hosted_more.py`. Their keys are entered in *Settings → Hosted services* like
+the others, or set in `GEMINI_API_KEY`, `DEEPGRAM_API_KEY`, `ASSEMBLYAI_API_KEY` or
+`AZURE_SPEECH_KEY`. An Azure key works only in the region of its Speech resource, so Azure's key
+form also has a region field. The region is saved with the key in `secrets.json`;
+`AZURE_SPEECH_REGION` overrides it, and `region` in the config is the default (`westeurope`). None
+of the four has been measured on Egyptian speech by the project.
 
 - **Gemini** ([keys](https://aistudio.google.com/apikey)) uses `gemini-3.5-transcribe` through the
   Interactions API, with `store: false` so Google doesn't keep the request. The app asks for verbatim
@@ -317,9 +323,10 @@ real limit per Azure request (2 or 5 hours) and how English words come out with 
 
 ### API keys
 
-Enter them in *Settings*, where they are saved to `app_data/secrets.json` (file mode 600, ignored by
-git), or set `ELEVENLABS_API_KEY` or `SPEECHMATICS_API_KEY` in the environment, which takes
-precedence.
+Enter them in *Settings → Hosted services*. Each service has a row there, and its key form opens
+only when you choose *Add key* (or *Change*, once a key is saved). Keys are saved to
+`app_data/secrets.json` (file mode 600, ignored by git). `ELEVENLABS_API_KEY` or
+`SPEECHMATICS_API_KEY` set in the environment takes precedence.
 
 ElevenLabs ([keys](https://elevenlabs.io/app/settings/api-keys)) gives about 4.5 h a month free,
 then charges $0.22/h. It may use your audio for training unless you opt out in your profile, under
@@ -465,7 +472,7 @@ the voiceprint step with a stand-in model process).
 ## Speed
 
 The app estimates the time from each model's measured speed (`rtf` in the config) and multiplies it
-by 3.5 in power-saver mode. On Linux the top bar shows the power profile, *Settings → Power mode*
+by 3.5 in power-saver mode. On Linux the top bar shows the power profile, *Settings → Speed*
 switches it, and `performance_while_running = true` switches it automatically while local jobs run.
 Local jobs run one at a time. Hosted jobs have their own queue and don't wait for a local one.
 
