@@ -130,11 +130,6 @@ class Grouping(unittest.TestCase):
         self.assertIsNone(self.store.get(a).get("fingerprint"))
         self.assertFalse(C._needs_fingerprint(self.store, self.store.get(a)), "not tried again")
 
-    def test_combined_sources_link(self):
-        a = make_job(self.store, 1)
-        b = make_job(self.store, 2, combined={"base": a, "sources": [{"id": a}]})
-        self.assertEqual(C.group_ids(self.store.list())[b], a)
-
 
 class Alignment(unittest.TestCase):
     def check_partition(self, tracks, rows):
@@ -434,74 +429,95 @@ class Api(unittest.TestCase):
         self.assertEqual(self.call("GET", f"/api/compare?ids={self.a},{self.b}&base={self.c}")[0], 400)
         self.assertEqual(self.call("GET", "/api/compare?ids=../x,y")[0], 404)
 
+    def pair(self, n):
+        """A fresh base transcript and a re-run of it with another model, for a test that saves onto it."""
+        a = make_job(self.store, n, self.base_lines, link=self.a, rerun_of=self.a, audio_s=25.0,
+                     speaker_names={"1": "Mona", "2": "Omar"})
+        b = make_job(self.store, n + 1, self.other_lines, link=self.a, rerun_of=self.a, model="cohere",
+                     model_title="Cohere Transcribe Arabic", audio_s=25.0, speaker_names={"1": "Omar A."})
+        return a, b
+
     def test_4_combine(self):
-        _, view, _ = self.call("GET", f"/api/compare?ids={self.a},{self.b}")
+        a, b = self.pair(10)
+        _, view, _ = self.call("GET", f"/api/compare?ids={a},{b}")
         rows = view["rows"]
-        body = {"ids": [self.a, self.b], "base": self.a, "title": "Weekly sync, best of both",
-                "picks": [{"start": rows[2]["from"], "end": rows[2]["to"], "from": self.b},  # a row
-                          {"start": 14.5, "end": 25, "from": self.b}],  # a time range
-                "speakers": {self.b: {"1": "2", "2": "3"}}}  # the user says Cohere's 2 is someone new
-        status, job, _ = self.call("POST", "/api/combine", body)
-        self.assertEqual(status, 201, job)
-        self.assertEqual((job["model"], job["model_title"], job["status"]), ("combined", "Combined", "done"))
-        status, r, _ = self.call("GET", f"/api/jobs/{job['id']}")
+        body = {"ids": [a, b], "base": a,
+                "picks": [{"start": rows[2]["from"], "end": rows[2]["to"], "from": b},  # a row
+                          {"start": 14.5, "end": 25, "from": b}],  # a time range
+                "speakers": {b: {"1": "2", "2": "3"}}}  # the user says Cohere's 2 is someone new
+        jobs_before = sorted(p.name for p in (self.cfg.storage / "jobs").iterdir())
+
+        # reviewed first, like an edit: nothing is saved yet
+        status, pre, _ = self.call("POST", "/api/combine/preview", body)
+        self.assertEqual(status, 200, pre)
+        self.assertEqual((pre["base"], pre["version"]), (a, 1), "v0 the model's output, v1 the names given before the history began")
+        self.assertTrue(pre["summary"].startswith("With the text of Cohere Transcribe Arabic for 00:09–00:25: "), pre["summary"])
+        self.assertEqual([r["op"] for r in pre["changes"]["lines"]].count("same"), 2)
+        self.assertEqual(self.call("GET", f"/api/jobs/{a}")[1]["lines"], self.base_lines)
+
+        status, r, _ = self.call("POST", "/api/combine", {**body, "message": "Best of both"})
+        self.assertEqual(status, 200, r)
+        self.assertEqual((r["job"]["id"], r["version"], r["edited"]), (a, 2, True))
         self.assertEqual([x["text"] for x in r["lines"]], [self.base_lines[0]["text"], self.base_lines[1]["text"],
                                                            self.other_lines[2]["text"], self.other_lines[3]["text"]])
         self.assertEqual([x["speaker"] for x in r["lines"]], ["1", "2", "3", "2"])
-        self.assertTrue(r["has_audio"])
-        self.assertFalse(r["edited"])
-        meta = r["job"]
-        self.assertEqual(meta["title"], "Weekly sync, best of both")
-        self.assertEqual(meta["speaker_names"], {"1": "Mona", "2": "Omar"}, "the base's names; Cohere's 2 had none")
-        self.assertEqual(meta["combined"]["base"], self.a)
-        self.assertEqual([s["id"] for s in meta["combined"]["sources"]], [self.a, self.b])
-        self.assertEqual(meta["combined"]["ranges"], [{"start": rows[2]["from"], "end": 25, "from": self.b}])
-        self.assertEqual(meta["fingerprint"], self.store.get(self.a)["fingerprint"])
+        self.assertEqual(r["job"]["speaker_names"], {"1": "Mona", "2": "Omar"}, "the base's names; Cohere's 2 had none")
+        self.assertEqual((r["job"]["title"], r["job"]["model"]), ("Weekly sync", "whisper-medium"), "the same transcript")
+        self.assertEqual(sorted(p.name for p in (self.cfg.storage / "jobs").iterdir()), jobs_before, "no new job")
+        self.assertEqual(self.call("GET", f"/api/jobs/{b}")[1]["lines"], self.other_lines, "the sources are left as they were")
 
-        folder = self.cfg.storage / "jobs"
-        self.assertEqual((folder / job["id"] / "audio.flac").stat().st_ino, (folder / self.a / "audio.flac").stat().st_ino,
-                         "the audio is shared, like a re-run's")
-        req = urllib.request.Request(self.base + f"/api/jobs/{job['id']}/audio", headers={"Range": "bytes=0-99"})
-        with urllib.request.urlopen(req) as resp:
-            self.assertEqual(resp.status, 206)
-        _, txt, _ = self.call("GET", f"/api/jobs/{job['id']}/export/txt")
+        # a version in History like any other
+        _, v, _ = self.call("GET", f"/api/jobs/{a}/versions")
+        v1 = v["versions"][-1]
+        self.assertEqual([x["n"] for x in v["versions"]], [0, 1, 2])
+        self.assertEqual((v["versions"][0]["kind"], v1["kind"], v1["message"]), ("model output", "combine", "Best of both"))
+        self.assertEqual(v1["summary"], pre["summary"])
+        self.assertEqual(v1["combined"]["ranges"], [{"start": rows[2]["from"], "end": 25, "from": b}])
+        self.assertEqual(v1["combined"]["sources"], [{"id": b, "model_title": "Cohere Transcribe Arabic"}])
+        self.assertEqual(v1["combined"]["speakers"][b], {"1": "2", "2": "3"})
+        _, v0, _ = self.call("GET", f"/api/jobs/{a}/versions/0")
+        self.assertEqual(v0["lines"], self.base_lines, "version 0 is still the model's output")
+        _, txt, _ = self.call("GET", f"/api/jobs/{a}/export/txt")
         self.assertIn("[00:00] Mona: تمام، نبدأ الـ meeting", txt.decode())
         self.assertIn("Speaker 3: okay I'll send the report", txt.decode())
-        _, md, _ = self.call("GET", f"/api/jobs/{job['id']}/export/md")
-        self.assertIn("*Combined ·", md.decode())
-        _, group, _ = self.call("GET", f"/api/jobs/{job['id']}/group")
-        self.assertIn(job["id"], [j["id"] for j in group["jobs"]])
+        self.assertEqual(self.call("POST", "/api/combine", body)[0], 409, "the same again: nothing to save")
 
-        # an ordinary job: it can be edited, and compared again
-        lines = r["lines"]
-        lines[0]["text"] = "تمام، نبدأ الـ meeting بتاع النهارده"
-        status, r, _ = self.call("PATCH", f"/api/jobs/{job['id']}", {"lines": lines, "speaker_names": {"3": "Sara"}})
-        self.assertEqual((status, r["edited"], r["job"]["speaker_names"]["3"]), (200, True, "Sara"))
-        self.assertEqual(self.call("GET", f"/api/compare?ids={self.a},{self.b},{job['id']}")[0], 200)
-        self.assertEqual(self.call("DELETE", f"/api/jobs/{job['id']}")[0], 200)
-        self.assertTrue((folder / self.a / "audio.flac").exists(), "deleting it leaves the others' audio")
+        # compared again with its new text, then undone by restoring version 0
+        _, again, _ = self.call("GET", f"/api/compare?ids={a},{b}")
+        self.assertTrue(all(row["same"] for row in again["rows"][2:]), "the picked rows now read the same")
+        status, r, _ = self.call("POST", f"/api/jobs/{a}/versions/0/restore", {})
+        self.assertEqual((status, r["version"], r["lines"]), (200, 3, self.base_lines))
+        self.assertEqual(r["job"]["speaker_names"], {}, "as the model wrote it")
 
     def test_4_combine_names_new_speakers_after_their_source(self):
-        body = {"ids": [self.a, self.b], "base": self.a, "picks": [{"start": 0, "end": 25, "from": self.b}],
-                "speakers": {self.b: {"1": "4"}}}
-        status, job, _ = self.call("POST", "/api/combine", body)
-        self.assertEqual(status, 201, job)
-        meta = self.store.get(job["id"])
-        self.assertEqual(meta["speaker_names"], {"1": "Mona", "2": "Omar", "4": "Omar A."})
-        self.assertEqual(meta["title"], "Weekly sync", "the base's title by default")
-        self.store.delete(job["id"])
+        a, b = self.pair(20)
+        body = {"ids": [a, b], "base": a, "picks": [{"start": 0, "end": 25, "from": b}], "speakers": {b: {"1": "4"}}}
+        status, r, _ = self.call("POST", "/api/combine", body)
+        self.assertEqual(status, 200, r)
+        self.assertEqual(self.store.get(a)["speaker_names"], {"1": "Mona", "2": "Omar", "4": "Omar A."})
+        self.assertEqual(self.store.get(a)["title"], "Weekly sync")
+        # with b as the base instead, b gets the new version and a is untouched
+        c, d = self.pair(30)
+        status, r, _ = self.call("POST", "/api/combine", {"ids": [c, d], "base": d, "picks": [{"start": 0, "end": 5, "from": c}]})
+        self.assertEqual((status, r["job"]["id"], r["version"]), (200, d, 2))
+        self.assertEqual(r["lines"][0]["text"], self.base_lines[0]["text"])
+        self.assertEqual(r["lines"][0]["speaker"], "2", "a's speaker 1 is b's 2")
 
     def test_4_combine_refuses(self):
-        good = {"ids": [self.a, self.b], "base": self.a, "picks": []}
-        for bad in ({**good, "ids": [self.a]}, {**good, "ids": [self.a, self.c]}, {**good, "base": self.c},
-                    {**good, "picks": [{"start": 5, "end": 1, "from": self.b}]},
+        a, b = self.pair(40)
+        good = {"ids": [a, b], "base": a, "picks": [{"start": 0, "end": 5, "from": b}]}
+        for bad in ({**good, "ids": [a]}, {**good, "ids": [a, self.c]}, {**good, "base": self.c},
+                    {**good, "picks": []}, {**good, "picks": [{"start": 0, "end": 5, "from": a}]},
+                    {**good, "picks": [{"start": 5, "end": 1, "from": b}]},
                     {**good, "picks": [{"start": 1, "end": 5, "from": self.c}]},
-                    {**good, "picks": [{"start": "x", "end": 5, "from": self.b}]},
-                    {**good, "picks": "all"}, {**good, "speakers": {self.b: {"1": "<b>"}}}, {**good, "speakers": [1]}, []):
+                    {**good, "picks": [{"start": "x", "end": 5, "from": b}]},
+                    {**good, "picks": "all"}, {**good, "speakers": {b: {"1": "<b>"}}}, {**good, "speakers": [1]}, []):
             self.assertEqual(self.call("POST", "/api/combine", bad)[0], 400, bad)
-        self.assertEqual(self.call("POST", "/api/combine", {**good, "ids": [self.a, self.running]})[0], 409)
+            self.assertEqual(self.call("POST", "/api/combine/preview", bad)[0], 400, bad)
+        self.assertEqual(self.call("POST", "/api/combine", {**good, "ids": [a, self.running]})[0], 409)
         self.assertEqual(self.call("POST", "/api/combine", good, headers={"X-Tafrigh": ""})[0], 403)
-        self.assertEqual(len(list((self.cfg.storage / "jobs").iterdir())), 4, "nothing was left behind")
+        self.assertEqual(self.call("GET", f"/api/jobs/{a}")[1]["lines"], self.base_lines, "nothing was saved")
+        self.assertEqual([x["n"] for x in self.call("GET", f"/api/jobs/{a}/versions")[1]["versions"]], [0, 1])
 
 
 if __name__ == "__main__":

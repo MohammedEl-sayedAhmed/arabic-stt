@@ -509,7 +509,13 @@ class Handler(BaseHTTPRequestHandler):
         self.json(compare.view(self.app.store, ids, params.get("base")))
 
     def combine_jobs(self, _params):
-        self.json(summary(compare.create_combined(self.app.store, self.body_json())), 201)
+        """The picked parts saved as a new version of the base transcript; answers like GET /api/jobs/<id>."""
+        base, _ = compare.save_combined(self.app.store, self.body_json(), self.app.cfg)
+        self.get_job({}, base)
+
+    def combine_preview(self, _params):
+        """What POST /api/combine with the same body would change, to review it first."""
+        self.json(compare.preview_combined(self.app.store, self.body_json(), self.app.cfg))
 
     def at_version(self, job, n):
         """(job, lines, edited by hand) as they are now, or as they were at version n."""
@@ -703,6 +709,7 @@ ROUTES = [
     ("GET", rf"/api/jobs/{ID}/group", Handler.job_group),
     ("GET", r"/api/compare", Handler.compare_jobs),
     ("POST", r"/api/combine", Handler.combine_jobs),
+    ("POST", r"/api/combine/preview", Handler.combine_preview),
     ("POST", rf"/api/jobs/{ID}/diff", Handler.diff_job),
     ("GET", rf"/api/jobs/{ID}/versions", Handler.versions),
     ("GET", rf"/api/jobs/{ID}/versions/(\d+)", Handler.get_version),

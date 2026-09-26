@@ -1,7 +1,7 @@
 /* Tafrigh: the transcripts of one recording (the server side is app/compare.py). The sidebar shows a
    recording once with its transcripts, the job page switches between them, and the compare view lines two
    or three of them up by time, marks the words that differ, and saves the parts picked from each as a new
-   transcript. Loaded before app.js: it only defines things, and uses app.js's helpers (S, api, $, esc,
+   version of one of them (its History has the versions). Loaded before app.js: it only defines things, and uses app.js's helpers (S, api, $, esc,
    clock, mixDir, the player) when they run. */
 "use strict";
 
@@ -10,7 +10,6 @@ const CMP_ICON = {
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
   close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
-  combined: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v5a4 4 0 0 0 4 4h4a4 4 0 0 1 4 4v3"/><path d="M18 4v5a4 4 0 0 1-4 4"/><path d="m15 17 3 3 3-3"/></svg>',
 };
 
 // The compare view's state. picks: the stretches picked from a transcript, [{start, end, from}], in order
@@ -21,7 +20,7 @@ const CMP = {
   lastKeep: null, playFrom: 0, playTo: null, current: -1, loading: 0, bar: "",
 };
 
-const jobIcon = (j) => (j.kind === "hosted" ? ICON.cloud : j.kind === "combined" ? CMP_ICON.combined : ICON.laptop);
+const jobIcon = (j) => (j.kind === "hosted" ? ICON.cloud : ICON.laptop);
 const joinWords = (items) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`);
 const STATUS_WORD = { done: "Done", failed: "Failed", cancelled: "Cancelled", interrupted: "Interrupted", queued: "Queued" };
 
@@ -85,15 +84,15 @@ function groupBar(j) {
 }
 
 function groupBarInner(j) {
-  const list = groupOf(j.id), note = combinedNote(j);
-  if (list.length < 2) return note;
+  const list = groupOf(j.id);
+  if (list.length < 2) return "";
   const done = list.filter((x) => x.status === "done");
   const pair = j.status === "done" ? [j.id, ...done.filter((x) => x.id !== j.id).slice(-1).map((x) => x.id)]
     : done.slice(-2).map((x) => x.id);
   const cmp = pair.length === 2 ? `<a class="btn btn-sm" id="compareBtn" href="#/compare/${pair.join(",")}">${CMP_ICON.columns} Compare</a>` : "";
   const labels = verLabels(list);
   return `<nav class="versions" aria-label="Transcripts of this recording"><span class="versions-label">Transcripts of this recording</span>
-    ${list.map((x) => verPill(x, x.id === j.id, labels.get(x.id))).join("")}${cmp}</nav>${note}`;
+    ${list.map((x) => verPill(x, x.id === j.id, labels.get(x.id))).join("")}${cmp}</nav>`;
 }
 
 // After the list of transcriptions was fetched again (only when something changed, so focus stays put)
@@ -102,20 +101,6 @@ function refreshGroupBar() {
   if (!el || S.route.name !== "job" || !S.job) return;
   const html = groupBarInner(S.job);
   if (html !== CMP.bar) el.innerHTML = CMP.bar = html;
-}
-
-// Where a combined transcript's text comes from.
-function combinedNote(j) {
-  const c = j.combined;
-  if (!c) return "";
-  const name = (id) => ((c.sources || []).find((s) => s.id === id) || {}).model_title || "another transcript";
-  const by = new Map();
-  for (const r of c.ranges || []) {
-    if (!by.has(r.from)) by.set(r.from, []);
-    by.get(r.from).push(`${clock(r.start)}–${clock(Math.min(r.end, j.audio_s || r.end))}`);
-  }
-  const parts = [...by].map(([id, list], i) => `${i ? "of " : ""}${name(id)} for ${joinWords(list.length > 6 ? [...list.slice(0, 5), `${list.length - 5} more`] : list)}`);
-  return `<p class="versions-note">${CMP_ICON.combined}<span>Combined from ${esc(name(c.base))}${parts.length ? `, with the text of ${esc(joinWords(parts))}` : ""}.</span></p>`;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -419,46 +404,52 @@ function cmpBind() {
   };
 }
 
-function cmpSaveDialog() {
-  let dlg = document.getElementById("cmpDialog");
-  if (!dlg) {
-    dlg = document.createElement("dialog");
-    dlg.id = "cmpDialog";
-    dlg.setAttribute("aria-labelledby", "cmpDialogTitle");
-    document.body.append(dlg);
+// Saving: the combination becomes a new version of the base transcript, reviewed as a diff first like an
+// edit (diffDialog, changesHtml in app.js), with an optional message. It can be restored or undone in History.
+function cmpBody() {
+  const d = CMP.data;
+  return {
+    ids: d.ids, base: d.base, picks: CMP.picks,
+    speakers: Object.fromEntries(d.ids.filter((id) => id !== d.base).map((id) => [id, cmpMap(id)])),
+  };
+}
+
+async function cmpSaveDialog() {
+  let r;
+  try { r = await api.post("/api/combine/preview", cmpBody()); } catch (e) { toast(e.message, "error"); return; }
+  const base = cmpJob(CMP.data.base), dlg = diffDialog("cmpReview", "Review the new version");
+  if (!$("#cmpReviewForm")) {
+    dlg.insertAdjacentHTML("beforeend", `<form class="dlg-foot review-foot" id="cmpReviewForm">
+      <input type="text" id="cmpReviewMsg" maxlength="500" dir="auto" data-mixdir placeholder="Message (optional)" aria-label="Message for this version (optional)">
+      <button type="button" class="btn" data-close>Back</button>
+      <button type="submit" class="btn btn-primary" id="cmpSaveGo">Save version</button></form>`);
+    $("#cmpReviewForm [data-close]").onclick = () => dlg.close();
+    $("#cmpReviewForm").onsubmit = (e) => { e.preventDefault(); cmpSave(dlg); };
   }
-  const d = CMP.data, base = cmpJob(d.base);
-  const list = [...cmpBySource()].map(([id, spans]) => `<li><b>${esc(cmpJob(id).model_title)}</b>: ${spans.map(([a, b]) => `${clock(a)}–${clock(b)}`).join(", ")}</li>`).join("");
-  dlg.innerHTML = `
-    <div class="dlg-head"><h2 id="cmpDialogTitle">Save as a new version</h2><button type="button" class="icon-btn" data-close aria-label="Close">${CMP_ICON.close}</button></div>
-    <div class="dlg-body">
-      <div class="field"><label for="cmpTitle">Title</label><input type="text" id="cmpTitle" data-mixdir dir="${mixDir(base.title || "")}" value="${esc(base.title || "")}"></div>
-      <p class="cmp-sum">It has the text of ${esc(base.model_title)}, except here:</p>
-      <ul class="cmp-sum-list">${list}</ul>
-      <p class="hint">Speakers are numbered and named as in ${esc(base.model_title)}. The new version is kept with the other transcripts of this recording and uses the same audio file. You can edit and export it like any other.</p>
-    </div>
-    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn btn-primary" id="cmpSaveGo">Save</button></div>`;
-  dlg.querySelectorAll("[data-close]").forEach((b) => (b.onclick = () => dlg.close()));
-  $("#cmpSaveGo", dlg).onclick = () => cmpSave(dlg);
-  $("#cmpTitle", dlg).onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); cmpSave(dlg); } };
+  const list = [...cmpBySource()].map(([id, spans]) => `<li>${esc(cmpJob(id).model_title)}: ${spans.map(([a, b]) => `${clock(a)}–${clock(b)}`).join(", ")}</li>`).join("");
+  $("#cmpReviewBody").innerHTML = `<p class="cmp-sum">This is saved as version ${r.version + 1} of the ${esc(base.model_title)} transcript. It keeps that text except here:</p>
+    <ul class="cmp-sum-list">${list}</ul>
+    <p class="hint diff-base">Compared with version ${r.version}, the current one. The earlier versions stay in its History, so you can go back.</p>
+    ${changesHtml(r.changes, true)}`;
+  bindDiff($("#cmpReviewBody"), r.changes);
+  $("#cmpSaveGo").disabled = false;
+  $("#cmpReviewMsg").value = "";
   dlg.showModal();
+  $("#cmpReviewMsg").focus();
 }
 
 async function cmpSave(dlg) {
-  const d = CMP.data, go = $("#cmpSaveGo", dlg);
+  const go = $("#cmpSaveGo");
   if (go.disabled) return;
   go.disabled = true;
   try {
-    const job = await api.post("/api/combine", {
-      ids: d.ids, base: d.base, title: $("#cmpTitle", dlg).value.trim(), picks: CMP.picks,
-      speakers: Object.fromEntries(d.ids.filter((id) => id !== d.base).map((id) => [id, cmpMap(id)])),
-    });
+    const r = await api.post("/api/combine", { ...cmpBody(), message: $("#cmpReviewMsg").value.trim() });
     dlg.close();
     CMP.picks = [];
     CMP.undo = [];
     await refreshJobs();
-    toast("Saved as a new version");
-    location.hash = `#/job/${job.id}`;
+    toast(`Saved as version ${r.version}`);
+    location.hash = `#/job/${r.job.id}`;
   } catch (e) {
     go.disabled = false;
     toast(e.message, "error");

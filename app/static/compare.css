@@ -28,8 +28,6 @@
 .versions .pill.ver:hover { border-color: var(--border-strong); }
 .versions .pill.ver.on { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 .versions .btn { margin-left: 4px; height: 28px; }
-.versions-note { display: flex; gap: 7px; align-items: flex-start; margin: -6px 0 14px; font-size: 13px; color: var(--muted); }
-.versions-note svg { width: 15px; height: 15px; flex: none; margin-top: 2px; color: var(--accent); }
 
 /* ---------- the compare view ---------- */
 .main-inner.wide { max-width: 1440px; }

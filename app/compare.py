@@ -2,8 +2,7 @@
 
 A recording is often transcribed with several models. "Run again with" makes a new job on the same
 audio (rerun_of, audio.flac shared by hardlink), and the same file can also be added again. Jobs are in
-one group when rerun_of or a combined transcript's sources link them, or when their audio has the same
-fingerprint: the SHA-256 of the decoded samples, stored in job.json when the audio is prepared and
+one group when rerun_of links them, or when their audio has the same fingerprint: the SHA-256 of the decoded samples, stored in job.json when the audio is prepared and
 worked out in the background for jobs made before that.
 
 Comparing lines the transcripts up by time. Rows are cut only where no line of any transcript is
@@ -14,25 +13,24 @@ normalization, so punctuation, case, diacritics and common spelling variants don
 Combining keeps the base transcript's lines everywhere except in the stretches picked from another one
 (a row or a time range; where picks overlap, the later one wins). A line is kept or dropped whole,
 depending on where its middle is. The other transcripts' speakers are mapped onto the base's by how
-long they talk at the same time, and the base's speaker names carry over. The result is an ordinary
-job that shares the audio.
+long they talk at the same time, and the base's speaker names carry over. The result is saved as a new
+version of the base transcript (app/history.py), so it is reviewed as a diff first and can be restored
+from, or undone in, its History; version 0 stays the model's output.
 """
 import bisect
 import difflib
 import hashlib
 import math
-import os
 import re
-import shutil
 import threading
 import unicodedata
 
 import soundfile as sf
 
-from . import __version__
+from . import history
 from . import transcript as T
 from .engines import partial_lines
-from .jobs import ACTIVE, now, write_json
+from .jobs import ACTIVE
 
 EDGE = 0.75       # seconds at each end of a line that may lie across a row boundary
 TINY_ROW = 0.8    # a row shorter than this (seconds) that only some transcripts have joins a neighbour...
@@ -121,8 +119,8 @@ def fill_later(store, jobs):
 
 
 def group_ids(jobs):
-    """{job id: group id}. Jobs linked by rerun_of or a combined transcript's sources, or with the same
-    audio fingerprint, are in one group, which is named after its oldest job."""
+    """{job id: group id}. Jobs linked by rerun_of, or with the same audio fingerprint, are in one
+    group, which is named after its oldest job."""
     root = {j["id"]: j["id"] for j in jobs}
 
     def find(x):
@@ -139,8 +137,6 @@ def group_ids(jobs):
     first = {}  # fingerprint -> the first job seen with it
     for j in jobs:
         join(j["id"], j.get("rerun_of"))
-        for src in (j.get("combined") or {}).get("sources", []):
-            join(j["id"], src.get("id"))
         if j.get("fingerprint"):
             join(j["id"], first.setdefault(j["fingerprint"], j["id"]))
     return {jid: find(jid) for jid in root}
@@ -401,7 +397,7 @@ def combine(tracks, base, picks, mapping):
     return sorted(out, key=lambda x: (x["start"], x["end"]))
 
 
-# ---- the API: GET /api/compare, POST /api/combine ------------------------------------------------
+# ---- the API: GET /api/compare, POST /api/combine (and /api/combine/preview) ------------------------------------------------
 
 def comparable(store, ids):
     """The jobs to compare or combine, in the order given: 2 or 3 finished transcripts of one recording."""
@@ -497,21 +493,10 @@ def clean_speakers(given, ids, base):
     return out
 
 
-def share_audio(store, jobs, folder):
-    """Give the new job the recording's audio.flac: the same file on disk (no extra space) if possible."""
-    src = next((store.dir(j["id"]) / "audio.flac" for j in jobs if (store.dir(j["id"]) / "audio.flac").exists()), None)
-    if src is None:
-        raise Invalid(409, "the audio of this recording is missing")
-    try:
-        os.link(src, folder / "audio.flac")
-    except OSError:
-        shutil.copy2(src, folder / "audio.flac")
-
-
-def create_combined(store, body):
-    """A new transcript in the group from the picked parts of 2 or 3 of its transcripts (POST
-    /api/combine): body has ids, base, picks [{start, end, from}], speakers (changes to the computed
-    mapping) and title. Returns the new job."""
+def combination(store, body, cfg=None):
+    """What saving a combination would change on the base transcript (POST /api/combine): body has
+    ids, base, picks [{start, end, from}] and speakers (changes to the computed mapping). Returns
+    (base job id, the change for history.save, the summary, what the version records)."""
     if not isinstance(body, dict):
         raise Invalid(400, "expected a JSON object")
     ids = [str(x) for x in body.get("ids") or []] if isinstance(body.get("ids"), list) else []
@@ -526,34 +511,49 @@ def create_combined(store, body):
     mapping = {jid: {**map_speakers(tracks[jid], tracks[base]), **changes.get(jid, {})} for jid in ids if jid != base}
     lines = combine(tracks, base, picks, mapping)
     ranges = timeline(picks, base)
+    if not ranges:
+        raise Invalid(400, "pick some text from another transcript first")
 
-    base_job = by_id[base]
-    names = dict(base_job.get("speaker_names") or {})  # the base's names carry over
+    names = dict(by_id[base].get("speaker_names") or {})  # the base's names carry over
     used = {x["speaker"] for x in lines}
     for jid, m in mapping.items():  # a speaker the base doesn't have keeps its own name
         own = by_id[jid].get("speaker_names") or {}
         for s, t in m.items():
             if t in used and t not in names and own.get(s):
                 names[t] = own[s]
-    sources = [base] + [jid for jid in ids if jid != base and any(o == jid for _, _, o in ranges)]
-    meta = {"id": store.new_id(), "title": str(body.get("title") or "").strip()[:200] or base_job.get("title"),
-            "source_name": base_job.get("source_name"), "source": base_job.get("source"), "created": now(),
-            "model": "combined", "model_title": "Combined", "kind": "combined",
-            "options": base_job.get("options") or {}, "status": "done", "stage": None, "finished": now(),
-            "speaker_names": names, "audio_s": base_job.get("audio_s"), "fingerprint": base_job.get("fingerprint"),
-            "app_version": __version__,
-            "combined": {"base": base,
-                         "sources": [{"id": jid, "model_title": by_id[jid].get("model_title"),
-                                      "title": by_id[jid].get("title")} for jid in sources],
-                         "ranges": [{"start": round(s, 2), "end": round(e, 2), "from": o} for s, e, o in ranges],
-                         "speakers": {jid: m for jid, m in mapping.items() if jid in sources}}}
-    folder = store.dir(meta["id"])
-    folder.mkdir(parents=True)
-    try:
-        share_audio(store, [base_job, *jobs], folder)
-        store.save_transcript(meta["id"], {"lines": lines, "edited": False, "model": "combined"})
-        write_json(folder / "job.json", meta)  # last, so the job is complete when it shows up in the list
-    except BaseException:
-        shutil.rmtree(folder, ignore_errors=True)
-        raise
-    return meta
+    sources = [jid for jid in ids if jid != base and any(o == jid for _, _, o in ranges)]
+    audio_s = by_id[base].get("audio_s")
+    title = lambda jid: by_id[jid].get("model_title") or by_id[jid].get("model")
+    parts = [f"{title(jid)} for " + ", ".join(f"{T.clock(a)}–{T.clock(min(b, audio_s or b))}"
+                                              for a, b, o in ranges if o == jid) for jid in sources]
+    summary = "With the text of " + "; ".join(parts)
+    record = {"sources": [{"id": jid, "model_title": title(jid)} for jid in sources],
+              "ranges": [{"start": round(a, 2), "end": round(b, 2), "from": o} for a, b, o in ranges],
+              "speakers": {jid: mapping[jid] for jid in sources}}
+    return base, {"lines": lines, "speaker_names": names}, summary, record
+
+
+def preview_combined(store, body, cfg=None):
+    """The review before saving: what the new version of the base would change (history.preview)."""
+    base, change, summary, _ = combination(store, body, cfg)
+    found = history.preview(store, base, change, cfg)
+    if found is None:
+        raise Invalid(409, "wait until the transcription has finished")
+    return {**found, "base": base, "summary": f"{summary}: {found['summary'][:1].lower()}{found['summary'][1:]}"}
+
+
+def save_combined(store, body, cfg=None):
+    """Save a combination as a new version of the base transcript, with an optional message (body
+    "message"). Version 0 stays the model's output, and the version can be reviewed and restored in
+    History like any other. Returns (base job id, the version's entry)."""
+    with store.lock:  # versions are numbered in the order they are saved
+        base, change, summary, record = combination(store, body, cfg)
+        found = history.preview(store, base, change, cfg)
+        if found is None:
+            raise Invalid(409, "wait until the transcription has finished")
+        entry = history.save(store, base, change, "combine", (body or {}).get("message"),
+                             f"{summary}: {found['summary'][:1].lower()}{found['summary'][1:]}", cfg,
+                             combined=record)
+    if entry is None:
+        raise Invalid(409, "the transcript already has this text")
+    return base, entry

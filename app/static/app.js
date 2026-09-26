@@ -684,7 +684,7 @@ function detailsPanel() {
     return list.length ? `<h4>${esc(g.title)}</h4><dl class="kv">${list.map((r) => `<dt>${esc(r.label)}</dt><dd dir="${mixDir(r.value)}">${esc(r.value)}</dd>`).join("")}</dl>` : "";
   }).join("");
   const copy = `<button type="button" class="btn btn-sm" id="copyDetails">${ICON.copy} Copy details</button>`;
-  if (!d || !d.run || S.job.kind === "combined") {  // an older job, or one combined from others (no run): the plain list
+  if (!d || !d.run) {  // an older job: the plain list
     const more = rows(true);
     return `<div class="panel job-details"><h3>Details</h3>${rows(false)}
       ${more ? `<details class="more" id="moreDetails"${S.moreDetails ? " open" : ""}><summary>More details</summary>${more}</details>` : ""}${copy}</div>`;
@@ -1031,7 +1031,7 @@ async function copyText(version) {
 // ---------------------------------------------------------------------------------------------
 const HISTORY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>';
 const CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
-const KIND_LABEL = { "model output": "Model output", edit: "Edit", rename: "Rename", merge: "Merge", restore: "Restore" };
+const KIND_LABEL = { "model output": "Model output", edit: "Edit", rename: "Rename", merge: "Merge", restore: "Restore", combine: "Combined" };
 const EDITBAR = `<div class="editbar"><span>Unsaved changes</span><button class="btn btn-sm" id="discardBtn">Discard</button><button class="btn btn-sm btn-primary" id="saveBtn">Review and save</button></div>`;
 const HIST = { jid: null, versions: [], view: null, editing: null };  // the History dialog
 const REVIEW = { draft: null };  // the edits being reviewed before they are saved
