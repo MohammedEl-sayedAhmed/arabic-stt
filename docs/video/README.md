@@ -30,8 +30,11 @@ Everything shown is made up: the meeting, the names, the lines and the file.
 - `index.html`: the scenes, their timing (`data-start` and `data-duration` on each scene) and the
   timeline script.
 - `style.css`: the layout and the app's colour tokens, drawn at about 1.7 times the app's size.
-- `assets/brands.js`: a copy of `app/static/brands.js`, the Simple Icons logos (CC0-1.0) the app shows.
-  Services with no logo there get a letter tile, as in the app. `assets/icon.svg` is the app's icon.
+- `assets/brands.js`: a copy of `app/static/brands.js`, which names the brands and holds the app's
+  logos: each brand's own logo file where it has one (`assets/logos/`, copied from `app/static/logos/`,
+  with `SOURCES.md` saying where each came from), and single-colour Simple Icons glyphs (CC0-1.0) for
+  NVIDIA, Intel and AMD. Groq, whose trademark policy allows no logo in a UI, gets a letter tile, as in
+  the app. `assets/icon.svg` is the app's icon.
 - `fonts/`: IBM Plex Sans, IBM Plex Sans Arabic and IBM Plex Mono (the app's fonts), and Patrick Hand
   for the handwritten opening line. All are under the SIL Open Font License, in `OFL-IBM-Plex.txt` and
   `OFL-Patrick-Hand.txt`.

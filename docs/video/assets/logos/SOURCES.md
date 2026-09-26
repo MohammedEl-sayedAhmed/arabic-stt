@@ -1,0 +1,47 @@
+# Where the logos come from
+
+These are the logos Tafrigh shows next to the models, the hosted services and the systems it names
+(app/static/brands.js, the `LOGOS` list). Each file was downloaded on 2026-09-26 from the source below.
+The SVG files were only cleaned: the XML prolog, comments, editor metadata, titles and the fixed width
+and height of the outer element were removed, and Illustrator's entity names in the Debian file were
+written out. Shapes, colours and the viewBox are as published. The PNG files are byte for byte as
+downloaded.
+
+The logos are trademarks of their owners. Tafrigh shows them only to identify the hardware, systems,
+models and services it names, and showing them does not mean that any of these companies endorses
+Tafrigh. The notes on terms say what each brand publishes about using its logo; they are not legal advice.
+
+| File | Brand | Source | What it is | Terms found |
+| --- | --- | --- | --- | --- |
+| `googlegemini.png` | Google Gemini | https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt_f94943af3be039176192d.png, the icon of https://gemini.google.com/ | The four-colour Gemini spark, 512 px, as Google's Gemini site uses it | Google's trademark guidelines (https://partnermarketinghub.withgoogle.com/brands/google/trademarks-and-terms/trademark-guidelines-for-proper-usage/) say not to imitate Google's product icons or build them into your own marks; they do not describe this use. Google generally asks for permission to use its logos. |
+| `assemblyai.svg`, `assemblyai-dark.svg` | AssemblyAI | https://www.assemblyai.com/media/logos/secondary-light.svg and secondary-dark.svg, from the media kit at https://www.assemblyai.com/media | The logomark for light and for dark backgrounds | The media kit says: never crop, recolor, rotate or add effects; use the logo in black or white only; "Cobolt is our accent, never a logo color". The blue mark on AssemblyAI's own favicon is therefore not used. |
+| `azure.png` | Azure AI Speech | The Speech icon on https://ai.azure.com/explore/aiservices/speech (Microsoft Foundry), saved from the page's image | The round blue and violet icon with a sound wave, 96 px | Microsoft's Azure icon terms (https://learn.microsoft.com/en-us/azure/architecture/icons/) permit its icons "in architectural diagrams, training materials, or documentation" only, unless Microsoft grants permission. An app's interface is not among those uses. |
+| `openai.svg` | OpenAI | The inline Blossom mark served by https://openai.com/brand/ (the page itself sits behind a browser check) | OpenAI's Blossom, one colour (currentColor, black in an image) | OpenAI's brand guidelines (https://openai.com/brand/, read through search results because the page blocks scripts) address partners, developers and other third parties: use the logo only where it relates to OpenAI's services, exactly as provided, and without suggesting a partnership or endorsement. |
+| `speechmatics.png` | Speechmatics | https://www.speechmatics.com/apple-touch-icon.png | Speechmatics' own app icon: its symbol in dark teal on white, 180 px | The brand page (https://www.speechmatics.com/brand) offers only the full logo with the wordmark, and says to use the official files, not to change colours, and not to recreate or modify the logo. The symbol alone is taken from Speechmatics' own icon, not cut out of the full logo. |
+| `cohere.png` | Cohere | https://cohere.com/apple-touch-icon.png | Cohere's own app icon: its three shapes in dark green, coral and lilac, 180 px | No public brand page was found. |
+| `elevenlabs.svg` | ElevenLabs | https://elevenlabs.io/icon.svg, the site icon; checked against the symbol on https://elevenlabs.io/brand | The two bars in black on a white rounded square | The brand page offers the logo and symbol for download; no terms on third-party use were read (the page could not be fetched as text). |
+| `deepgram.svg` | Deepgram | The `deepgram` symbol in https://deepgram.com/icons/sprites.svg, Deepgram's own site | The D mark, one colour (currentColor, black in an image), as on Deepgram's black and white favicon | No public brand page was found (deepgram.com/brand does not exist). |
+| `mistralai.svg` | Mistral AI | Mistral-Icon-Gradient-RGB.svg in Mistral_Brandkit_2026.zip, from https://mistral.ai/brand | The M in the "sunset" gradient | The brand page says partners and collaborators are welcome to use the brand with care. The guidelines in the kit say the gradient is made for light and dark backgrounds, 20 px is the smallest size for the symbol, and not to recolour, distort, add effects or use unofficial versions. |
+| `huggingface.svg` | Hugging Face | https://huggingface.co/datasets/huggingface/brand-assets/resolve/main/hf-logo.svg, linked from https://huggingface.co/brand | The hugging face emoji logo | The brand page offers the files for download for use in projects; the name and logo are trademarks of Hugging Face. |
+| `qwen.png` | Qwen | https://img.alicdn.com/imgextra/i4/O1CN01OXv3EM1FN8t9W4P79_!!6000000000474-2-tps-80-80.png, the icon of https://qwen.ai/ | The Qwen mark in blue, 80 px | No brand page was found. (LobeHub's copy is violet, which is not what qwen.ai shows.) |
+| `meta.svg` | Meta | https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.95.1/icons/meta-color.svg (LobeHub lobe-icons, MIT) | Meta's infinity symbol in its blue gradient | Meta's brand page (https://about.meta.com/brand/resources/meta/company-brand/) offers only the full lockup with the wordmark; LobeHub's copy of the symbol was checked against it. Meta's marks may be used only as its guidelines allow or with its permission. |
+| `fedora.svg` | Fedora | https://commons.wikimedia.org/wiki/File:Fedora_icon_(2021).svg, drawn from the Fedora design team's artwork at https://pagure.io/fedora-logos | The Fedora icon, blue with a white f | Commons lists it as public domain as simple geometry and marks it as a trademark of Red Hat. The Fedora logo guidelines (https://fedoraproject.org/wiki/Logo/UsageGuidelines2) allow it unmodified, and not in a way that suggests Fedora endorses a product. |
+| `debian.svg` | Debian | https://www.debian.org/logos/openlogo-nd.svg | The Debian swirl, the Open Use Logo without the name | The Debian Open Use Logo may be used by anyone to refer to the Debian project, without implying endorsement (https://www.debian.org/logos/). |
+
+## Brands without a logo file
+
+The single-colour logos in brands.js (`BRANDS`) come from Simple Icons 16.32.0 (https://simpleicons.org),
+whose icons are CC0-1.0. They are used where the brand's own mark is one colour and Simple Icons copies it
+in the brand's colour: Intel, AMD, NVIDIA, Apple, Qualcomm, Arm, Lenovo, Huawei, Dell, HP, ASUS, Acer, MSI,
+Samsung, LG, Ubuntu, Kubuntu, KDE Plasma, KDE neon, GNOME, Xfce, Arch Linux, Linux Mint, Pop!_OS, Manjaro,
+openSUSE, Vulkan and Alibaba Cloud. Several of these owners (Apple, Intel and NVIDIA among them) license
+their logos and do not allow them without permission; Simple Icons' own disclaimer says the same.
+
+Two brands show a plain tile instead of a logo:
+
+- Groq. Its trademark policy (https://groq.com/trademark-policy) allows referring to Groq by name only,
+  "limited to word marks (no logos)", and lists using Groq logos in a UI without a licence among the things
+  not to do. The model shows the letter G.
+- Windows. Microsoft requires a trademark licence to use any Windows logo, symbol or icon
+  (https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks), and Simple Icons has none. The
+  Details panel shows the app's own laptop icon.
