@@ -80,6 +80,7 @@ unpack = { "nvidia/cuda_nvrtc/lib/libnvrtc.so.12" = 106244480, "nvidia/cuda_nvrt
 # recording to the service (the app asks for confirmation every time).
 # rtf = processing time / audio length measured on the test laptop in performance mode, for estimates
 # (rtf_gpu: the same on its integrated GPU). Once a model has run here, the app uses its measured speed.
+# maker: who made the model, shown in Settings with the repository its files come from.
 # ---------------------------------------------------------------------------------------------
 
 [[models]]
@@ -88,6 +89,7 @@ kind = "local"
 engine = "whisper"
 whisper_model = "models/whisper-medium-arabic-codeswitched-ct2"
 title = "whisper-medium code-switching"
+maker = "OpenAI Whisper, fine-tuned by Seif-Eldeen-Sameh"  # the base model and who fine-tuned it, from the model card
 tagline = "Keeps English terms in English"
 facts = ["18.5% WER on the public Egyptian set", "48.8% different from ElevenLabs on real meetings",
          "English kept: 90% / 57%", "Word timestamps"]
@@ -124,6 +126,7 @@ kind = "local"
 engine = "cohere"
 cohere_model = "models/cohere-transcribe-arabic-07-2026-gguf/cohere-transcribe-arabic-07-2026-Q4_K_M.gguf"
 title = "Cohere Transcribe Arabic"
+maker = "Cohere"               # Cohere Labs; the GGUF build is handy-computer's
 tagline = "Arabic-heavy meetings, fastest"
 facts = ["13.4% WER on the public Egyptian set", "43.8% different from ElevenLabs on real meetings",
          "Fewest errors on Arabic words", "English kept: 77% / 46%"]
@@ -144,6 +147,7 @@ engine = "whisper"
 whisper_model = "models/faster-whisper-large-v3"  # gets the Egyptian style hint automatically
 fallback = "large-v3"       # or stock large-v3 from the Hugging Face cache, if it is there
 title = "Whisper large-v3 + hint"
+maker = "OpenAI Whisper"       # converted for faster-whisper by Systran
 tagline = "Stock Whisper, slow"
 facts = ["20.8% WER on the public Egyptian set", "English kept: 88%", "Slower than real time on a laptop processor"]
 rtf = 1.8

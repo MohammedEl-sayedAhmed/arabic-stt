@@ -6,6 +6,7 @@ open in the same browser cannot send (no cross-site requests).
 """
 import json
 import os
+import posixpath
 import re
 import shutil
 import statistics
@@ -101,10 +102,20 @@ class App:
 
     def model_info(self, model, jobs=None):
         ready, reason = self.cfg.availability(model)
-        keys = ("id", "kind", "engine", "title", "tagline", "facts", "service", "key_url", "rtf", "prompt", "hub",
-                "privacy", "prompt_hint", "speakers_hint")
+        keys = ("id", "kind", "engine", "title", "tagline", "facts", "service", "key_url", "rtf", "rtf_gpu", "prompt", "hub",
+                "privacy", "prompt_hint", "speakers_hint", "maker")
         items = self.cfg.download_items()
-        return {**{k: model.get(k) for k in keys}, "ready": ready, "reason": reason,
+        if model["kind"] == "local":  # for the details in Settings
+            try:
+                file = (model.get("hub") or {}).get("file") or report.model_file(self.cfg, model) \
+                    or posixpath.basename(model.get("cohere_model") or "") or None
+            except Exception:  # noqa: BLE001 — a detail is never a reason for the status to fail
+                file = None
+            extra = {**hub.about(model), "file": file}
+        else:
+            extra = {"api_model": model.get("api_model") or ", ".join(model.get("speech_models") or []) or None,
+                     "language": model.get("locale") or model.get("language")}
+        return {**{k: model.get(k) for k in keys}, "about": extra, "ready": ready, "reason": reason,
                 "speed": self.speed(model, self.store.list() if jobs is None else jobs) if model["kind"] == "local" else None,
                 "key_source": self.cfg.key_source(model) if model["kind"] == "hosted" else None,
                 "download": self.downloads.status(model["id"]) if model["id"] in items else None,

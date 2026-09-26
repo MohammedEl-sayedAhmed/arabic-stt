@@ -24,6 +24,14 @@ removal. *Add models* has two views: *Recommended* and *From Hugging Face*. *Hos
 the API keys, *Speed* the graphics card, power mode and processor threads, and *About* the version,
 the licence and the folder where the app keeps its data.
 
+Each model or service in *Models*, *Recommended* and *Hosted services* has a line of key facts under
+its name: who made it, the engine, the licence and which graphics cards it can use, or for a service
+the provider, the API model, the hourly price and what it does with your audio. Clicking the row, or
+its arrow, opens everything known about it: the Hugging Face repository and pinned revision its files
+come from, the file, the sizes, whether it runs on the graphics card on this computer, the project's
+measured results where there are any, and for a service its privacy terms, key and region. Values the
+app doesn't have are shown as not stated.
+
 ## What it does
 
 It takes any recording, audio or video (mp3, m4a, wav, ogg, opus, flac, mp4, mkv, webm and more),

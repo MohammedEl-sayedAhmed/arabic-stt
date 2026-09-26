@@ -1394,14 +1394,14 @@ $("#rate").onchange = (e) => (audio.playbackRate = parseFloat(e.target.value));
 // ---------------------------------------------------------------------------------------------
 // Settings: one tab at a time (Models, Add models, Hosted services, Speed, About), so nothing needs a long
 // scroll; a hosted service's key form opens only for the service being edited.
-const SET = { tab: "models", add: "recommended", openKey: null };
+const SET = { tab: "models", add: "recommended", openKey: null, details: {}, animate: null };  // details: the open row of each tab
 const SET_TABS = [["models", "laptop", "Models"], ["add", "plus", "Add models"], ["hosted", "cloud", "Hosted services"],
   ["speed", "bolt", "Speed"], ["about", "info", "About"]];
 
 function openSettings(focus) {
   if (!S.status) return;  // still starting up
   if (focus === "speed" || focus === "power") SET.tab = "speed";
-  else if (focus && model(focus)?.kind === "hosted") Object.assign(SET, { tab: "hosted", openKey: focus });
+  else if (focus && model(focus)?.kind === "hosted") { Object.assign(SET, { tab: "hosted", openKey: focus }); SET.details.hosted = null; }
   renderSettings(focus);
   $("#settings").showModal();
 }
@@ -1409,6 +1409,144 @@ function openSettings(focus) {
 function setStatus(kind, text, icon = "") {
   return `<span class="status ${kind}">${icon}${esc(text)}</span>`;
 }
+
+// What a row says about its model at a glance, and what it shows when opened. Every value comes from the
+// config, the catalog, the Hugging Face importer or the app's own checks (/api/status); what isn't known is
+// left out of the row and said to be not stated when the row is opened.
+const ENGINE_NAME = { whisper: "faster-whisper", cohere: "transcribe.cpp", gguf: "transcribe.cpp" };
+const ENGINE_LONG = { whisper: "faster-whisper (CTranslate2)", cohere: "transcribe.cpp", gguf: "transcribe.cpp" };
+const KIND_NAME = { gguf: "GGUF for transcribe.cpp", ct2: "faster-whisper (CTranslate2)", transformers: "Transformers, converted for faster-whisper after the download" };
+const GPU_SHORT = { any: "Any graphics card", nvidia: "NVIDIA graphics only" };
+const gpuKind = (m) => (m.engine === "whisper" ? "nvidia" : "any");  // as the server decides: Whisper needs CUDA, transcribe.cpp uses Vulkan
+const makerOf = (m) => m.maker || (m.hub?.repo ? m.hub.repo.split("/")[0] : "") || m.service || "";
+const hourly = (m) => ((m.facts || []).join(" ").match(/\$\d+(?:\.\d+)?\/h/) || [])[0];
+const priceFact = (m) => (m.facts || []).find((f) => /\$\d/.test(f));
+
+function factsLine(parts) {
+  const p = parts.filter(Boolean);
+  return p.length ? `<div class="set-facts" title="${esc(p.join(" · "))}">${p.map(esc).join('<i aria-hidden="true">·</i>')}</div>` : "";
+}
+function localFacts(m) {  // the maker of an added model is in the "from" link just above
+  return [m.hub ? "" : makerOf(m), ENGINE_NAME[m.engine], m.about?.licence, GPU_SHORT[gpuKind(m)]];
+}
+function hostedFacts(m) {
+  return [m.service, m.about?.api_model, hourly(m), (m.facts || []).slice(-1)[0]];
+}
+
+function detailsButton(tab, id, title) {
+  const open = SET.details[tab] === id;
+  return `<button type="button" class="btn btn-sm btn-ghost set-more-btn" data-details="${esc(id)}" data-details-tab="${tab}"
+    aria-expanded="${open}" aria-controls="det-${tab}-${esc(id)}" aria-label="Details" title="${open ? "Hide" : "Show"} the details of ${esc(title)}">${ICON.chevron}</button>`;
+}
+// rows: [label, html] pairs (html null: not stated), or a string for a heading inside the list
+function detailsBox(tab, id, title, rows) {
+  const body = rows.filter(Boolean).map((r) => typeof r === "string" ? `<dt class="set-kv-head">${esc(r)}</dt>`
+    : `<dt>${esc(r[0])}</dt><dd>${r[1] == null || r[1] === "" ? '<span class="unknown">Not stated</span>' : r[1]}</dd>`).join("");
+  return `<div class="set-details${SET.animate === `${tab}:${id}` ? " enter" : ""}" id="det-${tab}-${esc(id)}" role="region" aria-label="Details of ${esc(title)}">
+    <dl class="kv set-kv">${body}</dl></div>`;
+}
+const extLink = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+function hfSource(repo, revision) {
+  if (!repo) return null;
+  const link = extLink(`https://huggingface.co/${repo}`, esc(repo));
+  return revision ? `${link}<br><span class="sub">pinned to revision ${extLink(`https://huggingface.co/${repo}/tree/${revision}`, `<code>${esc(revision.slice(0, 7))}</code>`)}</span>` : link;
+}
+const bullets = (items) => items.length ? `<ul class="set-kv-list">${items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : null;
+
+// Whether the model uses the graphics card here, from the app's GPU check and the Speed settings
+function gpuHere(m) {
+  const st = S.status, gpu = st.gpu || {}, kind = gpuKind(m), best = (gpu.devices || [])[0];
+  let here;
+  if (!st.gpu && st.gpu_probing) here = "The app is still looking for a graphics card on this computer.";
+  else if (st.settings?.device === "cpu") here = "On this computer it runs on the processor: the graphics card is switched off under Speed.";
+  else if (m.speed?.runs_on === "gpu") here = kind === "any" && best ? `On this computer it runs on ${esc(gpuName(best.name))}.` : "On this computer it runs on the NVIDIA graphics card.";
+  else if (kind === "nvidia" && gpu.cuda_devices) here = "On this computer it runs on the processor until NVIDIA's libraries are downloaded (under Speed).";
+  else if (kind === "nvidia") here = "No NVIDIA graphics card was found on this computer, so it runs on the processor.";
+  else here = "No graphics card that can help was found on this computer, so it runs on the processor.";
+  return `${esc(GPU_USE[kind])}.<br><span class="sub">${here}</span>`;
+}
+
+// The project's own measurements, as the config's facts give them (built-in models only). The facts they
+// come from are taken out of the list, so the rest can follow as "Also".
+const MEASURED = [
+  [/^([\d.]+%) WER on the public Egyptian set$/, "WER on Perle", (x) => `${x[1]} (Perle's 40 Egyptian clips)`],
+  [/^English kept: ([\d.]+%)(?: \/ ([\d.]+%))?$/, "English kept", (x) => `${x[1]} of English terms on Perle${x[2] ? `, ${x[2]} on the meeting excerpts` : ""}`],
+  [/^([\d.]+%) different from ElevenLabs on real meetings$/, "Real meetings", (x) => `${x[1]} of words differ from ElevenLabs' transcript`],
+];
+function measured(m, facts) {
+  if (m.hub) return [];
+  const rows = [];
+  for (const [re, label, text] of MEASURED) {
+    const i = facts.findIndex((f) => re.test(f));
+    if (i >= 0) { rows.push([label, esc(text(facts[i].match(re)))]); facts.splice(i, 1); }
+  }
+  if (m.rtf) rows.push(["Speed", esc(`${m.rtf}× the recording's length on the test laptop's processor`
+    + (m.rtf_gpu ? `, ${m.rtf_gpu}× on its integrated graphics` : ""))]);
+  return rows;
+}
+
+function localDetails(m, d, cached) {
+  const a = m.about || {}, facts = (m.facts || []).slice();
+  const q = a.file && /\.gguf$/i.test(a.file) ? quant(a.file) : "";
+  const tests = measured(m, facts);
+  if (m.speed?.measured) tests.push(["Measured here", esc(`${m.speed.rtf}× the recording's length, over the last runs on this computer`)]);
+  return [
+    ["Made by", esc(m.hub ? `${makerOf(m)}, on Hugging Face` : m.maker)],
+    ["From", hfSource(a.source?.repo, a.source?.revision)],
+    m.hub?.label ? ["Kind", esc(m.hub.label)] : null,
+    ["Engine", esc(ENGINE_LONG[m.engine])],
+    ["File", a.file ? `<code>${esc(a.file)}</code>${q && q !== a.file ? ` <span class="sub">(${esc(q)})</span>` : ""}` : null],
+    ["Download", d?.size ? esc(bytes(d.size)) : null],
+    ["On disk", d?.installed ? esc(bytes(d.on_disk || d.size)) : cached ? "Uses the copy in the Hugging Face cache" : "Not downloaded"],
+    ["Licence", a.licence ? esc(a.licence) : null],
+    ["Graphics card", gpuHere(m)],
+    "In the project's tests",
+    ...(tests.length ? tests : [["Results", a.evidence ? esc(a.evidence) : null]]),
+    "In words",
+    m.hub ? ["Family", esc(m.tagline)] : ["In short", esc(m.tagline)],
+    ["Good for", a.good_for ? esc(a.good_for) : null],
+    !m.hub && facts.length ? ["Also", bullets(facts)] : null,
+  ];
+}
+
+function hostedDetails(m) {
+  const a = m.about || {}, facts = (m.facts || []).slice();
+  const take = (f) => { const i = facts.indexOf(f); if (i >= 0) facts.splice(i, 1); return f; };
+  const price = priceFact(m), oneLiner = facts.slice(-1)[0];
+  const speakers = facts.find((f) => /speaker labels/i.test(f));
+  const key = m.key_source === "app" ? "Saved in the app" : m.key_source === "environment" ? "Taken from the environment" : "No key yet";
+  return [
+    ["Provider", esc(m.service)],
+    ["API model", a.api_model ? `<code>${esc(a.api_model)}</code>` : null],
+    a.language ? ["Language setting", `<code>${esc(a.language)}</code>`] : null,
+    ["Price", price ? esc(take(price)) : null],
+    ["Privacy and training", m.privacy ? `${esc(take(oneLiner))}.<br><span class="sub">${esc(m.privacy)}</span>` : oneLiner ? esc(take(oneLiner)) : null],
+    ["Speaker labels", m.speakers_hint ? esc(m.speakers_hint) : speakers ? esc(take(speakers)) : null],
+    m.prompt_hint ? ["Your terms", esc(m.prompt_hint)] : null,
+    ["API key", `${key}${m.key_url ? `<br><span class="sub">Get one at ${extLink(m.key_url, esc(m.key_url.replace(/^https:\/\//, "")))}</span>` : ""}`],
+    m.region != null ? ["Region", m.region ? `<code>${esc(m.region)}</code>` : null] : null,
+    "In words",
+    ["In short", esc(m.tagline)],
+    facts.length ? ["Also", bullets(facts)] : null,
+  ];
+}
+
+// Opens a row's details (closing the one open before on that tab) or closes them, with a short animation
+function toggleDetails(tab, id) {
+  const closing = SET.details[tab] === id;
+  const done = () => {
+    SET.details[tab] = closing ? null : id;
+    if (!closing && tab === "hosted") SET.openKey = null;  // the details take the place of the key form
+    SET.animate = closing ? null : `${tab}:${id}`;
+    renderSettings();
+    SET.animate = null;
+    $(`#settings [data-details="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+    if (!closing) $(`#det-${CSS.escape(tab)}-${CSS.escape(id)}`)?.scrollIntoView({ block: "nearest", behavior: REDUCED() ? "auto" : "smooth" });
+  };
+  const box = closing && $(`#det-${CSS.escape(tab)}-${CSS.escape(id)}`);
+  if (box && !REDUCED()) { box.classList.add("leave"); setTimeout(done, 160); } else done();
+}
+const REDUCED = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function renderSettings(focus) {
   const st = S.status;
@@ -1430,7 +1568,8 @@ function renderSettings(focus) {
   bindSettings(focus);
 }
 
-// Models on this computer: one row each, with a status that says what is there
+// Models on this computer: one row each, with a status that says what is there, a line of key facts, and
+// everything known about the model when the row is opened
 function modelsPanel(items) {
   const rows = items.map(({ id, title, d, hub, m, note }) => {
     const cached = !d.installed && model(id)?.ready;  // found elsewhere, e.g. the Hugging Face cache
@@ -1452,11 +1591,14 @@ function modelsPanel(items) {
     if (note) sub = `${note} · ${sub}`;
     const from = hub ? ` · from <a href="https://huggingface.co/${esc(hub.repo)}" target="_blank" rel="noopener noreferrer">${esc(hub.repo)}</a>${hub.label ? ` · ${esc(hub.label)}` : ""}` : "";
     const forget = hub && !busy ? `<button type="button" class="btn btn-sm btn-ghost" data-forget-model="${esc(id)}">Remove from the app</button>` : "";
-    return `<div class="set-item">
-      <div class="set-item-row">${m ? modelTile(m) : brandTile(null, ICON.users, true)}
+    const open = m && SET.details.models === id;
+    return `<div class="set-item${open ? " expanded" : ""}">
+      <div class="set-item-row"${m ? ` data-row="${esc(id)}"` : ""}>${m ? modelTile(m) : brandTile(null, ICON.users, true)}
         <div class="set-item-text"><b>${esc(title)}</b><span>${esc(sub)}${from}</span></div>
-        ${status}<div class="set-item-actions">${actions}${forget}</div></div>
-      ${busy ? `<div class="set-item-more">${downloadBlock(id, d, true)}</div>` : ""}</div>`;
+        ${status}<div class="set-item-actions">${actions}${forget}${m ? detailsButton("models", id, title) : ""}</div>
+        ${m ? factsLine(localFacts(m)) : ""}</div>
+      ${busy ? `<div class="set-item-more">${downloadBlock(id, d, true)}</div>` : ""}
+      ${open ? detailsBox("models", id, title, localDetails(m, d, cached)) : ""}</div>`;
   }).join("");
   return `<h3>Models on this computer</h3>
     <div class="set-items">${rows || '<p class="hint">No downloadable models are configured.</p>'}</div>
@@ -1485,10 +1627,13 @@ function hostedPanel(items, hosted) {
         ${m.key_source === "app" ? `<button class="btn btn-ghost btn-danger" type="button" data-clear-key="${esc(m.id)}">Remove</button>` : ""}</form>
       ${m.key_url ? `<p class="hint">Get a key: <a href="${esc(m.key_url)}" target="_blank" rel="noopener noreferrer">${esc(m.key_url.replace(/^https:\/\//, ""))}</a></p>` : ""}
     </div>` : "";
-    return `<div class="set-item${open ? " open" : ""}" id="key-${esc(m.id)}">
-      <div class="set-item-row">${modelTile(m)}
-        <div class="set-item-text"><b>${esc(m.title)}</b><span>${esc((m.facts || []).slice(-1)[0] || m.service || "")}</span></div>
-        ${status}<div class="set-item-actions">${toggle}</div></div>${form}</div>`;
+    const expanded = SET.details.hosted === m.id;
+    return `<div class="set-item${open ? " open" : ""}${expanded ? " expanded" : ""}" id="key-${esc(m.id)}">
+      <div class="set-item-row" data-row="${esc(m.id)}">${modelTile(m)}
+        <div class="set-item-text"><b>${esc(m.title)}</b><span>${esc(m.tagline || m.service || "")}</span></div>
+        ${status}<div class="set-item-actions">${toggle}${detailsButton("hosted", m.id, m.title)}</div>
+        ${factsLine(hostedFacts(m))}</div>${form}
+      ${expanded ? detailsBox("hosted", m.id, m.title, hostedDetails(m)) : ""}</div>`;
   }).join("");
   return `<h3>Hosted services</h3>
     <p class="hint">More accurate than the local models on hard recordings, with your own API key. A recording is uploaded only when you pick one of these and confirm.</p>
@@ -1579,8 +1724,14 @@ function bindSettings(focus) {
     tabs[(i + step + tabs.length) % tabs.length].click();
   }));
   $$("[data-set-add]").forEach((b) => (b.onclick = () => { SET.add = b.dataset.setAdd; renderSettings(); }));
+  $$("[data-details]").forEach((b) => (b.onclick = () => toggleDetails(b.dataset.detailsTab, b.dataset.details)));
+  $$("#settings [data-row]").forEach((row) => (row.onclick = (e) => {  // a click anywhere on the row but its controls
+    if (e.target.closest("button, a, input, select, label, form, .dl") || getSelection().toString()) return;
+    row.querySelector("[data-details]")?.click();
+  }));
   $$("[data-key-toggle]").forEach((b) => (b.onclick = () => {
     SET.openKey = SET.openKey === b.dataset.keyToggle ? null : b.dataset.keyToggle;
+    if (SET.openKey) SET.details.hosted = null;  // the key form takes the place of the details
     renderSettings();
     if (SET.openKey) $(`[data-key="${SET.openKey}"]`)?.focus();
   }));
@@ -1626,14 +1777,32 @@ function catalogRow(c) {
   const action = builtin ? setStatus("none", "Built in")
     : c.added ? setStatus("ok", `Added${c.added_file && c.files?.length > 1 ? `: ${quant(c.added_file)}` : ""}`, ICON.check)
     : c.problem ? "" : `<button type="button" class="btn btn-sm btn-primary" data-catalog-add="${esc(c.key)}" ${HUB.busy ? "disabled" : ""}>${ICON.download} Add (${bytes(size)})</button>`;
-  const facts = [size ? bytes(size) : "", `Licence: ${esc(c.licence)}`, esc(GPU_USE[c.gpu] || c.gpu)];
+  const engine = builtin ? ENGINE_NAME[builtin.engine] : c.kind === "gguf" ? "transcribe.cpp" : "faster-whisper";
+  const maker = builtin ? makerOf(builtin) : String(c.repo || "").split("/")[0];
+  const facts = [maker, engine, size ? bytes(size) : "", c.licence, GPU_SHORT[c.gpu]];
   const tile = modelTile(builtin || { kind: "local", title: c.name, hub: { repo: c.repo } });
-  return `<div class="set-item catalog-item">
-    <div class="set-item-row">${tile}<div class="set-item-text"><b>${esc(c.name)}</b><span>${esc(c.good_for)}</span></div>
-      <div class="set-item-actions">${pick}${action}</div></div>
-    <div class="set-item-more"><p>${esc(c.evidence)}</p><p>${facts.filter(Boolean).join(" · ")}</p>
-      ${c.problem ? `<p class="mc-missing">${esc(c.problem)}</p>` : ""}</div>
+  const open = SET.details.add === c.key;
+  return `<div class="set-item catalog-item${open ? " expanded" : ""}">
+    <div class="set-item-row" data-row="${esc(c.key)}">${tile}<div class="set-item-text"><b>${esc(c.name)}</b><span>${esc(c.good_for)}</span></div>
+      <div class="set-item-actions">${pick}${action}${detailsButton("add", c.key, c.name)}</div>${factsLine(facts)}</div>
+    ${c.problem ? `<div class="set-item-more"><p class="mc-missing">${esc(c.problem)}</p></div>` : ""}
+    ${open ? detailsBox("add", c.key, c.name, catalogDetails(c, builtin)) : ""}
   </div>`;
+}
+
+function catalogDetails(c, builtin) {
+  const a = builtin?.about || {};
+  const size = c.size || builtin?.download?.size;
+  return [
+    ["Made by", esc(builtin ? builtin.maker : `${String(c.repo).split("/")[0]}, on Hugging Face`)],
+    ["From", builtin ? hfSource(a.source?.repo, a.source?.revision) : hfSource(c.repo, c.revision)],
+    ["Kind", esc(builtin ? `Built in, runs with ${ENGINE_LONG[builtin.engine]}` : `${KIND_NAME[c.kind] || c.kind}${c.architecture ? ` (${c.architecture})` : ""}`)],
+    c.files ? ["Files", bullets(c.files.map((f) => `${f.file} (${bytes(f.size)})`))] : ["Download", size ? esc(bytes(size)) : null],
+    ["Licence", c.licence ? esc(c.licence) : null],
+    ["Graphics card", GPU_USE[c.gpu] ? esc(GPU_USE[c.gpu]) : null],
+    ["Good for", c.good_for ? esc(c.good_for) : null],
+    ["In the project's tests", c.evidence ? esc(c.evidence) : null],
+  ];
 }
 
 function hubBlock() {

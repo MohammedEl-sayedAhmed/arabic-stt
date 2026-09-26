@@ -594,6 +594,27 @@ def catalog(cfg):
     return out
 
 
+PINNED = re.compile(r"^https://huggingface\.co/([^/]+/[^/]+)/resolve/([0-9a-f]{7,40})/")
+
+
+def about(model):
+    """What Settings shows of a local model beyond its row, all from the data: the Hugging Face repository
+    and pinned revision its files come from (for a built-in model, read from its first file's link), its
+    licence (from the config, the model page or the catalog), and the catalog's words about it."""
+    h = model.get("hub") if isinstance(model.get("hub"), dict) else {}
+    source = {"repo": h["repo"], "revision": h.get("revision")} if h.get("repo") else None
+    for f in model.get("files") or []:
+        m = PINNED.match(str(f.get("url", ""))) if not source else None
+        if m:
+            source = {"repo": m[1], "revision": m[2]}
+    repo = (source or {}).get("repo", "").lower()
+    rec = next((c for c in recommended() if c.get("builtin") == model.get("id")
+                or (h and repo and str(c.get("repo", "")).lower() == repo)), {})
+    stated = next((str(f)[len("Licence: "):] for f in model.get("facts") or [] if str(f).startswith("Licence: ")), None)
+    return {"source": source, "licence": model.get("licence") or stated or rec.get("licence"),
+            "good_for": rec.get("good_for"), "evidence": rec.get("evidence")}
+
+
 # ---------------------------------------------------------------------------------------------
 # Conversion of a Transformers checkpoint, for downloads.py
 # ---------------------------------------------------------------------------------------------
