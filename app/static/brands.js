@@ -91,7 +91,7 @@ const BRANDS = {
 // stays on a light tile in both themes, so its colours stay true.
 // "fill": an app icon with its own margin, drawn to the edges of the tile.
 const LOGOS = {
-  googlegemini: { title: "Google Gemini", file: "googlegemini.png" },
+  googlegemini: { title: "Google Gemini", file: "googlegemini.svg" },  // vector, from LobeHub
   assemblyai: { title: "AssemblyAI", file: "assemblyai.svg", dark: "assemblyai-dark.svg" },
   azure: { title: "Azure AI Speech", file: "azure.png" },
   openai: { title: "OpenAI", file: "openai.svg" },
@@ -105,6 +105,7 @@ const LOGOS = {
   meta: { title: "Meta", file: "meta.svg", dark: "meta.svg" },  // the same symbol on Meta's dark lockup
   fedora: { title: "Fedora", file: "fedora.svg" },
   debian: { title: "Debian", file: "debian.svg" },
+  groq: { title: "Groq", file: "groq.svg", dark: "groq-dark.svg" },
 };
 const logoSrc = (file) => `/static/logos/${file}`;
 const brandTitle = (slug) => (LOGOS[slug] || BRANDS[slug] || {}).title || slug;
@@ -142,6 +143,7 @@ const BRAND_NAMES = [
   ["elevenlabs", /\belevenlabs\b/i],
   ["deepgram", /\bdeepgram\b/i],
   ["googlegemini", /\bgemini\b/i],
+  ["groq", /\bgroq\b/i],
   ["mistralai", /\b(mistral|voxtral)\b/i],
   ["qwen", /\bqwen\d*/i],
   ["meta", /\b(meta|facebook|omnilingual)\b/i],
