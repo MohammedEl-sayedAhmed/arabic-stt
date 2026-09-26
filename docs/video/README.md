@@ -114,6 +114,13 @@ ffmpeg -ss 34.3 -t 9.25 -i renders/sedjem.mp4 -i renders/palette.png \
   -loop 0 ../images/sedjem-preview.gif
 ```
 
+`thumbnail.png` is the cover to choose when the video is posted (LinkedIn, YouTube and the like): the end
+card, with the logo, the tagline and the repository link, taken from the finished video:
+
+```sh
+ffmpeg -ss 58.5 -i sedjem-tech.mp4 -frames:v 1 -update 1 thumbnail.png
+```
+
 To change a scene, edit its markup and its block in the timeline script (each block is headed with
 the second it starts at), then look at single frames before a full render:
 
