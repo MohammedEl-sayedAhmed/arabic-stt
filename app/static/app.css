@@ -638,6 +638,19 @@ label.set-row { cursor: pointer; }
 :root:not([data-theme="dark"]) .logo-tile.plain-light:not(.plain-dark) { background: #1d232b; border-color: #1d232b; }
 :root[data-theme="dark"] .logo-tile.plain-dark:not(.plain-light) { background: #f3f5f7; border-color: #f3f5f7; }
 .logo-tile.plain-light.plain-dark { color: var(--text); background: var(--sunken); border-color: var(--border); }
+/* A brand's own full-colour logo (brands.js LOGOS) is made for a white background: a white tile with a
+   light border in both themes, or, where the brand has a version for dark backgrounds, a dark tile with
+   that version in the dark theme. */
+.logo-tile.img { background: #fff; border-color: #e3e6ea; }
+.logo-tile img { display: block; width: 24px; height: 24px; object-fit: contain; }
+.logo-tile.small img { width: 19px; height: 19px; }
+.logo-tile.fill { overflow: hidden; }
+.logo-tile.fill img { width: 100%; height: 100%; }  /* an app icon that has its own margin */
+.logo-tile .on-dark { display: none; }
+:root[data-theme="dark"] .logo-tile.img { border-color: #fff; }
+:root[data-theme="dark"] .logo-tile.img.has-dark { background: var(--sunken); border-color: var(--border); }
+:root[data-theme="dark"] .logo-tile.has-dark .on-light { display: none; }
+:root[data-theme="dark"] .logo-tile.has-dark .on-dark { display: block; }
 .job-details .more summary { margin-top: 14px; }
 
 /* ---------- version history, and the review of edits before they are saved ---------- */

@@ -500,10 +500,22 @@ class VendorLogoTests(unittest.TestCase):
     def test_every_name_has_a_logo_and_the_page_loads_them_first(self):
         """app/static/brands.js: a name pointing to a missing logo would break the whole Details panel."""
         js = (ROOT / "app" / "static" / "brands.js").read_text(encoding="utf-8")
-        logos = dict(re.findall(r'^  (\w+): \{ title: "[^"]+", hex: "([0-9A-F]{6})",\n    path: "M[^"]+" \},$', js, re.M))
+        glyphs = dict(re.findall(r'^  (\w+): \{ title: "[^"]+", hex: "([0-9A-F]{6})",\n    path: "M[^"]+" \},$', js, re.M))
+        files = re.findall(r'^  (\w+): \{ title: "[^"]+", file: "([\w.-]+)"(?:, dark: "([\w.-]+)")?(?:, fill: true)? \},', js, re.M)
         names = re.findall(r'^  \["(\w+)", /.+/i\],$', js, re.M)
-        self.assertGreater(len(logos), 10)
-        self.assertEqual(sorted(set(names)), sorted(logos))
+        self.assertGreater(len(glyphs), 10)
+        self.assertGreater(len(files), 10)
+        self.assertEqual(sorted(set(names)), sorted(set(glyphs) | {slug for slug, *_ in files}))
+        # each logo file is there, and each file there is used and listed in SOURCES.md
+        folder = ROOT / "app" / "static" / "logos"
+        used = {f for _, *pair in files for f in pair if f}
+        self.assertEqual(sorted(used), sorted(p.name for p in folder.iterdir() if p.name != "SOURCES.md"))
+        sources = (folder / "SOURCES.md").read_text(encoding="utf-8")
+        for f in used:
+            self.assertIn(f"`{f}`", sources)
+            if f.endswith(".svg"):  # cleaned: no scripts, external references or fixed size
+                svg = (folder / f).read_text(encoding="utf-8")
+                self.assertNotRegex(svg, r"<script|href=\"(?!#)|<svg[^>]*\s(width|height)=")
         html = (ROOT / "app" / "static" / "index.html").read_text(encoding="utf-8")
         self.assertLess(html.index('src="/static/brands.js"'), html.index('src="/static/app.js"'))
 

@@ -192,15 +192,41 @@ class SettingsDialog(UiTestCase):
 
     def test_logos_of_models_and_services(self):
         self.open()
-        self.page.wait_for_selector(".model-card[data-model='speechmatics'] .mc-head .logo-tile")
+        self.page.wait_for_selector(".model-card[data-model='groq'] .mc-head .logo-tile")
         labels = self.page.eval_on_selector_all(".model-card .mc-head .logo-tile",
                                                 "els => els.map(e => e.getAttribute('title') || e.textContent.trim())")
         self.assertIn("Hugging Face", labels)  # a model downloaded from there, with no logo of its own
+        self.assertIn("Cohere", labels)
         self.assertIn("ElevenLabs", labels)
         self.assertIn("Google Gemini", labels)
-        self.assertIn("Speechmatics", labels)  # no logo in Simple Icons: a tile with its initial
-        mono = self.page.locator(".model-card[data-model='speechmatics'] .logo-tile.mono").inner_text()
-        self.assertEqual(mono, "S")
+        self.assertIn("Speechmatics", labels)
+        # Groq's trademark policy allows no logo in an app's UI: a tile with its initial
+        mono = self.page.locator(".model-card[data-model='groq'] .logo-tile.mono").inner_text()
+        self.assertEqual(mono, "G")
+
+    def test_each_hosted_service_shows_its_own_logo(self):
+        self.open()
+        self.page.wait_for_selector(".model-card[data-model='mistral'] .mc-head .logo-tile")
+        for theme in ("light", "dark"):
+            self.page.evaluate("t => document.documentElement.dataset.theme = t", theme)
+            self.page.wait_for_function("""() => [...document.querySelectorAll('.model-card .mc-head .logo-tile img')]
+                .every(i => i.complete)""")
+            shown = self.page.evaluate("""() => Object.fromEntries([...document.querySelectorAll('.model-card')].map(card => {
+                const img = [...card.querySelectorAll('.mc-head .logo-tile img')].find(i => getComputedStyle(i).display !== 'none');
+                return [card.dataset.model, img ? [img.alt, img.naturalWidth, img.getBoundingClientRect().width] : null];
+            }))""")
+            for model, name in (("elevenlabs", "ElevenLabs"), ("gemini", "Google Gemini"), ("deepgram", "Deepgram"),
+                                ("assemblyai", "AssemblyAI"), ("azure", "Azure AI Speech"),
+                                ("speechmatics", "Speechmatics"), ("openai", "OpenAI"), ("mistral", "Mistral AI")):
+                with self.subTest(model=model, theme=theme):
+                    alt, natural, width = shown[model]
+                    self.assertEqual(alt, name)
+                    self.assertGreater(natural, 0)  # the file loaded
+                    self.assertGreater(width, 0)
+            self.assertIsNone(shown["groq"])
+        # AssemblyAI's own version for dark backgrounds, in the dark theme
+        src = self.page.eval_on_selector(".model-card[data-model='assemblyai'] .logo-tile img.on-dark", "i => i.src")
+        self.assertTrue(src.endswith("/static/logos/assemblyai-dark.svg"))
 
     def test_gpu_chip(self):
         self.open()

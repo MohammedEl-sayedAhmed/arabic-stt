@@ -721,7 +721,7 @@ function detailsPanel() {
     : recorded ? `<div class="det-row">${logoTile("", icon, true)}<div class="det-sub">${esc(what)}: not detected</div></div>` : "";
   const line = (text, icon, sub) => text ? `<div class="det-row">${logoTile(text, icon, true)}<div><div dir="${mixDir(text)}">${esc(text)}</div>${sub ? `<div class="det-sub">${esc(sub)}</div>` : ""}</div></div>` : "";
   const maker = pc.manufacturer && typeof brandFor === "function" && brandFor(pc.manufacturer)
-    ? BRANDS[brandFor(pc.manufacturer)].title : pc.manufacturer;  // "LENOVO" -> "Lenovo"
+    ? brandTitle(brandFor(pc.manufacturer)) : pc.manufacturer;  // "LENOVO" -> "Lenovo"
   const machine = [maker, pc.model].filter(Boolean).join(" ");
   const os = String(pc.os || "").replace(/\s*\(.*\)\s*$/, "");
   const said = [value("Language"), value("Speakers") && `Speakers: ${value("Speakers")}`].filter(Boolean).join(" · ");
@@ -738,14 +738,14 @@ function detailsPanel() {
     ${copy}</div>`;
 }
 
-// A brand's logo on a tinted tile (brands.js), or the given icon when no brand is named in the text.
+// A brand's logo on a tile (brands.js), or the given icon when no brand is named in the text.
 function logoTile(text, icon, small = false) {
   return brandTile(typeof brandFor === "function" ? brandFor(text) : null, icon, small);
 }
 
-// A model's logo: its maker's where Simple Icons has one (NVIDIA, Qwen, Mistral, Google…), else where it
-// comes from: the hosted service's, or Hugging Face's for a model downloaded from there. Hosted services
-// with no logo there get their initial.
+// A model's logo: its maker's (NVIDIA, Qwen, Mistral, Cohere, Google…), else where it comes from: the
+// hosted service's, or Hugging Face's for a model downloaded from there. A hosted service with no logo
+// the app may show (Groq) gets its initial.
 function modelBrand(m) {
   if (!m || typeof brandsFor !== "function") return null;
   const org = (m.hub?.repo || "").split("/")[0];
@@ -758,9 +758,17 @@ function modelTile(m, small = true) {
   return `<span class="logo-tile${small ? " small" : ""} plain mono" title="${esc(name)}" aria-hidden="true">${esc(name.trim()[0].toUpperCase())}</span>`;
 }
 
+// The brand's own logo file on a light tile (and its dark version on a dark tile in the dark theme), else
+// its single-colour Simple Icons glyph on a tile tinted with its colour.
 function brandTile(slug, icon, small = false) {
-  const b = slug && typeof BRANDS !== "undefined" && BRANDS[slug];
   const cls = `logo-tile${small ? " small" : ""}`;
+  const logo = slug && typeof LOGOS !== "undefined" && LOGOS[slug];
+  if (logo) {
+    const t = esc(logo.title);
+    const img = (file, which) => `<img class="${which}" src="${logoSrc(file)}" alt="${t}" draggable="false">`;
+    return `<span class="${cls} img${logo.dark ? " has-dark" : ""}${logo.fill ? " fill" : ""}" title="${t}">${img(logo.file, "on-light")}${logo.dark ? img(logo.dark, "on-dark") : ""}</span>`;
+  }
+  const b = slug && typeof BRANDS !== "undefined" && BRANDS[slug];
   if (!b) return `<span class="${cls} plain">${icon}</span>`;
   const plain = Object.keys(SURFACES).filter((t) => contrast(b.hex, SURFACES[t]) < 3).map((t) => ` plain-${t}`).join("");
   return `<span class="${cls}${plain}" style="--brand:#${b.hex}" title="${esc(b.title)}"><svg viewBox="0 0 24 24" role="img" aria-label="${esc(b.title)}"><path d="${b.path}"/></svg></span>`;

@@ -705,7 +705,7 @@ def clean_lines(lines):
 
 ROUTES = [
     ("GET", r"/", Handler.static),
-    ("GET", r"/static/([\w.-]+)", Handler.static),
+    ("GET", r"/static/((?:logos/)?[\w.-]+)", Handler.static),  # logos/: the brands' logo files (brands.js)
     ("GET", r"/sw\.js", Handler.service_worker),
     ("GET", r"/api/status", Handler.status),
     ("GET", r"/api/jobs", Handler.list_jobs),

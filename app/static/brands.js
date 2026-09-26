@@ -1,9 +1,16 @@
 /* Tafrigh: logos of the makers of the hardware, systems, models and services the app names: in the job
-   page's Details panel, on the model cards and in Settings. From Simple Icons 16.32.0 (https://simpleicons.org, CC0-1.0), only the icons used here:
-   single paths on a 24 x 24 grid, and each brand's colour. The trademarks belong to their owners; the logos
-   are shown only to identify the hardware and software. (Simple Icons has no Windows or Microsoft logo;
-   Debian's and Fedora's there are not CC0, so they are left out. It has none for OpenAI, Cohere, IBM,
-   AssemblyAI, Speechmatics or Groq either: those show a plain tile.) */
+   page's Details panel, on the model cards and in Settings.
+
+   LOGOS: each brand's own logo in its own colours, a file in app/static/logos/ taken from the brand's
+   brand or press page, its own site or product, or a faithful open copy (LobeHub's lobe-icons, MIT;
+   Wikimedia Commons). app/static/logos/SOURCES.md says where each file comes from, when it was fetched
+   and the terms found for it.
+   BRANDS: single-colour logos from Simple Icons 16.32.0 (https://simpleicons.org, CC0-1.0), single paths
+   on a 24 x 24 grid with each brand's colour. They are used where the brand's own mark is one colour, and
+   they name the brands for the Details panel's text matching.
+   A brand with neither shows a plain tile: Groq, whose trademark policy allows no logo in a UI without a
+   licence, and Windows, whose logo Microsoft licenses only (Simple Icons has none either). The trademarks belong to their owners; the logos are shown only to identify the hardware,
+   systems, models and services the app names, and do not mean that any of them endorses the app. */
 "use strict";
 
 const BRANDS = {
@@ -79,6 +86,29 @@ const BRANDS = {
     path: "M3.996 4.517h5.291L8.01 6.324 4.153 7.506a1.668 1.668 0 0 0-1.165 1.601v5.786a1.668 1.668 0 0 0 1.165 1.6l3.857 1.183 1.277 1.807H3.996A3.996 3.996 0 0 1 0 15.487V8.513a3.996 3.996 0 0 1 3.996-3.996m16.008 0h-5.291l1.277 1.807 3.857 1.182c.715.227 1.17.889 1.165 1.601v5.786a1.668 1.668 0 0 1-1.165 1.6l-3.857 1.183-1.277 1.807h5.291A3.996 3.996 0 0 0 24 15.487V8.513a3.996 3.996 0 0 0-3.996-3.996m-4.007 8.345H8.002v-1.804h7.995Z" },
 };
 
+// The brands' own logos, in app/static/logos/ (sources and terms: app/static/logos/SOURCES.md). "dark" is
+// the brand's version for dark backgrounds, shown on a dark tile in the dark theme; a logo without one
+// stays on a light tile in both themes, so its colours stay true.
+// "fill": an app icon with its own margin, drawn to the edges of the tile.
+const LOGOS = {
+  googlegemini: { title: "Google Gemini", file: "googlegemini.png" },
+  assemblyai: { title: "AssemblyAI", file: "assemblyai.svg", dark: "assemblyai-dark.svg" },
+  azure: { title: "Azure AI Speech", file: "azure.png" },
+  openai: { title: "OpenAI", file: "openai.svg" },
+  speechmatics: { title: "Speechmatics", file: "speechmatics.png", fill: true },  // an app icon, with its own margin
+  cohere: { title: "Cohere", file: "cohere.png" },
+  elevenlabs: { title: "ElevenLabs", file: "elevenlabs.svg", fill: true },
+  deepgram: { title: "Deepgram", file: "deepgram.svg" },
+  mistralai: { title: "Mistral AI", file: "mistralai.svg", dark: "mistralai.svg" },  // its gradient is made for both
+  huggingface: { title: "Hugging Face", file: "huggingface.svg" },
+  qwen: { title: "Qwen", file: "qwen.png" },
+  meta: { title: "Meta", file: "meta.svg", dark: "meta.svg" },  // the same symbol on Meta's dark lockup
+  fedora: { title: "Fedora", file: "fedora.svg" },
+  debian: { title: "Debian", file: "debian.svg" },
+};
+const logoSrc = (file) => `/static/logos/${file}`;
+const brandTitle = (slug) => (LOGOS[slug] || BRANDS[slug] || {}).title || slug;
+
 // The names that point to each brand, matched case-insensitively ("12th Gen Intel(R) Core(TM)" -> intel,
 // "NVIDIA RTX A1000" and "GeForce RTX 3050" -> nvidia, "LENOVO" -> lenovo, "Ubuntu 24.04" -> ubuntu).
 const BRAND_NAMES = [
@@ -118,6 +148,14 @@ const BRAND_NAMES = [
   ["alibabacloud", /\b(alibaba|sensevoice|funaudiollm|paraformer)\b/i],
   ["huggingface", /\b(hugging ?face|hf\.co)\b/i],
   ["vulkan", /\bvulkan\b/i],
+  // brands with a logo file only (LOGOS)
+  ["fedora", /\bfedora\b/i],
+  ["debian", /\bdebian\b/i],
+  ["openai", /\bopenai\b/i],
+  ["assemblyai", /\bassembly ?ai\b/i],
+  ["azure", /\bazure\b/i],
+  ["speechmatics", /\bspeechmatics\b/i],
+  ["cohere", /\bcohere(labs)?\b/i],
 ];
 
 // The brands named in a text, in the order they appear ("Intel Iris Xe Graphics (Vulkan)" -> intel, vulkan).
@@ -147,7 +185,9 @@ function contrast(a, b) {
 // Inline logos for the brands named in a text, at the size of the text, titled with the brand's name.
 function brandIcons(text) {
   return brandsFor(text).map((slug) => {
-    const { title, hex, path } = BRANDS[slug];
+    const title = brandTitle(slug);
+    if (LOGOS[slug]) return `<img class="vendor" src="${logoSrc(LOGOS[slug].file)}" alt="${title}" title="${title}">`;
+    const { hex, path } = BRANDS[slug];
     const plain = Object.keys(SURFACES).filter((t) => contrast(hex, SURFACES[t]) < 3).map((t) => ` plain-${t}`).join("");
     return `<svg class="vendor${plain}" viewBox="0 0 24 24" role="img" aria-label="${title}" style="--brand:#${hex}"><title>${title}</title><path d="${path}"/></svg>`;
   }).join("");
