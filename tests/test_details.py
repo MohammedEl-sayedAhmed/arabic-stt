@@ -158,13 +158,39 @@ class MachineTests(unittest.TestCase):
             (d / "cpuinfo").write_text("processor\t: 0\nvendor_id\t: GenuineIntel\n"
                                        "model name\t: 12th Gen Intel(R) Core(TM) i5-1245U\n")
             with mock.patch.object(sysinfo, "DMI", d / "dmi"), mock.patch.object(sysinfo, "OS_RELEASE", d / "os-release"), \
-                    mock.patch.object(sysinfo, "CPUINFO", d / "cpuinfo"), \
+                    mock.patch.object(sysinfo, "CPUINFO", d / "cpuinfo"), mock.patch.object(sysinfo, "KDE_ABOUT", d / "none"), \
+                    mock.patch.dict(os.environ, {"XDG_CURRENT_DESKTOP": ""}), \
                     mock.patch("platform.release", return_value="7.0.0-31-generic"), \
                     mock.patch("os.sysconf", create=True, side_effect=lambda k: 4096 if k == "SC_PAGE_SIZE" else 4_000_000):
                 info = sysinfo._linux()
         self.assertEqual(info, {"manufacturer": "LENOVO", "model": "ThinkPad L14 Gen 3",
                                 "os": "Ubuntu 24.04.4 LTS (Linux 7.0.0-31-generic)",
                                 "cpu": "12th Gen Intel(R) Core(TM) i5-1245U", "ram": 4096 * 4_000_000})
+
+    def test_kde_editions_and_the_desktop_are_named(self):
+        """Kubuntu keeps Ubuntu's os-release; the name comes from KDE's About file, and the desktop is named."""
+        def os_name(release, about, desktop, plasma="5.27.12"):
+            with tempfile.TemporaryDirectory() as d:
+                d = Path(d)
+                (d / "os-release").write_text(release)
+                (d / "about").write_text(about)
+                (d / "xsessions").mkdir()
+                (d / "xsessions" / "plasma.desktop").write_text(f"[Desktop Entry]\nName=Plasma (X11)\nX-KDE-PluginInfo-Version={plasma}\n")
+                with mock.patch.object(sysinfo, "OS_RELEASE", d / "os-release"), mock.patch.object(sysinfo, "KDE_ABOUT", d / "about"), \
+                        mock.patch.object(sysinfo, "SESSIONS", (d / "wayland-sessions", d / "xsessions")), \
+                        mock.patch.dict(os.environ, {"XDG_CURRENT_DESKTOP": desktop}), \
+                        mock.patch("platform.release", return_value="7.0.0-31-generic"):
+                    return sysinfo._linux_os()
+        ubuntu = 'NAME="Ubuntu"\nPRETTY_NAME="Ubuntu 24.04.4 LTS"\nID=ubuntu\n'
+        kubuntu = "[General]\nLogoPath=/usr/share/kubuntu-default-settings/kubuntu-circle-128.png\nWebsite=https://www.kubuntu.org\nName=Kubuntu\n"
+        self.assertEqual(os_name(ubuntu, kubuntu, "KDE"), "Kubuntu 24.04.4 LTS, KDE Plasma 5.27 (Linux 7.0.0-31-generic)")
+        # the same Kubuntu packages, but a GNOME session: that is Ubuntu's own desktop
+        self.assertEqual(os_name(ubuntu, kubuntu, "ubuntu:GNOME"), "Ubuntu 24.04.4 LTS, GNOME (Linux 7.0.0-31-generic)")
+        # KDE neon already says so in its os-release
+        self.assertEqual(os_name('NAME="KDE neon"\nPRETTY_NAME="KDE neon 6.2"\n', "[General]\nName=KDE neon\n", "KDE", "6.2.4"),
+                         "KDE neon 6.2, KDE Plasma 6.2 (Linux 7.0.0-31-generic)")
+        # outside a desktop session (over SSH) the edition is still named
+        self.assertEqual(os_name(ubuntu, kubuntu, ""), "Kubuntu 24.04.4 LTS (Linux 7.0.0-31-generic)")
 
     def test_missing_files_and_failing_calls_give_none(self):
         missing = Path(tempfile.gettempdir()) / "tafrigh-no-such-folder"
@@ -340,6 +366,15 @@ class DetailsTests(unittest.TestCase):
             self.assertNotIn(key, r)
         self.assertEqual(report.summary(d)[1:], ["Model: ElevenLabs Scribe (scribe_v2), took 2 min (1.07× real time)",
                                                  "Ran on: ElevenLabs", "Made: 2026-09-25 22:17 with Tafrigh 0.1.0"])
+
+    def test_computer_details_that_could_not_be_read_say_so(self):
+        job = {**LOCAL_JOB, "machine": {**dict.fromkeys(sysinfo.MACHINE_KEYS), "cpu": "Apple M2", "threads": 8}}
+        r = rows(report.details(job, []))
+        self.assertEqual(r[("Computer", "Processor")][0], "Apple M2, 8 threads")
+        for label in ("Computer", "Memory", "Graphics", "System"):
+            self.assertEqual(r[("Computer", label)][0], "Not detected", label)
+        # an older job recorded no computer at all: nothing is claimed about it
+        self.assertFalse([k for k in rows(report.details({**LOCAL_JOB, "machine": None}, [])) if k[0] == "Computer"])
 
     def test_an_older_job_without_the_new_fields(self):
         d = report.details(OLD_JOB, [])

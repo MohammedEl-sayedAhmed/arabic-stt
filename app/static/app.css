@@ -346,7 +346,11 @@ details.path .row { display: flex; gap: 8px; margin-top: 10px; }
 }
 
 .job-body { display: grid; grid-template-columns: 1fr 250px; gap: 18px; align-items: start; }
-.side-col { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 14px; }
+/* sticky, and scrolled on its own when taller than the window, so the details stay in reach in a long transcript */
+.side-col {
+  position: sticky; top: 12px; display: flex; flex-direction: column; gap: 14px;
+  max-height: calc(100vh - 100px);  /* the window less the player bar at the bottom */ overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+}
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
 .panel h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--faint); margin: 0 0 10px; font-weight: 650; }
 .job-details h4 { font-size: 12.5px; font-weight: 650; margin: 14px 0 6px; }

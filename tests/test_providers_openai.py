@@ -1,7 +1,7 @@
 """Tests for the OpenAI, Groq and Mistral clients (app/hosted_openai.py).
 
 The services are replaced by a local mock server that follows the documented request and reply
-formats, so no audio leaves the laptop and no keys are needed.
+formats, so no audio leaves this computer and no keys are needed.
 Run: .venv/bin/python -m unittest discover -s tests -v
 """
 import base64

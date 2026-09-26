@@ -26,7 +26,7 @@ language = "ar"             # "ar", "en" or "auto"
 # python = ""               # interpreter for local runs; default: the one running the app
 threads = 10                # CPU threads for the local models
 voiceprint_model = "models/diarization/nemo_en_titanet_small.onnx"
-# Switch the laptop to the performance power profile while local jobs run, and back afterwards
+# Switch the computer to the performance power profile while local jobs run, and back afterwards
 # (Linux, powerprofilesctl). Power-saver makes local models about 3-5x slower. Also a switch in Settings.
 performance_while_running = false
 # "auto": use a graphics card when one works (Cohere through Vulkan on any GPU; Whisper on NVIDIA GPUs

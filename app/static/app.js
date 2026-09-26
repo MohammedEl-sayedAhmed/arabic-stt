@@ -705,6 +705,10 @@ function detailsPanel() {
   const engine = { cohere: "transcribe.cpp", gguf: "transcribe.cpp", whisper: "faster-whisper", llama: "llama.cpp" }[mod.engine] || mod.service || "";
   const modChips = [engine, quant && `GGUF ${quant[1].toUpperCase()}`, mod.api_model].filter(Boolean);
   const chips = (list) => list.length ? `<div class="chips">${list.map((c) => `<span class="chip" dir="auto">${esc(c)}</span>`).join("")}</div>` : "";
+  // a detail of the computer the app looked for but couldn't read says so, rather than being left out or guessed
+  const recorded = !!run.computer_recorded;
+  const found = (text, what, icon, sub) => text ? line(text, icon, sub)
+    : recorded ? `<div class="det-row">${logoTile("", icon, true)}<div class="det-sub">${esc(what)}: not detected</div></div>` : "";
   const line = (text, icon, sub) => text ? `<div class="det-row">${logoTile(text, icon, true)}<div><div dir="${mixDir(text)}">${esc(text)}</div>${sub ? `<div class="det-sub">${esc(sub)}</div>` : ""}</div></div>` : "";
   const maker = pc.manufacturer && typeof brandFor === "function" && brandFor(pc.manufacturer)
     ? BRANDS[brandFor(pc.manufacturer)].title : pc.manufacturer;  // "LENOVO" -> "Lenovo"
@@ -718,8 +722,8 @@ function detailsPanel() {
     </div>
     ${rec.name ? `<section class="det-sec"><h4>${ICON.wave} Recording</h4><div class="det-main" dir="auto">${esc(rec.name)}</div>${chips(recChips)}</section>` : ""}
     <section class="det-sec"><h4>${ICON.layers} Model</h4><div class="det-main">${esc(mod.title || S.job.model_title || "")}</div>${chips(modChips)}${said ? `<div class="det-sub">${esc(said)}</div>` : ""}</section>
-    ${machine || pc.cpu ? `<section class="det-sec"><h4>${ICON.laptop} Computer</h4>
-      ${line(machine, ICON.laptop, "")}${line(gpuName(pc.cpu), ICON.cpu, pc.threads ? `${pc.threads} threads${pc.ram_gb ? ` · ${Math.round(pc.ram_gb)} GB RAM` : ""}` : "")}${line(os, ICON.laptop, pc.arch || "")}</section>` : ""}
+    ${recorded || machine || pc.cpu ? `<section class="det-sec"><h4>${ICON.laptop} Computer</h4>
+      ${found(machine, "Computer model", ICON.laptop, "")}${found(gpuName(pc.cpu), "Processor", ICON.cpu, pc.threads ? `${pc.threads} threads${pc.ram_gb ? ` · ${Math.round(pc.ram_gb)} GB RAM` : ""}` : "")}${found(os, "System", ICON.laptop, pc.arch || "")}</section>` : ""}
     <details class="more" id="moreDetails"${S.moreDetails ? " open" : ""}><summary>All details</summary>${rows(null)}</details>
     ${copy}</div>`;
 }
