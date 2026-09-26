@@ -1,11 +1,12 @@
-"""An original 40 s track for the Tafrigh video, synthesised from scratch (numpy only), so it is free to publish.
+"""The bright version of the Tafrigh video track: synthesised from scratch (numpy only), free to publish.
 
 120 BPM, 4/4: a beat is 0.5 s and a bar 2 s. C major, I-V-vi-IV (C, G/B, Am, F), one chord per bar.
-  0-4 s   intro: soft pad and a sparse pluck, the filter opening, a riser into 4 s
-  4 s     impact: the logo
-  4-30 s  groove: kick, clap, hats, bass, and from 14 s a 16th-note arpeggio
-  30-36 s build: snare roll, filter up, noise riser
-  36-40 s end card: final C chord, pluck motif, tail fading to silence at 40 s
+  0-6 s   intro: soft pad and a sparse pluck, the filter opening, a riser into the drop
+  6 s     impact: the logo
+  6-48 s  groove: kick, clap, hats, bass, and from 18 s a 16th-note arpeggio
+  48-54 s build: snare roll, filter up, noise riser
+  54-60 s end card: final C chord, pluck motif, tail fading to silence at 60 s
+The cue points are the constants below, so the track can follow another cut of the video.
 """
 import sys
 
@@ -16,7 +17,9 @@ SR = 48000
 BPM = 120
 BEAT = 60 / BPM
 BAR = 4 * BEAT
-LENGTH = 40.0
+LENGTH = 60.0
+# cue points, in seconds, matched to the video's scenes (all on bar lines)
+DROP, ARP, BUILD, END = 6.0, 18.0, 48.0, 54.0  # logo, arpeggio in, build, end card
 N = int(LENGTH * SR)
 rng = np.random.default_rng(7)
 
@@ -193,71 +196,71 @@ for bar in range(bars):
     t0 = bar * BAR
     notes, root = chord_at(bar)
     # pad: filter closed in the intro, open in the groove, wider in the build, warm at the end
-    if t0 < 4:
+    if t0 < DROP:
         cut = np.linspace(500, 1400, int(BAR * SR + 0.5 * SR))
-    elif t0 < 30:
+    elif t0 < BUILD:
         cut = 1800
-    elif t0 < 36:
-        cut = np.linspace(1800 + (t0 - 30) * 500, 2300 + (t0 - 30) * 500, int(BAR * SR + 0.5 * SR))
+    elif t0 < END:
+        cut = np.linspace(1800 + (t0 - BUILD) * 500, 2300 + (t0 - BUILD) * 500, int(BAR * SR + 0.5 * SR))
     else:
         cut = 1600
     s, sig = pad(t0, BAR + 0.5, notes, cut)
-    place(music, sig * (0.8 if t0 < 4 else 1.0), s)
+    place(music, sig * (0.8 if t0 < DROP else 1.0), s)
 
-    if t0 < 4:  # sparse plucks in the intro
+    if t0 < DROP:  # sparse plucks in the intro
         for k, m in enumerate([notes[1] + 12, notes[2] + 12]):
             place(music, pluck(midi(m), level=0.14), t0 + 0.5 + k * 1.0)
-    if 4 <= t0 < 36:
+    if DROP <= t0 < END:
         # bass: root on the beat, octave bounce on the off-beat eighths
         for b in range(4):
             place(music, bass(midi(root), 0.42), t0 + b * BEAT)
-            if t0 >= 6:
+            if t0 >= DROP + 2:
                 place(music, bass(midi(root + 12), 0.2) * 0.6, t0 + b * BEAT + BEAT / 2)
-    if 14 <= t0 < 36:
+    if ARP <= t0 < END:
         # 16th arpeggio over the chord, up two octaves on the last beat of each bar
         pattern = [0, 1, 2, 3, 2, 1, 2, 3]
         for s16 in range(16):
             m = notes[pattern[s16 % 8]] + 12 + (12 if s16 >= 12 else 0)
             lvl = 0.10 if s16 % 4 else 0.14
-            place(music, pluck(midi(m), dur=0.25, cutoff=2500 + (t0 - 14) * 120, level=lvl), t0 + s16 * BEAT / 4)
-    if t0 >= 36:  # the end: a pluck motif over the last chord
+            place(music, pluck(midi(m), dur=0.25, cutoff=2500 + (t0 - ARP) * 120, level=lvl), t0 + s16 * BEAT / 4)
+    if t0 >= END:  # the end: a pluck motif over the last chord
         for k, m in enumerate([72, 76, 79, 84]):
-            place(music, pluck(midi(m), dur=1.2, cutoff=3000, level=0.16), t0 + k * BEAT * 0.5 + (0 if t0 == 36 else 99))
+            place(music, pluck(midi(m), dur=1.2, cutoff=3000, level=0.16), t0 + k * BEAT * 0.5 + (0 if t0 == END else 99))
 
 # drums in the groove
-for i in range(int(4 / BEAT), int(36 / BEAT)):
+for i in range(int(DROP / BEAT), int(END / BEAT)):
     t = i * BEAT
-    if 4 <= t < 36:
-        place(drums, kick(0.85 if t < 30 else 0.9), t)
+    if DROP <= t < END:
+        place(drums, kick(0.85 if t < BUILD else 0.9), t)
         k = int(t * SR)
         m = min(N, k + int(0.28 * SR))
         duck[k:m] = np.minimum(duck[k:m], 0.45 + 0.55 * (np.arange(m - k) / (m - k)) ** 0.6)
-    if 6 <= t < 30 and i % 2 == 1:
+    if DROP + 2 <= t < BUILD and i % 2 == 1:
         place(drums, clap(), t)
-    if 6 <= t < 36:
+    if DROP + 2 <= t < END:
         place(drums, hat(0.08), t + BEAT / 2)
-        if t >= 14:
+        if t >= ARP:
             place(drums, hat(0.04), t + BEAT / 4)
             place(drums, hat(0.04), t + 3 * BEAT / 4)
-    if 28 <= t < 30 and i % 4 == 3:
+    if BUILD - 2 <= t < BUILD and i % 4 == 3:
         place(drums, hat(0.08, open_=True), t + BEAT / 2)
 
 # the build: a snare roll getting faster and louder
-t = 30.0
-while t < 36:
-    frac = (t - 30) / 6
+t = BUILD
+while t < END:
+    frac = (t - BUILD) / (END - BUILD)
     step = BEAT / (2 if frac < 0.34 else 4 if frac < 0.67 else 8)
     place(drums, clap(0.10 + 0.22 * frac), t)
     t += step
 
 # transitions
-place(fx, riser(3.5, 0.14), 0.5)          # into the logo at 4 s
-place(fx, impact(0.75), 4.0)
-place(fx, riser(5.5, 0.18), 30.5)         # into the end card at 36 s
-place(fx, impact(0.85), 36.0)
-_, final = pad(36.0, 4.0, [48, 55, 60, 64, 67, 72], np.linspace(2200, 700, int(4 * SR)))
-place(music, final * 1.4, 36.0)
-place(music, bass(midi(36), 3.2) * 1.2, 36.0)
+place(fx, riser(DROP - 0.5, 0.14), 0.5)   # into the logo
+place(fx, impact(0.75), DROP)
+place(fx, riser(END - BUILD - 0.5, 0.18), BUILD + 0.5)  # into the end card
+place(fx, impact(0.85), END)
+_, final = pad(END, LENGTH - END, [48, 55, 60, 64, 67, 72], np.linspace(2200, 700, int((LENGTH - END) * SR)))
+place(music, final * 1.4, END)
+place(music, bass(midi(36), LENGTH - END - 0.8) * 1.2, END)
 
 mix = music * duck + drums * 0.9 + fx
 mix = reverb(mix, seconds=2.4, mix=0.22)
