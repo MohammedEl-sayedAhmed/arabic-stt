@@ -280,7 +280,6 @@ The models keep their own licences: the whisper-medium fine-tune and Whisper lar
 the fine-tune's card for its training data), Cohere Transcribe Arabic and the Whisper tokenizer are
 Apache-2.0, and NVIDIA TitaNet through sherpa-onnx is CC-BY-4.0. The desktop build bundles
 third-party packages under their own licences, including the FFmpeg libraries that come with PyAV
-(LGPL). The hosted services are used under their own terms. The vendor logos in a
-transcription's details come from [Simple Icons](https://simpleicons.org) (CC0). The trademarks
-belong to their owners, and the logos are shown only to identify the hardware and system a
-transcription was made on.
+(LGPL). The hosted services are used under their own terms. The logos in the app come
+from [Simple Icons](https://simpleicons.org) (CC0). The trademarks belong to their owners, and the
+logos are shown only to identify the hardware, systems, models and services the app names.
