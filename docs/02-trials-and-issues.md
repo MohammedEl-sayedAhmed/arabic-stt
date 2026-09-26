@@ -34,7 +34,7 @@ were measured.
    because the shell's startup file broke under `set -u`; the launchers were rewritten in plain POSIX
    `sh`. R2T2 does run on a CPU.
 7. Speed tuning. Generation stayed at about 4.5 tokens/s whatever the thread count, because the
-   laptop was in power-saver mode with the CPU at 0.4–1.2 GHz. Eight threads worked best, and the
+   test laptop was in power-saver mode with the CPU at 0.4–1.2 GHz. Eight threads worked best, and the
    performance power profile was used for test runs from then on (and switched back afterwards).
 8. R2T2 on the call: 1.8 times real time (measured before that switch, in power-saver mode), with
    clearly more errors than Whisper: misheard tech terms and dropped clauses.
@@ -177,8 +177,8 @@ were measured.
     default.
 
 38. The graphics card. transcribe.cpp ships a Vulkan backend, and it found the test laptop's
-    integrated Iris Xe. Cohere ran there at 0.15 times real time instead of 0.36 on the Perle clips, with the same text
-    for all 40 clips. The app now uses a graphics card when one works: Cohere through Vulkan on any GPU,
+    integrated Iris Xe. Cohere ran there at 0.15 times real time instead of 0.36 on the Perle clips,
+    with the same text for all 40 clips. The app now uses a graphics card when one works: Cohere through Vulkan on any GPU,
     a discrete one first; Whisper on NVIDIA GPUs through CUDA, after a download of NVIDIA's cuBLAS
     (about 600 MB, unpacked from NVIDIA's pip packages). Each is checked on a second of silence, any GPU
     error sends the rest of the recording to the CPU, and speed estimates now come from earlier runs on

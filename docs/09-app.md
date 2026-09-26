@@ -142,7 +142,7 @@ Above that field, *Recommended models* lists the models worth trying for these m
 [`app/catalog.toml`](../app/catalog.toml): the three built-in ones, Cohere at higher precision,
 the Egyptian code-switching whisper-small, and Whisper large-v3 and large-v3-turbo, in GGUF for any
 graphics card and for faster-whisper. Each entry gives what it is good for, the evidence (the
-figures measured here, or *Not tested here*), the download size, the licence and which graphics
+figures from the project's tests, or *Not tested by the project*), the download size, the licence and which graphics
 cards it can use, and adds the model in one click, pinned to the revision in the file. The GGUF
 Whisper models run without the Egyptian style hint for now.
 
@@ -174,7 +174,7 @@ These run through `app/hosted_more.py`. Their keys are entered in *Settings* lik
 `GEMINI_API_KEY`, `DEEPGRAM_API_KEY`, `ASSEMBLYAI_API_KEY` or `AZURE_SPEECH_KEY`. An Azure key works
 only in the region of its Speech resource, so the Azure row in *Settings* also has a region field. The
 region is saved with the key in `secrets.json`; `AZURE_SPEECH_REGION` overrides it, and `region` in the
-config is the default (`westeurope`). None of the four has been measured on Egyptian speech here.
+config is the default (`westeurope`). None of the four has been measured on Egyptian speech by the project.
 
 - **Gemini** ([keys](https://aistudio.google.com/apikey)) uses `gemini-3.5-transcribe` through the
   Interactions API, with `store: false` so Google doesn't keep the request. The app asks for verbatim
@@ -401,7 +401,7 @@ speakers (the guide says any upload format; its example is WAV) and how well it 
 many keywords gpt-transcribe takes, whether Groq trains on API data (its data page doesn't say),
 which of Mistral's two length limits holds, whether it takes phrases with spaces as context bias,
 its error format, whether its free mode includes Voxtral, and the OpenAI key page link (the site
-couldn't be fetched). None of the three was measured on Egyptian speech here, and the clients were
+couldn't be fetched). None of the three was measured on Egyptian speech by the project, and the clients were
 tested only against local stand-ins (`tests/test_providers_openai.py`: request fields, the file sent,
 parts and time offsets, speaker numbers across parts, errors 401, 413 and 429, retries, cancel, and
 the voiceprint step with a stand-in model process).
