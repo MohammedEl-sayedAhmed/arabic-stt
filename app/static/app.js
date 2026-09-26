@@ -766,7 +766,7 @@ function brandTile(slug, icon, small = false) {
   if (logo) {
     const t = esc(logo.title);
     const img = (file, which) => `<img class="${which}" src="${logoSrc(file)}" alt="${t}" draggable="false">`;
-    return `<span class="${cls} img${logo.dark ? " has-dark" : ""}${logo.fill ? " fill" : ""}" title="${t}">${img(logo.file, "on-light")}${logo.dark ? img(logo.dark, "on-dark") : ""}</span>`;
+    return `<span class="${cls} img${logo.dark ? " has-dark" : ""}${logo.fill ? " fill" : ""}${logo.wide ? " wide" : ""}" title="${t}">${img(logo.file, "on-light")}${logo.dark ? img(logo.dark, "on-dark") : ""}</span>`;
   }
   const b = slug && typeof BRANDS !== "undefined" && BRANDS[slug];
   if (!b) return `<span class="${cls} plain">${icon}</span>`;

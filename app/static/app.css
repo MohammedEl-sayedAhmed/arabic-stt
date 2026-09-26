@@ -646,6 +646,7 @@ label.set-row { cursor: pointer; }
 .logo-tile.small img { width: 19px; height: 19px; }
 .logo-tile.fill { overflow: hidden; }
 .logo-tile.fill img { width: 100%; height: 100%; }  /* an app icon that has its own margin */
+.logo-tile.wide img { width: 80%; height: 80%; }  /* a wordmark: most of the width, a margin to the edges */
 .logo-tile .on-dark { display: none; }
 :root[data-theme="dark"] .logo-tile.img { border-color: #fff; }
 :root[data-theme="dark"] .logo-tile.img.has-dark { background: var(--sunken); border-color: var(--border); }
