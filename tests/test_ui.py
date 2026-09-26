@@ -109,7 +109,7 @@ class TranscriptPage(UiTestCase):
 class SettingsDialog(UiTestCase):
     def test_toasts_show_above_the_open_dialog(self):
         self.open()
-        self.open_settings()
+        self.open_settings("speed")
         threads = self.page.locator("input[data-setting='threads']")
         threads.fill("2")
         threads.dispatch_event("change")
@@ -125,24 +125,82 @@ class SettingsDialog(UiTestCase):
 
     def test_switches_are_saved(self):
         self.open()
-        self.open_settings()
+        self.open_settings("speed")
         self.page.locator("input[data-setting='device']").uncheck()
         self.page.wait_for_selector(".toast >> text=Saved")
         self.assertEqual(self.api("GET", "/api/status")["json"]["settings"]["device"], "cpu")
         self.page.reload()
         self.page.wait_for_function("() => typeof S !== 'undefined' && S.status")
-        self.open_settings()
+        self.open_settings("speed")
         self.assertFalse(self.page.locator("input[data-setting='device']").is_checked())
         self.api("POST", "/api/settings", {"device": "auto"})
 
     def test_about_shows_the_author_and_the_licence(self):
         self.open()
-        self.open_settings()
+        self.open_settings("about")
         about = self.page.locator(".about-text")
         self.assertIn("By Mohammed El-sayed Ahmed", about.inner_text())
         self.assertIn("AGPL-3.0", about.inner_text())
         links = about.locator("a").evaluate_all("els => els.map(a => a.href)")
         self.assertIn("https://github.com/MohammedEl-sayedAhmed/arabic-stt", links)
+
+    def test_one_tab_at_a_time_and_the_keyboard_moves_between_them(self):
+        self.open()
+        self.open_settings()
+        self.assertEqual(self.page.locator("#settings [role=tab][aria-selected=true]").inner_text().split("\n")[0].strip(), "Models")
+        self.assertEqual(self.page.locator("#settings .set-panel").count(), 1)
+        self.page.focus("#tab-models")
+        self.page.keyboard.press("ArrowDown")
+        self.assertEqual(self.page.evaluate("() => document.activeElement.id"), "tab-add")
+        self.assertTrue(self.page.locator("#tab-add[aria-selected=true]").is_visible())
+        # the panel fits the dialog: no scrolling through every section
+        height = self.page.evaluate("() => document.getElementById('settingsBody').scrollHeight")
+        self.assertLessEqual(height, 700)
+
+    def test_model_states_look_different(self):
+        self.open()
+        self.open_settings()
+        states = self.page.eval_on_selector_all("#settings .set-item .status",
+                                                "els => els.map(e => [e.className, e.textContent.trim(), getComputedStyle(e).borderStyle])")
+        kinds = {cls.split()[1]: text for cls, text, _ in states}
+        self.assertEqual(kinds.get("none"), "Not downloaded")  # nothing is downloaded in the test's home
+        # each state has its own look, not only its word: here the dashed outline of "Not downloaded"
+        self.assertIn("dashed", {style for cls, _, style in states if "none" in cls})
+
+    def test_key_rows_stay_closed_until_one_is_opened(self):
+        self.open()
+        self.open_settings("hosted")
+        self.assertEqual(self.page.locator("#settings [data-key]").count(), 0, "no key box is open at first")
+        self.page.click("[data-key-toggle='deepgram']")
+        self.assertEqual(self.page.evaluate("() => document.activeElement.dataset.key"), "deepgram")
+        self.page.click("[data-key-toggle='gemini']")
+        self.assertEqual(self.page.locator("#settings [data-key]").count(), 1, "only one open at a time")
+        self.page.fill("[data-key='gemini']", "test-key-123")
+        self.page.click("[data-key-form='gemini'] button[type=submit]")
+        self.page.wait_for_selector(".toast >> text=Key saved")
+        self.assertEqual(self.page.locator("#settings [data-key]").count(), 0, "saving closes it")
+        self.assertIn("Key saved", self.page.locator("#key-gemini .status").inner_text())
+        self.assertIn("1 of", self.page.locator("#tab-hosted small").inner_text())
+        self.api("POST", "/api/keys", {"model": "gemini", "key": ""})
+
+    def test_the_add_it_link_opens_that_services_key(self):
+        self.open()
+        card = self.page.locator(".model-card[data-model='deepgram']")
+        card.locator("[data-open-settings]").click()
+        self.page.wait_for_selector("#settings[open] #tab-hosted[aria-selected=true]")
+        self.page.wait_for_function("() => document.activeElement && document.activeElement.dataset.key === 'deepgram'")
+
+    def test_logos_of_models_and_services(self):
+        self.open()
+        self.page.wait_for_selector(".model-card[data-model='speechmatics'] .mc-head .logo-tile")
+        labels = self.page.eval_on_selector_all(".model-card .mc-head .logo-tile",
+                                                "els => els.map(e => e.getAttribute('title') || e.textContent.trim())")
+        self.assertIn("Hugging Face", labels)  # a model downloaded from there, with no logo of its own
+        self.assertIn("ElevenLabs", labels)
+        self.assertIn("Google Gemini", labels)
+        self.assertIn("Speechmatics", labels)  # no logo in Simple Icons: a tile with its initial
+        mono = self.page.locator(".model-card[data-model='speechmatics'] .logo-tile.mono").inner_text()
+        self.assertEqual(mono, "S")
 
     def test_gpu_chip(self):
         self.open()
