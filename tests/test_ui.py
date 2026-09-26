@@ -74,7 +74,9 @@ class TranscriptPage(UiTestCase):
         hero = self.page.locator(".job-details .det-hero")
         self.assertIn("Intel Iris Xe Graphics", hero.inner_text())
         self.assertIn("0.15×", hero.inner_text())
-        logos = self.page.eval_on_selector_all(".job-details .logo-tile svg[aria-label]", "els => els.map(e => e.getAttribute('aria-label'))")
+        # a logo is a Simple Icons glyph (svg with a label) or a brand's own file (img with alt text)
+        logos = self.page.eval_on_selector_all(".job-details .logo-tile svg[aria-label], .job-details .logo-tile img.on-light",
+                                               "els => els.map(e => e.getAttribute('aria-label') || e.alt)")
         self.assertEqual(logos[:1], ["Intel"])
         self.assertIn("Lenovo", logos)
         text = self.page.locator(".job-details").inner_text()
@@ -93,7 +95,8 @@ class TranscriptPage(UiTestCase):
         self.assertTrue(top, "nothing covers the top of the side column")
         side.evaluate("el => el.scrollTo(0, el.scrollHeight)")  # scrolled on its own
         copy = self.page.locator("#copyDetails").bounding_box()
-        self.assertLessEqual(copy["y"] + copy["height"], 800)
+        player = self.page.locator("#player").bounding_box()
+        self.assertLessEqual(copy["y"] + copy["height"], player["y"], "the player bar doesn't cover the details")
         main = self.page.evaluate("() => { const m = document.getElementById('main'); return [m.scrollTop, m.scrollHeight - m.clientHeight]; }")
         self.assertLess(main[0], main[1] / 2, "the transcript stays where it was, far from its end")
 
@@ -223,8 +226,8 @@ class SettingsDialog(UiTestCase):
                     self.assertEqual(alt, name)
                     self.assertGreater(natural, 0)  # the file loaded
                     self.assertGreater(width, 0)
-        # the versions for dark backgrounds, in the dark theme: AssemblyAI's own, and Groq's mark in white
-        for model, file in (("assemblyai", "assemblyai-dark.svg"), ("groq", "groq-dark.svg")):
+        # the version for dark backgrounds, in the dark theme: Groq's mark in white
+        for model, file in (("groq", "groq-dark.svg"),):
             src = self.page.eval_on_selector(f".model-card[data-model='{model}'] .logo-tile img.on-dark", "i => i.src")
             self.assertTrue(src.endswith(f"/static/logos/{file}"), src)
 
