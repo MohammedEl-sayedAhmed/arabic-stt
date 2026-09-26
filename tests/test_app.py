@@ -1,6 +1,6 @@
 """Tests for the app (tafrigh): transcript helpers, the hosted-API parsers and the HTTP API.
 
-The hosted services are replaced by a local mock server, so nothing leaves the laptop.
+The hosted services are replaced by a local mock server, so nothing leaves this computer.
 Run: .venv/bin/python -m unittest discover -s tests -v
 With RUN_MODEL_TESTS=1 it also transcribes a public Perle clip with the local whisper-medium model.
 """

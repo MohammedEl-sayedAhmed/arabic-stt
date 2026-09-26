@@ -1,6 +1,6 @@
 """Tests for adding models from Hugging Face (app/hub.py): links, the GGUF header reader, what each kind of
 repository gives and what is refused, git blob checksums in downloads, the conversion step, saved entries,
-and the HTTP API. Hugging Face is replaced by a local stand-in, so nothing leaves the laptop.
+and the HTTP API. Hugging Face is replaced by a local stand-in, so nothing leaves this computer.
 Run: .venv/bin/python -m unittest discover -s tests -v
 """
 import hashlib
@@ -524,7 +524,7 @@ class CatalogTests(unittest.TestCase):
             for field in ("name", "good_for", "evidence", "licence"):
                 self.assertTrue(c.get(field), (c, field))
                 self.assertNotIn("—", c[field], "plain sentences, no em dashes")
-            self.assertTrue(c["evidence"].startswith("Measured here" if c.get("builtin") else "Not tested here"), c)
+            self.assertTrue(c["evidence"].startswith("In the project's tests" if c.get("builtin") else "Not tested by the project"), c)
             self.assertIn(c["gpu"], ("any", "nvidia"))
             if c.get("builtin"):
                 self.assertIn(c["builtin"], self.cfg.models)

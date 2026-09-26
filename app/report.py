@@ -84,7 +84,8 @@ def details(job, lines=None, edited=None):
                 "peak_memory_mb": job.get("peak_rss_mb"), "language": opts.get("language"),
                 "detected_language": job.get("detected_language"), "speakers": opts.get("speakers"),
                 "speakers_found": found, "voiceprint_model": job.get("voiceprint_model"),
-                "vocabulary": opts.get("prompt") or None, "edited": edited, "app_version": job.get("app_version")},
+                "vocabulary": opts.get("prompt") or None, "edited": edited, "app_version": job.get("app_version"),
+                "computer_recorded": bool(machine)},
         "computer": {k: machine.get(k) for k in sysinfo.MACHINE_KEYS},
     }
 
@@ -177,6 +178,9 @@ def audio_text(rec):
                   channels and {1: "mono", 2: "stereo"}.get(channels, f"{channels} channels")])
 
 
+NOT_DETECTED = "Not detected"
+
+
 def computer_name(pc):
     """LENOVO ThinkPad L14 Gen 3; the maker isn't repeated when the model starts with it (HP EliteBook 840)."""
     maker, model = pc.get("manufacturer"), pc.get("model")
@@ -245,7 +249,9 @@ def model_name(model):
 def groups(d):
     """The details as labelled lines for people: [{"title", "rows": [{"label", "value", "more"}]}], in the
     order Recording, Model, Run, Computer. The job page shows the "more" lines only under More details.
-    Unknown values are left out, and so is a group with nothing known (older jobs have no Computer)."""
+    Unknown values are left out, and so is a group with nothing known. The computer's are the exception: when
+    the app recorded them but couldn't read one, its row says so ("Not detected") rather than guessing.
+    Older jobs recorded no computer, so they have no Computer group."""
     rec, model, run, pc = d["recording"], d["model"], d["run"], d["computer"]
     hosted = model.get("kind") == "hosted"
     out = []
@@ -288,12 +294,15 @@ def groups(d):
           ("Peak memory", memory(run.get("peak_memory_mb")), True),
           ("Voiceprints", run.get("voiceprint_model"), True),
           ("App", version and f"Tafrigh {version}", True))
+    def found(value):  # a computer detail the app looked for but couldn't read
+        return value or (NOT_DETECTED if run.get("computer_recorded") else None)
+
     group("Computer",  # for a hosted model this computer only sent the audio, so it all goes under More
-          ("Computer", computer_name(pc), hosted),
-          ("Processor", processor(pc), hosted),
-          ("Memory", _num(pc.get("ram_gb")) and f"{pc['ram_gb']} GB", True),
-          ("Graphics", graphics(pc.get("gpus")), True),
-          ("System", _join([pc.get("os"), pc.get("arch")]), True))
+          ("Computer", found(computer_name(pc)), hosted),
+          ("Processor", found(processor(pc)), hosted),
+          ("Memory", found(_num(pc.get("ram_gb")) and f"{pc['ram_gb']} GB"), True),
+          ("Graphics", found(graphics(pc.get("gpus"))), True),
+          ("System", found(_join([pc.get("os"), pc.get("arch")])), True))
     return out
 
 

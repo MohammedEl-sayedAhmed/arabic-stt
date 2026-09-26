@@ -18,6 +18,13 @@ from pathlib import Path
 
 DMI = Path("/sys/class/dmi/id")  # Linux: the firmware's description of the computer
 OS_RELEASE = Path("/etc/os-release")
+KDE_ABOUT = Path("/etc/xdg/kcm-about-distrorc")  # the name KDE's About page shows: Kubuntu's os-release says Ubuntu
+SESSIONS = (Path("/usr/share/wayland-sessions"), Path("/usr/share/xsessions"))
+# XDG_CURRENT_DESKTOP entries ("ubuntu:GNOME", "KDE", "X-Cinnamon") and the desktops' own names
+DESKTOPS = {"kde": "KDE Plasma", "gnome": "GNOME", "x-cinnamon": "Cinnamon", "cinnamon": "Cinnamon", "xfce": "Xfce",
+            "mate": "MATE", "lxqt": "LXQt", "lxde": "LXDE", "budgie": "Budgie", "pantheon": "Pantheon", "unity": "Unity",
+            "cosmic": "COSMIC", "deepin": "Deepin", "enlightenment": "Enlightenment", "sway": "Sway",
+            "hyprland": "Hyprland", "i3": "i3"}
 CPUINFO = Path("/proc/cpuinfo")
 MACHINE_KEYS = ("manufacturer", "model", "os", "cpu", "threads", "ram_gb", "arch", "gpus")
 RECORDING_KEYS = ("name", "extension", "format", "format_name", "codec", "codec_name", "sample_rate", "channels",
@@ -71,9 +78,37 @@ def _read(path):
     return Path(path).read_text(encoding="utf-8", errors="replace").strip()
 
 
+def _linux_desktop():
+    """The desktop of this session, from XDG_CURRENT_DESKTOP, with Plasma's version from its session file
+    ("KDE Plasma 5.27"). None outside a desktop session, e.g. over SSH."""
+    names = [DESKTOPS[e.strip().lower()] for e in os.environ.get("XDG_CURRENT_DESKTOP", "").split(":")
+             if e.strip().lower() in DESKTOPS]
+    if not names:
+        return None
+    if names[0] != "KDE Plasma":
+        return names[0]
+    for folder in SESSIONS:
+        for f in sorted(folder.glob("plasma*.desktop")):
+            m = re.search(r"^X-KDE-PluginInfo-Version=(\d+\.\d+)", _safe(_read, f) or "", re.M)
+            if m:
+                return f"KDE Plasma {m.group(1)}"
+    major = os.environ.get("KDE_SESSION_VERSION", "")
+    return f"KDE Plasma {major}" if major.isdigit() else "KDE Plasma"
+
+
 def _linux_os():
     fields = dict(re.findall(r"""^(\w+)=["']?(.*?)["']?[ \t]*$""", _safe(_read, OS_RELEASE) or "", re.M))
     name = fields.get("PRETTY_NAME") or " ".join(x for x in (fields.get("NAME"), fields.get("VERSION")) if x)
+    desktop = _safe(_linux_desktop)
+    # Kubuntu and the other KDE editions keep their base's os-release ("Ubuntu 24.04.4 LTS"); KDE's About page
+    # takes its name from its own file, so use that name too: "Kubuntu 24.04.4 LTS"
+    about = re.search(r"^Name=(.+)$", _safe(_read, KDE_ABOUT) or "", re.M)
+    base = fields.get("NAME")
+    if about and (desktop or "KDE").startswith("KDE") and base and name.startswith(base) \
+            and about.group(1).strip().lower() not in name.lower():
+        name = about.group(1).strip() + name[len(base):]
+    if name and desktop:
+        name = f"{name}, {desktop}"
     kernel = _safe(platform.release)
     if not name:
         return f"Linux {kernel}" if kernel else None

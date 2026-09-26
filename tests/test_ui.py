@@ -4,13 +4,16 @@ Run: .venv/bin/python -m unittest discover -s tests -p "test_ui*.py" -v
 """
 import unittest
 
-from ui_support import UiTestCase
+from ui_support import LINES, UiTestCase
 
-JOB, MERGE = "20260925-230000-a1b2", "20260925-230100-b2c3"
+JOB, MERGE, LONG = "20260925-230000-a1b2", "20260925-230100-b2c3", "20260925-230200-c3d4"
+# a two-hour meeting: 400 lines
+LONG_LINES = [{**LINES[i % 5], "start": i * 18.0, "end": i * 18.0 + 17} for i in range(400)]
 
 
 class TranscriptPage(UiTestCase):
-    jobs = ({"jid": JOB}, {"jid": MERGE, "title": "Two speakers"})
+    jobs = ({"jid": JOB}, {"jid": MERGE, "title": "Two speakers"},
+            {"jid": LONG, "title": "Long meeting", "lines": LONG_LINES, "seconds": 20.0})
 
     def job_page(self, jid=JOB):
         self.open(f"#/job/{jid}")
@@ -77,6 +80,22 @@ class TranscriptPage(UiTestCase):
         text = self.page.locator(".job-details").inner_text()
         self.assertIn("Lenovo ThinkPad P16 Gen 1", text)  # the maker's own casing, not "LENOVO"
         self.assertIn("M4A", text)
+
+    def test_details_can_be_reached_at_the_top_of_a_long_transcript(self):
+        self.job_page(LONG)
+        self.page.evaluate("() => document.getElementById('main').scrollTo(0, 600)")  # a little way into it
+        side = self.page.locator(".side-col")
+        box = side.bounding_box()
+        self.assertGreaterEqual(box["y"], 0)
+        self.assertLessEqual(box["y"] + box["height"], 800, "the side column fits in the window")
+        top = self.page.evaluate("([x, y]) => !!document.elementFromPoint(x, y).closest('.side-col')",
+                                 [box["x"] + box["width"] / 2, box["y"] + 4])
+        self.assertTrue(top, "nothing covers the top of the side column")
+        side.evaluate("el => el.scrollTo(0, el.scrollHeight)")  # scrolled on its own
+        copy = self.page.locator("#copyDetails").bounding_box()
+        self.assertLessEqual(copy["y"] + copy["height"], 800)
+        main = self.page.evaluate("() => { const m = document.getElementById('main'); return [m.scrollTop, m.scrollHeight - m.clientHeight]; }")
+        self.assertLess(main[0], main[1] / 2, "the transcript stays where it was, far from its end")
 
     def test_playback_speed_list_is_styled_and_works(self):
         self.job_page()
