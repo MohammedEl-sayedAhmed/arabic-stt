@@ -37,7 +37,7 @@ On Linux the desktop app keeps `~/.local/share/applications/tafrigh.desktop` cur
 in the application menu and its window shows the Tafrigh icon: the browser window gets the window class
 `Tafrigh` (`--class`), which the entry names. On Windows the built `Tafrigh.exe` carries the icon.
 
-Closing the window quits the app, and so does *Settings → Quit*. `--browser` skips the native window,
+Closing the window quits the app, and so does *Quit Tafrigh* in *Settings*. `--browser` skips the native window,
 `--server` (or `--no-window`) runs only the server, and `--port N` picks the port (the default is
 8765, or any free one). The Windows installer also adds a *Tafrigh (browser window)* shortcut, which
 starts it with `--browser`.
@@ -60,7 +60,7 @@ app-mode browser window is used, which works just as well apart from the native 
 
 ## Models are downloaded in the app
 
-A fresh installation has no local models. *Settings → Models on this computer*, or the button on a
+A fresh installation has no local models. *Settings → Models*, or the button on a
 model's card, downloads them:
 
 | Model | Download | Source (pinned revision) |
