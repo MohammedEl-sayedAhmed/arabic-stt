@@ -1,12 +1,13 @@
 """The "tech" version of the Tafrigh video track: synthesised from scratch (numpy only), free to publish.
 
 120 BPM, 4/4 (a beat 0.5 s, a bar 2 s), A minor: Am, F, C, G, one chord per bar.
-  0-4 s   intro: a filtered 16th-note sequence fading in, digital bleeps, a riser into 4 s
-  4 s     impact
-  4-30 s  groove: four-on-the-floor kick, clap, 16th hats, pulsing 8th bass, the sequence with a resonant
-          filter sweeping over 8 bars, bleeps with ping-pong echo, glitch stutters at 14 and 22 s
-  30-36 s build: snare roll, filter wide open, noise riser, pitch-rising bleeps
-  36-40 s end card: impact, Am(add9) chord, the sequence echoing out, silence at 40 s
+  0-6 s   intro: a filtered 16th-note sequence fading in, digital bleeps, a riser into the drop
+  6 s     impact (the logo)
+  6-48 s  groove: four-on-the-floor kick, clap, 16th hats, pulsing 8th bass, the sequence with a resonant
+          filter sweeping over 8 bars, bleeps with ping-pong echo, glitch stutters at 25.5 and 33.5 s
+  48-54 s build: snare roll, filter wide open, noise riser, pitch-rising bleeps
+  54-60 s end card: impact, Am(add9) chord, the sequence echoing out, silence at 60 s
+The cue points are the constants below, so the track can follow another cut of the video.
 """
 import sys
 
@@ -16,7 +17,10 @@ import soundfile as sf
 SR = 48000
 BEAT = 0.5
 BAR = 2.0
-LENGTH = 40.0
+LENGTH = 60.0
+# cue points, in seconds, matched to the video's scenes (all on bar lines)
+DROP, ARP, BUILD, END = 6.0, 18.0, 48.0, 54.0  # logo, arpeggio in, build, end card
+GLITCHES = (25.5, 33.5)
 N = int(LENGTH * SR)
 rng = np.random.default_rng(11)
 
@@ -209,76 +213,76 @@ fx = np.zeros(N)
 duck = np.ones(N)
 
 PATTERN = [0, 2, 1, 3, 0, 2, 3, 1, 0, 2, 1, 3, 2, 3, 1, 3]  # chord tones for the 16ths
-for bar in range(20):
+for bar in range(int(LENGTH / BAR)):
     t0 = bar * BAR
     notes, root = CHORDS[bar % 4], ROOTS[bar % 4]
-    if t0 < 36:
+    if t0 < END:
         # the sequence: quiet and closed in the intro, then sweeping over 8 bars, wide open in the build
         for s in range(16):
             t = t0 + s * BEAT / 4
-            if t0 < 4:
-                cutoff, level = 500 + 1200 * (t / 4), 0.05 + 0.05 * (t / 4)
-            elif t0 < 30:
-                cutoff, level = 900 + 1700 * (0.5 - 0.5 * np.cos(2 * np.pi * (t - 4) / 16)), 0.12
+            if t0 < DROP:
+                cutoff, level = 500 + 1200 * (t / DROP), 0.05 + 0.05 * (t / DROP)
+            elif t0 < BUILD:
+                cutoff, level = 900 + 1700 * (0.5 - 0.5 * np.cos(2 * np.pi * (t - DROP) / 16)), 0.12
             else:
-                cutoff, level = 2600 + 900 * (t - 30) / 6, 0.13
+                cutoff, level = 2600 + 900 * (t - BUILD) / (END - BUILD), 0.13
             octave = 12 if s in (6, 14) else 0
             accent = 1.25 if s % 4 == 0 else 1.0
             place(seq, seq_note(notes[PATTERN[s]] + octave, cutoff, level * accent), t)
-        place(pads, pad([m - 12 for m in notes[:3]], BAR + 0.6, 900 if t0 < 30 else 1500), t0)
-    if 4 <= t0 < 36:  # bass on the eighths, root and octave
+        place(pads, pad([m - 12 for m in notes[:3]], BAR + 0.6, 900 if t0 < BUILD else 1500), t0)
+    if DROP <= t0 < END:  # bass on the eighths, root and octave
         for e in range(8):
             place(low, bass(root + (12 if e % 4 == 3 else 0)), t0 + e * BEAT / 2)
     # bleeps: a few per bar on off-sixteenths, chosen from the scale (seeded, so the same each render)
     if t0 < 30 or t0 >= 30:
         r = np.random.default_rng(100 + bar)
-        count = 2 if t0 < 4 else 3 if t0 < 30 else 6 if t0 < 36 else 0
+        count = 2 if t0 < DROP else 3 if t0 < BUILD else 6 if t0 < END else 0
         for _ in range(count):
             s = int(r.choice([1, 3, 5, 7, 9, 11, 13, 15]))
-            m = int(r.choice(SCALE)) + 12 + (int((t0 - 30) * 1.5) if t0 >= 30 else 0)
+            m = int(r.choice(SCALE)) + 12 + (int((t0 - BUILD) * 1.5) if t0 >= BUILD else 0)
             place(blp, bleep(m), t0 + s * BEAT / 4)
 
-# drums, 4-36 s
-for i in range(8, 72):
+# drums, from the drop to the end card
+for i in range(int(DROP / BEAT), int(END / BEAT)):
     t = i * BEAT
     place(drums, kick(), t)
     k = int(t * SR)
     m = min(N, k + int(0.3 * SR))
     duck[k:m] = np.minimum(duck[k:m], 0.35 + 0.65 * (np.arange(m - k) / (m - k)) ** 0.7)
-    if i % 2 == 1 and t < 30:
+    if i % 2 == 1 and t < BUILD:
         place(drums, clap(), t)
-    if t >= 6:
+    if t >= DROP + 2:
         for q, v in ((0.25, 0.035), (0.5, 0.07), (0.75, 0.04)):
             place(drums, hat(v), t + q * BEAT)
-        if t >= 14 and i % 2 == 1:
+        if t >= ARP and i % 2 == 1:
             place(drums, hat(0.05, open_=True), t + 0.5 * BEAT)
 
-# the build: a roll that doubles in speed, 30-36 s
-t = 30.0
-while t < 36:
-    frac = (t - 30) / 6
+# the build: a roll that doubles in speed
+t = BUILD
+while t < END:
+    frac = (t - BUILD) / (END - BUILD)
     step = BEAT / (2 if frac < 0.34 else 4 if frac < 0.67 else 8)
     place(drums, clap(0.08 + 0.2 * frac, tight=True), t)
     t += step
 
 # transitions
-place(fx, riser(3.6, 0.13), 0.4)
-place(fx, impact(0.75), 4.0)
-place(fx, riser(5.6, 0.17), 30.4)
-place(fx, impact(0.85), 36.0)
+place(fx, riser(DROP - 0.4, 0.13), 0.4)
+place(fx, impact(0.75), DROP)
+place(fx, riser(END - BUILD - 0.4, 0.17), BUILD + 0.4)
+place(fx, impact(0.85), END)
 end_chord = [45, 52, 57, 60, 64, 71]  # Am(add9)
-end = sum(synth(midi(m), int(4 * SR), np.linspace(2600, 600, int(4 * SR)), harmonics=24, detune=(-8, 0, 8), seed=m)
+end = sum(synth(midi(m), int((LENGTH - END) * SR), np.linspace(2600, 600, int((LENGTH - END) * SR)), harmonics=24, detune=(-8, 0, 8), seed=m)
           for m in end_chord)
-place(pads, fft_filter(end, lo=120) * env_adsr(int(4 * SR), a=0.02, d=0.6, s=0.7, r=1.2) * 0.07, 36.0)
-tail = bass(33, dur=3.4, level=0.4)
+place(pads, fft_filter(end, lo=120) * env_adsr(int((LENGTH - END) * SR), a=0.02, d=0.6, s=0.7, r=1.2) * 0.07, END)
+tail = bass(33, dur=LENGTH - END - 0.6, level=0.4)
 tail *= np.linspace(1, 0, len(tail)) ** 2  # a slow fade, not a cut
-place(low, tail, 36.0)
+place(low, tail, END)
 for k, m in enumerate([69, 72, 76, 81]):
-    place(seq, seq_note(m, 2400, 0.12, dur=0.3), 36.0 + k * BEAT / 2)
+    place(seq, seq_note(m, 2400, 0.12, dur=0.3), END + k * BEAT / 2)
 
 # glitches: the last beat before 14 s and 22 s stutters in 1/32ths, bit-crushed
 music = seq + blp + pads
-for g in (13.5, 21.5):
+for g in GLITCHES:
     a, b = int(g * SR), int((g + BEAT) * SR)
     slice_ = (music + drums)[a:a + int(BEAT / 8 * SR)]
     stutter = np.tile(crush(slice_), 8)[: b - a] * np.linspace(1, 0.4, b - a)
