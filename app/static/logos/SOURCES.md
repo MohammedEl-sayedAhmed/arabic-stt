@@ -13,7 +13,8 @@ Tafrigh. The notes on terms say what each brand publishes about using its logo; 
 
 | File | Brand | Source | What it is | Terms found |
 | --- | --- | --- | --- | --- |
-| `googlegemini.png` | Google Gemini | https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt_f94943af3be039176192d.png, the icon of https://gemini.google.com/ | The four-colour Gemini spark, 512 px, as Google's Gemini site uses it | Google's trademark guidelines (https://partnermarketinghub.withgoogle.com/brands/google/trademarks-and-terms/trademark-guidelines-for-proper-usage/) say not to imitate Google's product icons or build them into your own marks; they do not describe this use. Google generally asks for permission to use its logos. |
+| `googlegemini.svg` | Google Gemini | LobeHub's lobe-icons, `@lobehub/icons-static-svg` 1.95.1, icons/gemini-color.svg (https://github.com/lobehub/lobe-icons, MIT), supplied by the project's author | The four-colour Gemini spark as a vector, the same drawing as the icon of https://gemini.google.com/ | Google's trademark guidelines (https://partnermarketinghub.withgoogle.com/brands/google/trademarks-and-terms/trademark-guidelines-for-proper-usage/) say not to imitate Google's product icons or build them into your own marks; they do not describe this use. Google generally asks for permission to use its logos. LobeHub's MIT licence covers its files, not Google's trademark. |
+| `groq.svg`, `groq-dark.svg` | Groq | LobeHub's lobe-icons, `@lobehub/icons-static-svg` 1.95.1, icons/groq.svg (https://github.com/lobehub/lobe-icons, MIT), supplied by the project's author; its currentColor fill is written as black, and as white for dark backgrounds | Groq's rounded g mark, one colour | Groq's trademark policy (https://groq.com/trademark-policy) allows referring to Groq by name only, "limited to word marks (no logos)", and lists using Groq logos in a UI without a licence among the things not to do. The project's author chose to show it; LobeHub's MIT licence covers its files, not Groq's trademark. |
 | `assemblyai.svg`, `assemblyai-dark.svg` | AssemblyAI | https://www.assemblyai.com/media/logos/secondary-light.svg and secondary-dark.svg, from the media kit at https://www.assemblyai.com/media | The logomark for light and for dark backgrounds | The media kit says: never crop, recolor, rotate or add effects; use the logo in black or white only; "Cobolt is our accent, never a logo color". The blue mark on AssemblyAI's own favicon is therefore not used. |
 | `azure.png` | Azure AI Speech | The Speech icon on https://ai.azure.com/explore/aiservices/speech (Microsoft Foundry), saved from the page's image | The round blue and violet icon with a sound wave, 96 px | Microsoft's Azure icon terms (https://learn.microsoft.com/en-us/azure/architecture/icons/) permit its icons "in architectural diagrams, training materials, or documentation" only, unless Microsoft grants permission. An app's interface is not among those uses. |
 | `openai.svg` | OpenAI | The inline Blossom mark served by https://openai.com/brand/ (the page itself sits behind a browser check) | OpenAI's Blossom, one colour (currentColor, black in an image) | OpenAI's brand guidelines (https://openai.com/brand/, read through search results because the page blocks scripts) address partners, developers and other third parties: use the logo only where it relates to OpenAI's services, exactly as provided, and without suggesting a partnership or endorsement. |
@@ -37,11 +38,8 @@ Samsung, LG, Ubuntu, Kubuntu, KDE Plasma, KDE neon, GNOME, Xfce, Arch Linux, Lin
 openSUSE, Vulkan and Alibaba Cloud. Several of these owners (Apple, Intel and NVIDIA among them) license
 their logos and do not allow them without permission; Simple Icons' own disclaimer says the same.
 
-Two brands show a plain tile instead of a logo:
+One brand shows a plain tile instead of a logo:
 
-- Groq. Its trademark policy (https://groq.com/trademark-policy) allows referring to Groq by name only,
-  "limited to word marks (no logos)", and lists using Groq logos in a UI without a licence among the things
-  not to do. The model shows the letter G.
 - Windows. Microsoft requires a trademark licence to use any Windows logo, symbol or icon
   (https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks), and Simple Icons has none. The
   Details panel shows the app's own laptop icon.

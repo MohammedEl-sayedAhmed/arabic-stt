@@ -200,9 +200,8 @@ class SettingsDialog(UiTestCase):
         self.assertIn("ElevenLabs", labels)
         self.assertIn("Google Gemini", labels)
         self.assertIn("Speechmatics", labels)
-        # Groq's trademark policy allows no logo in an app's UI: a tile with its initial
-        mono = self.page.locator(".model-card[data-model='groq'] .logo-tile.mono").inner_text()
-        self.assertEqual(mono, "G")
+        self.assertIn("Groq", labels)  # its mark, from LobeHub's set (see app/static/logos/SOURCES.md)
+        self.assertEqual(self.page.locator(".model-card[data-model='groq'] .logo-tile.mono").count(), 0)
 
     def test_each_hosted_service_shows_its_own_logo(self):
         self.open()
@@ -217,16 +216,17 @@ class SettingsDialog(UiTestCase):
             }))""")
             for model, name in (("elevenlabs", "ElevenLabs"), ("gemini", "Google Gemini"), ("deepgram", "Deepgram"),
                                 ("assemblyai", "AssemblyAI"), ("azure", "Azure AI Speech"),
-                                ("speechmatics", "Speechmatics"), ("openai", "OpenAI"), ("mistral", "Mistral AI")):
+                                ("speechmatics", "Speechmatics"), ("openai", "OpenAI"), ("mistral", "Mistral AI"),
+                                ("groq", "Groq")):
                 with self.subTest(model=model, theme=theme):
                     alt, natural, width = shown[model]
                     self.assertEqual(alt, name)
                     self.assertGreater(natural, 0)  # the file loaded
                     self.assertGreater(width, 0)
-            self.assertIsNone(shown["groq"])
-        # AssemblyAI's own version for dark backgrounds, in the dark theme
-        src = self.page.eval_on_selector(".model-card[data-model='assemblyai'] .logo-tile img.on-dark", "i => i.src")
-        self.assertTrue(src.endswith("/static/logos/assemblyai-dark.svg"))
+        # the versions for dark backgrounds, in the dark theme: AssemblyAI's own, and Groq's mark in white
+        for model, file in (("assemblyai", "assemblyai-dark.svg"), ("groq", "groq-dark.svg")):
+            src = self.page.eval_on_selector(f".model-card[data-model='{model}'] .logo-tile img.on-dark", "i => i.src")
+            self.assertTrue(src.endswith(f"/static/logos/{file}"), src)
 
     def test_gpu_chip(self):
         self.open()
