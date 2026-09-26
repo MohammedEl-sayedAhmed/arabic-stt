@@ -108,8 +108,10 @@ const LOGOS = {
   nvidia: { title: "NVIDIA", file: "nvidia.svg" },  // from LobeHub
   alibabacloud: { title: "Alibaba Cloud", file: "alibabacloud.svg" },  // from LobeHub
   groq: { title: "Groq", file: "groq.svg", dark: "groq-dark.svg" },
+  intel: { title: "Intel", file: "intel.svg", fill: true },  // wordmarks: the whole width of the tile
+  amd: { title: "AMD", file: "amd.svg", fill: true },
   hp: { title: "HP", file: "hp.svg" },
-  dell: { title: "Dell", file: "dell.svg" },
+  dell: { title: "Dell", file: "dell.svg", fill: true },
   lenovo: { title: "Lenovo", file: "lenovo.svg", fill: true },  // a wordmark: the whole width of the tile
   huawei: { title: "Huawei", file: "huawei.svg" },
   kubuntu: { title: "Kubuntu", file: "kubuntu.svg" },
