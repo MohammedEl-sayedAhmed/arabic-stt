@@ -16,8 +16,10 @@
 </p>
 
 <p align="center">
+  <!-- The hero is always the light screenshot. To follow the reader's theme instead, move this line inside the
+       <picture> below: <source media="(prefers-color-scheme: dark)" srcset="docs/images/transcript-dark.png">
+       (or use transcript-dark.png as the img to always show the dark one). -->
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/transcript-dark.png">
     <img src="docs/images/transcript.png" width="900" alt="A sprint planning transcript in Tafrigh: Arabic lines with English terms such as sprint, login bug and dashboard, four named speakers with their share of the talking, the run details with the NVIDIA logo next to the graphics card, and the audio player along the bottom">
   </picture>
 </p>
