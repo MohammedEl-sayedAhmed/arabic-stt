@@ -31,6 +31,12 @@ turn Egyptian speech into formal Arabic. Tafrigh (Arabic for writing out a recor
 that were measured to do better, labels who said what by listening to their voices, and keeps the
 recording on your machine unless you choose a hosted service.
 
+<p align="center">
+  <a href="docs/video/tafrigh-tech.mp4"><img src="docs/images/tafrigh-preview.gif" width="900" alt="An animated look at the three steps in Tafrigh: speaker-labelled lines from Mona, Karim and Omar appear in a sprint planning transcript, each in its own direction, then a word in one line is corrected, the change is reviewed in red and green and saved as version 1"></a>
+</p>
+
+<p align="center"><a href="docs/video/tafrigh-tech.mp4">Watch the 40-second video</a> (1920 x 1080, with music; <a href="docs/video/tafrigh-bright.mp4">another soundtrack</a>). Its source is in <a href="docs/video/">docs/video/</a>.</p>
+
 ## What it does
 
 ### Transcribe
