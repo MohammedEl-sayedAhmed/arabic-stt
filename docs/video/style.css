@@ -236,17 +236,19 @@ svg { display: block; }
 .consent .b { font-size: 21px; color: var(--muted); margin-top: 3px; }
 
 /* stat */
-.center-copy { position: absolute; left: 0; right: 0; top: 150px; display: flex; flex-direction: column; align-items: center; text-align: center; }
-.center-copy .h { font-size: 112px; }
-.gpu-row { position: absolute; left: 0; right: 0; top: 520px; display: flex; justify-content: center; gap: 70px; }
+.center-copy { position: absolute; left: 0; right: 0; top: 140px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.center-copy .h { font-size: 96px; }
+.gpu-row { position: absolute; left: 0; right: 0; top: 560px; display: flex; justify-content: center; gap: 70px; }
 .gpu { display: flex; flex-direction: column; align-items: center; gap: 22px; }
 .gpu .logo { width: 210px; height: 210px; border-radius: 50px; }
 .gpu .logo svg { width: 128px; height: 128px; }
 .gpu .nm { font-size: 30px; font-weight: 600; }
 .gpu .api { font-size: 23px; color: var(--muted); margin-top: -12px; }
-.cpu { position: absolute; left: 50%; top: 500px; margin-left: -125px; width: 250px; height: 250px; }
-.cpu .logo { width: 250px; height: 250px; border-radius: 60px; --brand: #0e7c7b; }
-.cpu .logo svg { width: 140px; height: 140px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+/* the processor joins the row on the right once the cards have moved left (x set in the timeline) */
+.cpu { position: absolute; left: 1150px; top: 560px; width: 560px; }
+.cpu .logo svg { fill: none; stroke: currentColor; stroke-width: 1.6; }
+.cpu .api { font-size: 24px; color: var(--accent-strong); font-weight: 550; }
+.pill.tag { height: 36px; font-size: 19px; padding: 0 14px; margin-top: 6px; }
 .stat-sub { position: absolute; left: 0; right: 0; top: 860px; text-align: center; }
 
 /* end card */
