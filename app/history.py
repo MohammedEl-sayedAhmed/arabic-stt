@@ -223,7 +223,7 @@ def _start(store, jid, job, state, cfg):
 def ensure(store, jid, cfg=None):
     """The job's versions, oldest first, or None while it runs or has no lines. The first call for a
     finished job starts its history, and a transcript changed outside the app (by hand, or with an
-    older Tafrigh) is saved as a new version before anything else happens."""
+    older Sedjem) is saved as a new version before anything else happens."""
     with store.lock:
         job = store.get(jid)
         if job is None or job["status"] in ACTIVE:

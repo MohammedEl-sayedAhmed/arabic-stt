@@ -44,4 +44,4 @@ asked for a hands-on comparison of R2T2, its base model Qwen3-ASR-1.7B and Whisp
 Arabic–English audio.
 
 That comparison was run, and then the work went further: a search for the best free option overall,
-and a working transcriber with speaker labels, which became Tafrigh.
+and a working transcriber with speaker labels, which became Sedjem.

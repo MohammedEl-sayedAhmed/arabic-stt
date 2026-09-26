@@ -293,7 +293,7 @@ def groups(d):
           ("Finished", when(run.get("finished")), True),
           ("Peak memory", memory(run.get("peak_memory_mb")), True),
           ("Voiceprints", run.get("voiceprint_model"), True),
-          ("App", version and f"Tafrigh {version}", True))
+          ("App", version and f"Sedjem {version}", True))
     def found(value):  # a computer detail the app looked for but couldn't read
         return value or (NOT_DETECTED if run.get("computer_recorded") else None)
 
@@ -317,7 +317,7 @@ def summary(d, title=None):
             ("Model", _join([model_name(model), took(run) and f"took {took(run)}"])),
             ("Ran on", _join([None if hosted else computer_name(pc), ran_on(d)])),
             ("Status", None if done else run.get("status")),
-            ("Made", done and _join([when(run.get("finished")), version and f"with Tafrigh {version}"], " "))]
+            ("Made", done and _join([when(run.get("finished")), version and f"with Sedjem {version}"], " "))]
     return [f"{label}: {' '.join(str(value).split())}" for label, value in rows if value]
 
 

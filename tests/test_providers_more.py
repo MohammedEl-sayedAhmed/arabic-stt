@@ -249,7 +249,7 @@ class FakeCfg:
 class Base(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = Path(tempfile.mkdtemp(prefix="tafrigh-providers-"))
+        cls.tmp = Path(tempfile.mkdtemp(prefix="sedjem-providers-"))
         cls.mock = ThreadingHTTPServer(("127.0.0.1", 0), Mock)
         threading.Thread(target=cls.mock.serve_forever, daemon=True).start()
         cls.url = f"http://127.0.0.1:{cls.mock.server_address[1]}"
@@ -564,7 +564,7 @@ class ThroughTheApp(Base):
         super().tearDownClass()
 
     def call(self, method, path, body=None):
-        req = urllib.request.Request(self.api + path, method=method, headers={"X-Tafrigh": "1", "Content-Type": "application/json"},
+        req = urllib.request.Request(self.api + path, method=method, headers={"X-Sedjem": "1", "Content-Type": "application/json"},
                                      data=json.dumps(body).encode() if body is not None else None)
         try:
             with urllib.request.urlopen(req, timeout=30) as r:

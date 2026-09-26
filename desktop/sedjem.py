@@ -1,5 +1,5 @@
 """Entry point of the desktop build (PyInstaller). The same executable also runs the model worker:
-the app starts `Tafrigh --transcribe <arguments>` for every local transcription."""
+the app starts `Sedjem --transcribe <arguments>` for every local transcription."""
 import sys
 
 if __name__ == "__main__":

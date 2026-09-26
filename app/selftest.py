@@ -1,4 +1,4 @@
-"""Check an installation (source or desktop build): `Tafrigh --self-test [--window] [--report out.json]`.
+"""Check an installation (source or desktop build): `Sedjem --self-test [--window] [--report out.json]`.
 
 1. worker    the model process starts and imports everything a local run needs
 2. server    the interface and the API answer
@@ -62,7 +62,7 @@ class FakeElevenLabs(BaseHTTPRequestHandler):
 def check_worker(tmp):
     log = Path(tmp) / "worker.log"
     env = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8", "PYTHONPATH": str(ROOT),
-           "TAFRIGH_LOG": str(log)}
+           "SEDJEM_LOG": str(log)}
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     r = subprocess.run(worker_command(Config()) + ["--check-imports"], cwd=ROOT, env=env, capture_output=True,
                        text=True, encoding="utf-8", errors="replace", timeout=600, creationflags=flags)
@@ -71,7 +71,7 @@ def check_worker(tmp):
 
 
 def get(url, data=None, headers=None, method=None):
-    req = urllib.request.Request(url, data=data, headers={"X-Tafrigh": "1", **(headers or {})}, method=method)
+    req = urllib.request.Request(url, data=data, headers={"X-Sedjem": "1", **(headers or {})}, method=method)
     with urllib.request.urlopen(req, timeout=60) as r:
         body = r.read()
         return json.loads(body) if "json" in r.headers.get("Content-Type", "") else body.decode("utf-8", "replace")
@@ -91,7 +91,7 @@ def check_server_and_job(tmp, results, window):
     base = f"http://127.0.0.1:{server.server_address[1]}"
     try:
         page, status = get(base + "/"), get(base + "/api/status")
-        results["server"] = {"ok": "Tafrigh" in page and status.get("app") == "tafrigh",
+        results["server"] = {"ok": "Sedjem" in page and status.get("app") == "sedjem",
                              "models": {m["id"]: m["ready"] for m in status["models"]}}
         t = np.arange(int(44100 * 2)) / 44100
         wav = Path(tmp) / "tone.wav"
@@ -125,7 +125,7 @@ def check_window(url):
     def probe(win):
         try:
             for _ in range(120):
-                if win.evaluate_js("document.title") == "Tafrigh" and win.evaluate_js(
+                if win.evaluate_js("document.title") == "Sedjem" and win.evaluate_js(
                         "document.querySelector('#view') && document.querySelector('#view').children.length > 0"):
                     outcome.update(ok=True, backend=getattr(webview, "renderer", None) or "")
                     break
@@ -139,7 +139,7 @@ def check_window(url):
     watchdog.daemon = True
     watchdog.start()
     try:
-        webview.start(probe, webview.create_window("Tafrigh self-test", url, width=900, height=600))
+        webview.start(probe, webview.create_window("Sedjem self-test", url, width=900, height=600))
     except Exception as e:  # noqa: BLE001
         outcome["error"] = f"{type(e).__name__}: {e}"
     watchdog.cancel()
@@ -191,7 +191,7 @@ def check_models(tmp):
 
 def run(window=False, report=None, models=False):
     results = {"python": sys.version.split()[0], "platform": sys.platform, "frozen": bool(getattr(sys, "frozen", False))}
-    with tempfile.TemporaryDirectory(prefix="tafrigh-selftest-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="sedjem-selftest-") as tmp:
         checks = [("worker", lambda: results.__setitem__("worker", check_worker(tmp))),
                   ("server", lambda: check_server_and_job(tmp, results, window))]
         if models:

@@ -70,7 +70,7 @@ Latin letters written together (`الdata` becomes `ال data`); and lowercases.
 
 ![Horizontal bars of the word error rate on the Perle clips at 16 kHz for Cohere, whisper-medium and Whisper large-v3 with the hint, with 95% confidence-interval whiskers, next to bars of the share of English words each kept in Latin script](images/charts/perle-16k.svg)
 
-*The three models Tafrigh runs, from the table: bars are the word error rate, whiskers its 95% confidence interval.*
+*The three models Sedjem runs, from the table: bars are the word error rate, whiskers its 95% confidence interval.*
 
 Paired over the same 40 clips (bootstrap), Cohere minus whisper-medium is −5.1 points (95% CI
 −10.9 to +0.8), and whisper-medium minus large-v3 with the hint is −2.3 (−7.3 to +2.2). With 648

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=1920, height=1080">
-  <title>Tafrigh</title>
+  <title>Sedjem</title>
   <style>
     @font-face { font-family: "IBM Plex Sans"; font-weight: 400; src: url(fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2"); }
     @font-face { font-family: "IBM Plex Sans"; font-weight: 500; src: url(fonts/ibm-plex-sans-latin-500-normal.woff2) format("woff2"); }
@@ -22,7 +22,7 @@
   <script src="assets/brands.js"></script>
 </head>
 <body>
-<div id="root" data-composition-id="tafrigh" data-start="0" data-duration="60" data-width="1920" data-height="1080">
+<div id="root" data-composition-id="sedjem" data-start="0" data-duration="60" data-width="1920" data-height="1080">
 
   <div id="bgLayer" class="bg clip" data-start="0" data-duration="60" data-track-index="0">
     <div class="bg-dots" id="dots"></div>
@@ -50,22 +50,26 @@
   <!-- 6 s: the logo, then the corner mark, then the end card -->
   <div id="brandClip" class="clip" data-start="5.8" data-duration="54.2" data-track-index="9" style="pointer-events:none">
     <div id="brand">
-      <svg class="b-icon" id="bIcon" viewBox="0 0 64 64">
-        <defs><linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14a3a1"/><stop offset="1" stop-color="#0b5f5e"/></linearGradient></defs>
-        <rect width="64" height="64" rx="15" fill="url(#bg1)"/>
-        <g fill="#fff">
-          <rect class="wv" x="11" y="27" width="4" height="10" rx="2"/>
-          <rect class="wv" x="18" y="20" width="4" height="24" rx="2"/>
-          <rect class="wv" x="25" y="24" width="4" height="16" rx="2"/>
-          <rect class="tl" x="34" y="21" width="19" height="4" rx="2" opacity=".95"/>
-          <rect class="tl" x="34" y="30" width="14" height="4" rx="2" opacity=".8"/>
-          <rect class="tl" x="34" y="39" width="17" height="4" rx="2" opacity=".65"/>
-        </g>
+      <svg viewBox="0 0 5680 1313.5" class="b-logo" id="bLogo">
+        <g id="bIcon"><svg x="0" y="46.5" width="1267" height="1267" viewBox="0 0 64 64"><defs>
+          <linearGradient id="v-icon-sedjem-colour" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#14a3a1"/>
+            <stop offset="1" stop-color="#0b5f5e"/>
+          </linearGradient>
+        </defs>
+        <rect width="64" height="64" rx="18" fill="url(#v-icon-sedjem-colour)"/>
+        <rect x=".75" y=".75" width="62.5" height="62.5" rx="17.25" fill="none" stroke="#ffffff" stroke-opacity=".16" stroke-width="1.5"/>
+        <path d="M22 14 C38 10 50 20 48 34 C47 43 40 46 37 50 C35 53 31 54 29 51 C27 48 30 45 30 41 C30 37 24 35 22 30 C19 24 18 16 22 14Z" fill="#ffffff"/>
+        <path id="bInner" d="M29 22 C35 21 40 26 38 32" fill="none" stroke="#0b5f5e" stroke-width="3.2" stroke-linecap="round"/></svg></g>
+        <g class="ch"><path transform="translate(1600 1040) scale(1 -1)" d="M277 -10Q209 -10 158.0 11.5Q107 33 78.5 71.0Q50 109 50 160H200Q200 136 221.5 121.5Q243 107 277 107H321Q362 107 383.5 122.0Q405 137 405 164Q405 189 386.0 202.5Q367 216 327 221L263 229Q160 242 113.0 279.0Q66 316 66 392Q66 472 121.0 516.0Q176 560 282 560H320Q421 560 481.0 516.0Q541 472 541 398H391Q391 418 371.5 430.5Q352 443 320 443H282Q245 443 228.0 430.5Q211 418 211 393Q211 370 226.5 358.0Q242 346 276 341L345 332Q449 319 499.5 280.0Q550 241 550 164Q550 80 492.0 35.0Q434 -10 321 -10Z" fill="#111111"/></g>
+        <g class="ch"><path transform="translate(2180 1040) scale(1 -1)" d="M301 -10Q228 -10 173.5 17.5Q119 45 89.5 94.5Q60 144 60 210V340Q60 406 89.5 455.5Q119 505 173.5 532.5Q228 560 301 560Q374 560 427.5 532.5Q481 505 510.5 455.5Q540 406 540 340V240H203V210Q203 158 228.0 131.5Q253 105 303 105Q338 105 359.5 117.0Q381 129 388 150H535Q517 78 453.5 34.0Q390 -10 301 -10ZM397 317V342Q397 393 373.5 420.0Q350 447 301 447Q252 447 227.5 419.0Q203 391 203 340V325L407 327Z" fill="#111111"/></g>
+        <g class="ch"><path transform="translate(2760 1040) scale(1 -1)" d="M243 -10Q160 -10 110.0 48.0Q60 106 60 205V345Q60 443 110.0 501.5Q160 560 243 560Q311 560 350.0 520.5Q389 481 389 410L354 445H389L384 580V730H534V0H389V105H354L389 140Q389 69 350.0 29.5Q311 -10 243 -10ZM297 120Q338 120 361.0 143.5Q384 167 384 210V340Q384 383 361.0 406.5Q338 430 297 430Q255 430 232.5 406.5Q210 383 210 340V210Q210 167 232.5 143.5Q255 120 297 120Z" fill="#111111"/></g>
+        <g class="ch"><path transform="translate(3340 1040) scale(1 -1)" d="M80 -180V-40H240Q281 -40 303.0 -17.5Q325 5 325 45V410H110V550H475V40Q475 -62 415.0 -121.0Q355 -180 251 -180Z" fill="#111111"/></g>
+        <g class="ch"><path transform="translate(3920 1040) scale(1 -1)" d="M301 -10Q228 -10 173.5 17.5Q119 45 89.5 94.5Q60 144 60 210V340Q60 406 89.5 455.5Q119 505 173.5 532.5Q228 560 301 560Q374 560 427.5 532.5Q481 505 510.5 455.5Q540 406 540 340V240H203V210Q203 158 228.0 131.5Q253 105 303 105Q338 105 359.5 117.0Q381 129 388 150H535Q517 78 453.5 34.0Q390 -10 301 -10ZM397 317V342Q397 393 373.5 420.0Q350 447 301 447Q252 447 227.5 419.0Q203 391 203 340V325L407 327Z" fill="#111111"/></g>
+        <g class="ch"><path transform="translate(4500 1040) scale(1 -1)" d="M42 0V550H160V470H184L165 456Q165 503 192.0 531.5Q219 560 259 560Q302 560 326.0 523.0Q350 486 350 425L332 470H360L351 456Q351 503 377.0 531.5Q403 560 447 560Q497 560 528.0 522.5Q559 485 559 420V0H430V410Q430 433 420.0 445.5Q410 458 391 458Q372 458 362.0 445.5Q352 433 352 410V0H249V410Q249 433 239.0 445.5Q229 458 210 458Q191 458 181.0 445.5Q171 433 171 410V0Z" fill="#111111"/></g>
+        <g id="bCur"><path transform="translate(5080 1040) scale(1 -1)" d="M60 -165V-25H540V-165Z" fill="#14a3a1"/></g>
+        <g id="bEar"><g transform="translate(3569.7 0.0) scale(10.6667) translate(-18 -10)"><mask id="v-ear-cut" maskUnits="userSpaceOnUse" x="18" y="10" width="31" height="45"><path d="M22 14 C38 10 50 20 48 34 C47 43 40 46 37 50 C35 53 31 54 29 51 C27 48 30 45 30 41 C30 37 24 35 22 30 C19 24 18 16 22 14Z" fill="#fff"/><path d="M29 22 C35 21 40 26 38 32" fill="none" stroke="#000" stroke-width="4.2" stroke-linecap="round"/></mask><rect x="18" y="10" width="31" height="45" fill="#14a3a1" mask="url(#v-ear-cut)"/></g></g>
       </svg>
-      <div class="b-words">
-        <span class="b-name" id="bName">Tafrigh</span>
-        <span class="b-ar" id="bAr" lang="ar" dir="rtl">تفريغ</span>
-      </div>
     </div>
   </div>
   <section id="logoTag" class="clip" data-start="6" data-duration="4.2" data-track-index="2">
@@ -247,13 +251,13 @@
     <div class="end-copy">
       <div class="tag" id="endTag">Transcripts of Arabic–English meetings, made on your own computer.</div>
       <div class="foss" id="endFoss"><span>Free and open source</span><i></i><span>AGPL-3.0</span></div>
-      <div class="url" id="endUrl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7 4 12l5 5M15 7l5 5-5 5"/></svg>github.com/MohammedEl-sayedAhmed/arabic-stt<div class="shine" id="shine"></div></div>
+      <div class="url" id="endUrl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7 4 12l5 5M15 7l5 5-5 5"/></svg>github.com/MohammedEl-sayedAhmed/sedjem<div class="shine" id="shine"></div></div>
     </div>
   </section>
 
 </div>
 <script>
-/* Tafrigh product video: one paused GSAP timeline, 60 s, seeked frame by frame by HyperFrames.
+/* Sedjem product video: one paused GSAP timeline, 60 s, seeked frame by frame by HyperFrames.
    The music runs at 120 BPM, so scenes start on even seconds (bar lines) and smaller accents land on
    half seconds (beats). Headlines stay still for at least 3 s once they land, and no more than one new
    piece of text appears in any half second. Everything visible is a pure function of the time. */
@@ -337,7 +341,6 @@
     `<div class="gpu">${logoHTML(slug)}<div class="nm">${BRANDS[slug].title}</div><div class="api">${api}</div></div>`).join("");
 
   // the wordmark's letters, for a staggered entrance
-  $("#bName").innerHTML = "Tafrigh".split("").map((c) => `<span style="display:inline-block">${c}</span>`).join("");
 
   // ---------- text that changes with time (typing, counters) ----------
   const HOOK = [["تمام، نبدأ ال ", false], ["sprint planning", true], [" دلوقتي", false]];
@@ -446,16 +449,19 @@
     const SMALL = { x: 60, y: 72 - (H * S) / 2, scale: S };
     const END = { x: (1920 - W) / 2, y: 420 - H / 2, scale: 1 };
     gsap.set(brand, BIG);
-    // The icon's bars are a waveform centred on the icon's middle (app/static/icon.svg): each grows from
-    // its own centre. The origins are set once, before any tween, so every tween ends on icon.svg's
-    // exact geometry.
-    gsap.set("#bIcon .wv", { transformOrigin: "50% 50%" });
-    gsap.set("#bIcon .tl", { transformOrigin: "0% 50%" });
+    // The lockup is docs/brand/sedjem-logo-colour.svg. The ear pops in and its inner curve is drawn, the
+    // letters rise, the ear drops in as the dot of the j and the cursor blinks while the logo holds.
+    // Origins are set once, before any tween, so every tween ends on the file's exact geometry.
+    gsap.set(["#bIcon", "#bEar"], { transformOrigin: "50% 50%" });
+    gsap.set("#bInner", { strokeDasharray: 20, strokeDashoffset: 20 });
+    const blink = (from, to) => { for (let t = from, on = false; t < to; t += 0.53, on = !on) tl.set("#bCur", { opacity: on ? 1 : 0 }, t); };
     tl.fromTo("#bIcon", { scale: 0.3, rotation: -14, opacity: 0 }, { scale: 1, rotation: 0, opacity: 1, duration: 0.75, ease: "back.out(1.7)" }, 5.82);
-    tl.fromTo("#bIcon .wv", { scaleY: 0 }, { scaleY: 1, duration: 0.5, ease: "back.out(2.6)", stagger: 0.07 }, 6.0);
-    tl.fromTo("#bIcon .tl", { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "power3.out", stagger: 0.08 }, 6.12);
-    tl.fromTo("#bName span", { yPercent: 70, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 0.6, ease: E, stagger: 0.035 }, 6.05);
-    tl.fromTo("#bAr", { x: 40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.7, ease: E }, 6.5);
+    tl.to("#bInner", { strokeDashoffset: 0, duration: 0.5, ease: "power2.out" }, 6.1);
+    tl.fromTo("#bLogo .ch", { y: 700, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: E, stagger: 0.045 }, 6.05);
+    tl.fromTo("#bEar", { y: -700, scale: 0.4, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.6, ease: "back.out(2.2)" }, 6.55);
+    tl.fromTo("#bCur", { opacity: 0 }, { opacity: 1, duration: 0.01 }, 6.9);
+    blink(7.43, 9.3);
+    tl.set("#bCur", { opacity: 1 }, 9.35);
     tl.fromTo("#logoSub", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7, ease: E }, 7.0);
     tl.to("#logoSub", { y: -14, opacity: 0, duration: 0.3, ease: IN }, 9.45);
     tl.fromTo(brand, BIG, { ...SMALL, duration: 0.6, ease: IO }, 9.4);
@@ -620,7 +626,8 @@
     // ---- 54 s: the end card, on the impact, holding to 60 s ----
     tl.fromTo(brand, SMALL, { ...END, duration: 0.6, ease: IO, immediateRender: false }, 53.4);
     tl.fromTo("#glowC", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 1.6, ease: "power2.out" }, 53.8);
-    tl.to("#bIcon .wv", { scaleY: 1.4, duration: 0.18, yoyo: true, repeat: 1, stagger: 0.06, ease: "power2.out" }, 54.0);
+    tl.to("#bEar", { scale: 1.3, duration: 0.18, yoyo: true, repeat: 1, ease: "power2.out" }, 54.0);
+    blink(54.53, 60);
     tl.fromTo("#endTag", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.7, ease: E }, 54.5);
     tl.fromTo("#endFoss", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.7, ease: E }, 55.0);
     tl.fromTo("#endUrl", { opacity: 0, scale: 0.85, y: 20 }, { opacity: 1, scale: 1, y: 0, duration: 0.7, ease: "back.out(1.7)" }, 55.5);
@@ -628,7 +635,7 @@
 
     tl.eventCallback("onUpdate", () => render(tl.time()));
     render(0);
-    window.__timelines["tafrigh"] = tl;
+    window.__timelines["sedjem"] = tl;
     if (window.__hfForceTimelineRebind) window.__hfForceTimelineRebind();
   }
 
@@ -636,7 +643,7 @@
     '400 28px "IBM Plex Sans Arabic"', '500 28px "IBM Plex Sans Arabic"', '600 28px "IBM Plex Sans Arabic"',
     '400 28px "IBM Plex Mono"', '500 28px "IBM Plex Mono"', '400 28px "Patrick Hand"'];
   Promise.all(faces.map((f) => document.fonts.load(f, f.includes("Arabic") ? "عربي" : "Aa"))).then(() => document.fonts.ready).then(build)
-    .catch((e) => console.error("tafrigh video: could not build the timeline", e && e.stack ? e.stack : e));
+    .catch((e) => console.error("sedjem video: could not build the timeline", e && e.stack ? e.stack : e));
 })();
 </script>
 </body>

@@ -1,4 +1,4 @@
-/* Tafrigh — local transcription app */
+/* Sedjem — local transcription app */
 :root {
   --bg: #f4f5f7;
   --surface: #ffffff;
@@ -107,9 +107,9 @@ a { color: var(--accent); }
   text-decoration: none; color: var(--text);
   min-width: calc(var(--sidebar) - 34px);
 }
-.brand img { width: 30px; height: 30px; }
-.brand-name { font-weight: 650; font-size: 17px; letter-spacing: -.01em; }
-.brand-ar { font-family: var(--font-ar); color: var(--muted); font-size: 16px; }
+.brand img { height: 30px; width: auto; }
+.brand-dark, [data-theme="dark"] .brand-light { display: none; }
+[data-theme="dark"] .brand-dark { display: block; }
 .topbar-status { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; overflow: hidden; }
 .topbar-actions { display: flex; gap: 4px; }
 .icon-btn.menu-toggle { display: none; }
@@ -516,7 +516,6 @@ dialog::backdrop { background: rgba(10, 14, 20, .45); backdrop-filter: blur(2px)
   .sidebar.open { transform: none; }
   .icon-btn.menu-toggle { display: inline-grid; }
   .brand { min-width: 0; }
-  .brand-ar { display: none; }
   .main-inner { padding: 20px 16px 140px; }
   .grid2 { grid-template-columns: 1fr; }
   .player { left: 0; padding: 8px 12px; }

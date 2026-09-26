@@ -1,7 +1,7 @@
 """The local web server: the UI in app/static and a small JSON API (Python standard library only).
 
 Safety: it listens on 127.0.0.1, answers only requests addressed to that host (no DNS rebinding),
-and every request that changes something must carry the X-Tafrigh header, which other websites
+and every request that changes something must carry the X-Sedjem header, which other websites
 open in the same browser cannot send (no cross-site requests).
 """
 import json
@@ -66,7 +66,7 @@ class App:
                 self.gpu = engines.gpu_info(self.cfg)
             finally:
                 self.gpu_probing = False
-        threading.Thread(target=run, daemon=True, name="tafrigh-gpu").start()
+        threading.Thread(target=run, daemon=True, name="sedjem-gpu").start()
 
     def gpu_names(self):
         """The graphics cards the check found, for the job details; None until it has run (or if it failed)."""
@@ -137,7 +137,7 @@ class App:
                 and self.downloads.status("cuda")["installed"]:
             self.probe_gpu()  # the NVIDIA libraries were just downloaded: check them again
         return {
-            "app": "tafrigh", "version": __version__,
+            "app": "sedjem", "version": __version__,
             "desktop": self.desktop, "frozen": FROZEN, "home": str(self.cfg.home),
             "models": [self.model_info(m, jobs) for m in self.cfg.models.values()],
             "catalog": hub.catalog(self.cfg),  # recommended models (app/catalog.toml)
@@ -186,7 +186,7 @@ def parse_options(p, cfg, model):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "Tafrigh"
+    server_version = "Sedjem"
     protocol_version = "HTTP/1.1"
     app: App  # set by make_server
 
@@ -229,8 +229,8 @@ class Handler(BaseHTTPRequestHandler):
             origin = self.headers.get("Origin")
             if origin and origin.removeprefix("http://") not in allowed:
                 raise ApiError(403, "cross-site request refused")
-        if write and self.headers.get("X-Tafrigh") != "1":
-            raise ApiError(403, "missing X-Tafrigh header")
+        if write and self.headers.get("X-Sedjem") != "1":
+            raise ApiError(403, "missing X-Sedjem header")
 
     def dispatch(self, method):
         self._body_read = False  # one handler serves every request on a keep-alive connection

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Tafrigh</title>
+  <title>Sedjem</title>
   <meta name="description" content="Transcribe recordings with speaker labels, locally or with ElevenLabs / Speechmatics">
   <meta name="theme-color" content="#0e7c7b">
   <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="/static/app.css">
   <link rel="stylesheet" href="/static/compare.css">
   <script>
-    try { const t = localStorage.getItem("tafrigh-theme"); if (t) document.documentElement.dataset.theme = t;
+    try { const t = localStorage.getItem("sedjem-theme"); if (t) document.documentElement.dataset.theme = t;
       else if (matchMedia("(prefers-color-scheme: dark)").matches) document.documentElement.dataset.theme = "dark"; } catch (e) {}
   </script>
 </head>
@@ -22,10 +22,9 @@
     <button class="icon-btn menu-toggle" id="menuToggle" title="Transcriptions" aria-label="Show transcriptions">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
-    <a class="brand" href="#/new">
-      <img src="/static/icon.svg" alt="">
-      <span class="brand-name">Tafrigh</span>
-      <span class="brand-ar" lang="ar" dir="rtl">تفريغ</span>
+    <a class="brand" href="#/new" aria-label="Sedjem">
+      <img class="brand-light" src="/static/logo-colour.svg" alt="Sedjem">
+      <img class="brand-dark" src="/static/logo-colour-dark.svg" alt="Sedjem">
     </a>
     <div class="topbar-status" id="topStatus"></div>
     <div class="topbar-actions">
@@ -81,7 +80,7 @@
   </div>
   <div class="dlg-body" id="settingsBody"></div>
   <div class="dlg-foot">
-    <button class="btn btn-danger" id="quitBtn">Quit Tafrigh</button>
+    <button class="btn btn-danger" id="quitBtn">Quit Sedjem</button>
     <span style="flex:1"></span>
     <button class="btn" data-close>Close</button>
   </div>

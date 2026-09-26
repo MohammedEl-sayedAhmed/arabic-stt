@@ -132,7 +132,7 @@ def run_local(cfg, model, job_dir, job, on_progress, cancelled, register=None):
     progress_file.unlink(missing_ok=True)
     cmd = local_command(cfg, model, job_dir / "audio.flac", out_dir, progress_file, job.get("options") or {})
     env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8",
-           "PYTHONPATH": str(ROOT), "TAFRIGH_LOG": str(log_path)}
+           "PYTHONPATH": str(ROOT), "SEDJEM_LOG": str(log_path)}
     log_path.write_text("", encoding="utf-8")
     with open(log_path, "a", encoding="utf-8") as log:  # append: the worker may open it too
         proc = spawn(cmd, log, env)

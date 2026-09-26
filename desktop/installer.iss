@@ -1,35 +1,35 @@
-; Windows installer for Tafrigh (Inno Setup 6): run after `python desktop\build.py`
-;   iscc desktop\installer.iss                 -> dist\Tafrigh-<version>-setup.exe
-;   set TAFRIGH_VERSION=0.2.0 before, to stamp another version
+; Windows installer for Sedjem (Inno Setup 6): run after `python desktop\build.py`
+;   iscc desktop\installer.iss                 -> dist\Sedjem-<version>-setup.exe
+;   set SEDJEM_VERSION=0.2.0 before, to stamp another version
 ; Installs for the current user (no admin rights needed). Transcriptions, keys and downloaded models live
-; in %LOCALAPPDATA%\Tafrigh and are kept when the app is uninstalled.
+; in %LOCALAPPDATA%\Sedjem and are kept when the app is uninstalled.
 
-#define AppVersion GetEnv("TAFRIGH_VERSION")
+#define AppVersion GetEnv("SEDJEM_VERSION")
 #if AppVersion == ""
   #define AppVersion "0.1.0"
 #endif
 
 [Setup]
 AppId={{6F3C2E9A-4B71-4D5C-9A2E-8B1F0C7D3E45}
-AppName=Tafrigh
+AppName=Sedjem
 AppVersion={#AppVersion}
-AppVerName=Tafrigh {#AppVersion}
+AppVerName=Sedjem {#AppVersion}
 AppPublisher=Mohammed El-sayed Ahmed
 AppPublisherURL=https://github.com/MohammedEl-sayedAhmed
-AppSupportURL=https://github.com/MohammedEl-sayedAhmed/arabic-stt
+AppSupportURL=https://github.com/MohammedEl-sayedAhmed/sedjem
 AppCopyright=Copyright (C) 2026 Mohammed El-sayed Ahmed
 LicenseFile=..\LICENSE
-DefaultDirName={autopf}\Tafrigh
-DefaultGroupName=Tafrigh
+DefaultDirName={autopf}\Sedjem
+DefaultGroupName=Sedjem
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
-OutputBaseFilename=Tafrigh-{#AppVersion}-setup
-SetupIconFile=tafrigh.ico
-UninstallDisplayIcon={app}\Tafrigh.exe
+OutputBaseFilename=Sedjem-{#AppVersion}-setup
+SetupIconFile=sedjem.ico
+UninstallDisplayIcon={app}\Sedjem.exe
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -38,13 +38,13 @@ WizardStyle=modern
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\dist\Tafrigh\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\Sedjem\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\Tafrigh"; Filename: "{app}\Tafrigh.exe"
+Name: "{autoprograms}\Sedjem"; Filename: "{app}\Sedjem.exe"
 ; the same app in an Edge (or default browser) window, if the built-in window ever misbehaves
-Name: "{autoprograms}\Tafrigh (browser window)"; Filename: "{app}\Tafrigh.exe"; Parameters: "--browser"
-Name: "{autodesktop}\Tafrigh"; Filename: "{app}\Tafrigh.exe"; Tasks: desktopicon
+Name: "{autoprograms}\Sedjem (browser window)"; Filename: "{app}\Sedjem.exe"; Parameters: "--browser"
+Name: "{autodesktop}\Sedjem"; Filename: "{app}\Sedjem.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\Tafrigh.exe"; Description: "{cm:LaunchProgram,Tafrigh}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Sedjem.exe"; Description: "{cm:LaunchProgram,Sedjem}"; Flags: nowait postinstall skipifsilent

@@ -1,4 +1,4 @@
-/* Tafrigh: the transcripts of one recording (the server side is app/compare.py). The sidebar shows a
+/* Sedjem: the transcripts of one recording (the server side is app/compare.py). The sidebar shows a
    recording once with its transcripts, the job page switches between them, and the compare view lines two
    or three of them up by time, marks the words that differ, and saves the parts picked from each as a new
    version of one of them (its History has the versions). Loaded before app.js: it only defines things, and uses app.js's helpers (S, api, $, esc,

@@ -1,4 +1,4 @@
-"""Tests for the app (tafrigh): transcript helpers, the hosted-API parsers and the HTTP API.
+"""Tests for the app (sedjem): transcript helpers, the hosted-API parsers and the HTTP API.
 
 The hosted services are replaced by a local mock server, so nothing leaves this computer.
 Run: .venv/bin/python -m unittest discover -s tests -v
@@ -162,7 +162,7 @@ class MockServices(BaseHTTPRequestHandler):
 class Api(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = Path(tempfile.mkdtemp(prefix="tafrigh-test-"))
+        cls.tmp = Path(tempfile.mkdtemp(prefix="sedjem-test-"))
         cls.mock = ThreadingHTTPServer(("127.0.0.1", 0), MockServices)
         threading.Thread(target=cls.mock.serve_forever, daemon=True).start()
         mock_url = f"http://127.0.0.1:{cls.mock.server_address[1]}"
@@ -190,7 +190,7 @@ class Api(unittest.TestCase):
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def call(self, method, path, body=None, headers=None, raw=None):
-        h = {"X-Tafrigh": "1", **(headers or {})}
+        h = {"X-Sedjem": "1", **(headers or {})}
         data = raw
         if body is not None:
             data, h["Content-Type"] = json.dumps(body).encode(), "application/json"
@@ -212,13 +212,13 @@ class Api(unittest.TestCase):
         self.fail(f"job {jid} still {r['job']['status']}")
 
     def test_1_security(self):
-        self.assertEqual(self.call("POST", "/api/keys", {"model": "elevenlabs", "key": "x"}, headers={"X-Tafrigh": ""})[0], 403)
+        self.assertEqual(self.call("POST", "/api/keys", {"model": "elevenlabs", "key": "x"}, headers={"X-Sedjem": ""})[0], 403)
         self.assertEqual(self.call("GET", "/api/status", headers={"Host": "evil.example:80"})[0], 403)
         self.assertEqual(self.call("POST", "/api/keys", {"model": "elevenlabs", "key": "x"},
                                    headers={"Origin": "http://evil.example"})[0], 403)
         status, body, _ = self.call("GET", "/api/status")
         self.assertEqual(status, 200)
-        self.assertEqual(body["app"], "tafrigh")
+        self.assertEqual(body["app"], "sedjem")
         hosted = {m["id"]: m for m in body["models"] if m["kind"] == "hosted"}
         self.assertFalse(hosted["elevenlabs"]["ready"])
 
@@ -319,14 +319,14 @@ class Api(unittest.TestCase):
         conn = http.client.HTTPConnection("127.0.0.1", self.server.server_address[1], timeout=10)
         try:
             conn.request("POST", "/api/downloads/voiceprints/cancel", body=b"{}",
-                         headers={"X-Tafrigh": "1", "Content-Type": "application/json"})
+                         headers={"X-Sedjem": "1", "Content-Type": "application/json"})
             r = conn.getresponse()
             r.read()
             self.assertEqual(r.status, 200)
             conn.request("GET", "/api/status")
             r = conn.getresponse()
             self.assertEqual(r.status, 200)
-            self.assertEqual(json.loads(r.read())["app"], "tafrigh")
+            self.assertEqual(json.loads(r.read())["app"], "sedjem")
         finally:
             conn.close()
 

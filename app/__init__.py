@@ -1,3 +1,3 @@
-"""Tafrigh (تفريغ): a local web app for transcribing meetings with speaker labels."""
+"""Sedjem: a local web app for transcribing meetings with speaker labels."""
 
 __version__ = "0.1.0"

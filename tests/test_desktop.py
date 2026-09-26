@@ -24,7 +24,7 @@ class LauncherTests(unittest.TestCase):
     def test_entry_names_the_window_class_and_icon_and_is_kept_current(self):
         with tempfile.TemporaryDirectory() as d, mock.patch.dict(os.environ, {"XDG_DATA_HOME": d}):
             dest = desktop.install_launcher()
-            self.assertEqual(dest, Path(d) / "applications" / "tafrigh.desktop")
+            self.assertEqual(dest, Path(d) / "applications" / "sedjem.desktop")
             text = dest.read_text(encoding="utf-8")
             self.assertIn(f"StartupWMClass={desktop.WM_CLASS}\n", text)
             self.assertIn(f"Icon={ROOT / 'app' / 'static' / 'icon-512.png'}\n", text)
@@ -71,7 +71,7 @@ class PortTests(unittest.TestCase):
     def test_finds_a_running_copy_on_the_port_it_noted(self):
         class Status(BaseHTTPRequestHandler):
             def do_GET(self):
-                body = json.dumps({"app": "tafrigh"}).encode()
+                body = json.dumps({"app": "sedjem"}).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
@@ -101,7 +101,7 @@ class IconTests(unittest.TestCase):
     def test_window_icon_exists(self):
         icon = desktop.app_icon()
         if os.name == "nt" and icon is None:
-            self.skipTest("no desktop/tafrigh.ico in this checkout")
+            self.skipTest("no desktop/sedjem.ico in this checkout")
         self.assertTrue(Path(icon).is_file(), icon)
 
 

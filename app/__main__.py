@@ -14,7 +14,7 @@ def running_here(port):
     """True if this app already answers on the port."""
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=2) as r:
-            return json.load(r).get("app") == "tafrigh"
+            return json.load(r).get("app") == "sedjem"
     except (OSError, ValueError):
         return False
 
@@ -23,13 +23,13 @@ def main():
     if "--desktop" in sys.argv[1:]:  # ./app.sh --desktop: the desktop window (app/desktop.py)
         from .desktop import main as desktop
         return desktop([a for a in sys.argv[1:] if a != "--desktop"])
-    ap = argparse.ArgumentParser(prog="app", description="Tafrigh: transcribe recordings with speaker labels.")
+    ap = argparse.ArgumentParser(prog="app", description="Sedjem: transcribe recordings with speaker labels.")
     ap.add_argument("--port", type=int, help="default: [server] port in app/config.toml")
     ap.add_argument("--no-browser", action="store_true", help="don't open a browser tab")
     ap.add_argument("--desktop", action="store_true", help="open the desktop window instead (see app/desktop.py)")
     ap.add_argument("--config", type=Path, help="another config file instead of app/config.toml")
     ap.add_argument("--install-launcher", action="store_true",
-                    help="add Tafrigh to the desktop's application menu (~/.local/share/applications)")
+                    help="add Sedjem to the desktop's application menu (~/.local/share/applications)")
     args = ap.parse_args()
     if args.install_launcher:
         from .desktop import install_launcher  # the desktop app also keeps it current when it starts
@@ -43,12 +43,12 @@ def main():
         server, app = make_server(cfg, port=port)
     except OSError:
         if running_here(port):  # already running (e.g. started from the app menu): just open it
-            print(f"Tafrigh is already running at {url}")
+            print(f"Sedjem is already running at {url}")
             if not args.no_browser:
                 webbrowser.open(url)
             return
         sys.exit(f"port {port} is in use by another program; start with --port N")
-    print(f"Tafrigh is running at {url}  (data: {cfg.storage}; stop with Ctrl+C)", flush=True)
+    print(f"Sedjem is running at {url}  (data: {cfg.storage}; stop with Ctrl+C)", flush=True)
     if cfg.server.get("open_browser", True) and not args.no_browser:
         threading.Timer(0.6, webbrowser.open, [url]).start()
     try:

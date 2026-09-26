@@ -53,7 +53,7 @@ jobs:
         run: python -m unittest discover -s tests -v
         env:
           # the browser tests (tests/test_ui*.py) run in the runner's Chrome; fail rather than skip without it
-          TAFRIGH_UI_REQUIRED: "1"
+          SEDJEM_UI_REQUIRED: "1"
 
       - name: Self-test from source
         run: python -m app.desktop --self-test --report selftest-source.json
@@ -63,7 +63,7 @@ jobs:
 
       - name: Self-test the build (Linux)
         if: runner.os == 'Linux'
-        run: dist/Tafrigh/Tafrigh --self-test --report selftest-build.json
+        run: dist/Sedjem/Sedjem --self-test --report selftest-build.json
 
       - name: Self-test the build (Windows)
         if: runner.os == 'Windows'
@@ -71,7 +71,7 @@ jobs:
         run: |
           # a windowed .exe doesn't block the shell or print: wait for it and read its report
           $report = Join-Path $PWD "selftest-build.json"
-          $p = Start-Process -FilePath dist\Tafrigh\Tafrigh.exe -ArgumentList "--self-test","--report","`"$report`"" -Wait -PassThru
+          $p = Start-Process -FilePath dist\Sedjem\Sedjem.exe -ArgumentList "--self-test","--report","`"$report`"" -Wait -PassThru
           Get-Content $report
           exit $p.ExitCode
 
@@ -80,7 +80,7 @@ jobs:
         shell: pwsh
         run: |
           $report = Join-Path $PWD "selftest-models.json"
-          $p = Start-Process -FilePath dist\Tafrigh\Tafrigh.exe -ArgumentList "--self-test","--models","--report","`"$report`"" -Wait -PassThru
+          $p = Start-Process -FilePath dist\Sedjem\Sedjem.exe -ArgumentList "--self-test","--models","--report","`"$report`"" -Wait -PassThru
           Get-Content $report
           exit $p.ExitCode
 
@@ -90,7 +90,7 @@ jobs:
         shell: pwsh
         run: |
           $report = Join-Path $PWD "selftest-window.json"
-          $p = Start-Process -FilePath dist\Tafrigh\Tafrigh.exe -ArgumentList "--self-test","--window","--report","`"$report`"" -Wait -PassThru
+          $p = Start-Process -FilePath dist\Sedjem\Sedjem.exe -ArgumentList "--self-test","--window","--report","`"$report`"" -Wait -PassThru
           Get-Content $report
           exit $p.ExitCode
 
@@ -101,7 +101,7 @@ jobs:
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y; }
-          $env:TAFRIGH_VERSION = "${{ steps.version.outputs.version }}"
+          $env:SEDJEM_VERSION = "${{ steps.version.outputs.version }}"
           & $iscc desktop\installer.iss
 
       - name: Self-test reports
@@ -109,31 +109,31 @@ jobs:
         run: cat selftest-*.json || true
 
       - name: Upload the Windows installer
-        if: runner.os == 'Windows' && hashFiles('dist/Tafrigh-*-setup.exe') != ''
+        if: runner.os == 'Windows' && hashFiles('dist/Sedjem-*-setup.exe') != ''
         uses: actions/upload-artifact@v4
         with:
-          name: Tafrigh-windows-setup
-          path: dist/Tafrigh-*-setup.exe
+          name: Sedjem-windows-setup
+          path: dist/Sedjem-*-setup.exe
           retention-days: 7
 
       - name: Upload the Windows build folder (when there is no installer)
-        if: runner.os == 'Windows' && hashFiles('dist/Tafrigh-*-setup.exe') == ''
+        if: runner.os == 'Windows' && hashFiles('dist/Sedjem-*-setup.exe') == ''
         uses: actions/upload-artifact@v4
         with:
-          name: Tafrigh-windows
-          path: dist/Tafrigh
+          name: Sedjem-windows
+          path: dist/Sedjem
           retention-days: 7
 
       - name: Linux archive (version tags)
         if: runner.os == 'Linux' && github.ref_type == 'tag'
-        run: tar -czf "dist/Tafrigh-${{ steps.version.outputs.version }}-linux-x64.tar.gz" -C dist Tafrigh
+        run: tar -czf "dist/Sedjem-${{ steps.version.outputs.version }}-linux-x64.tar.gz" -C dist Sedjem
 
       - name: Upload the Linux archive
         if: runner.os == 'Linux' && github.ref_type == 'tag'
         uses: actions/upload-artifact@v4
         with:
-          name: Tafrigh-linux
-          path: dist/Tafrigh-*-linux-x64.tar.gz
+          name: Sedjem-linux
+          path: dist/Sedjem-*-linux-x64.tar.gz
           retention-days: 7
 
   release:
@@ -149,12 +149,12 @@ jobs:
       # by name: a tag without the Windows installer or the Linux archive must not be published
       - uses: actions/download-artifact@v4
         with:
-          name: Tafrigh-windows-setup
+          name: Sedjem-windows-setup
           path: release
 
       - uses: actions/download-artifact@v4
         with:
-          name: Tafrigh-linux
+          name: Sedjem-linux
           path: release
 
       - name: Publish
@@ -166,4 +166,4 @@ jobs:
           sha256sum * > SHA256SUMS.txt
           notes="../.github/release-notes/$GITHUB_REF_NAME.md"
           if [ -f "$notes" ]; then set -- --notes-file "$notes"; else set -- --generate-notes; fi
-          gh release create "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --title "Tafrigh ${GITHUB_REF_NAME#v}" "$@"
+          gh release create "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --title "Sedjem ${GITHUB_REF_NAME#v}" "$@"

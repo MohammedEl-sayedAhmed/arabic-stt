@@ -1,15 +1,15 @@
 # Where the logos come from
 
-These are the logos Tafrigh shows next to the models, the hosted services and the systems it names
+These are the logos Sedjem shows next to the models, the hosted services and the systems it names
 (app/static/brands.js, the `LOGOS` list). Each file was downloaded on 2026-09-26 from the source below.
 The SVG files were only cleaned: the XML prolog, comments, editor metadata, titles and the fixed width
 and height of the outer element were removed, and Illustrator's entity names in the Debian file were
 written out. Shapes, colours and the viewBox are as published. The PNG files are byte for byte as
 downloaded.
 
-The logos are trademarks of their owners. Tafrigh shows them only to identify the hardware, systems,
+The logos are trademarks of their owners. Sedjem shows them only to identify the hardware, systems,
 models and services it names, and showing them does not mean that any of these companies endorses
-Tafrigh. The notes on terms say what each brand publishes about using its logo; they are not legal advice.
+Sedjem. The notes on terms say what each brand publishes about using its logo; they are not legal advice.
 
 | File | Brand | Source | What it is | Terms found |
 | --- | --- | --- | --- | --- |

@@ -166,7 +166,7 @@ class Runner:
         self.procs = {}  # job id -> running transcribe.py process
         self.saved_profile = None
         for name, fn in (("prepare", self.prepare), ("local", self.work), ("hosted", self.work)):
-            threading.Thread(target=self.loop, args=(name, fn), daemon=True, name=f"tafrigh-{name}").start()
+            threading.Thread(target=self.loop, args=(name, fn), daemon=True, name=f"sedjem-{name}").start()
 
     # ---- queueing -----------------------------------------------------------------------------
     def submit(self, jid):

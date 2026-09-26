@@ -163,7 +163,7 @@ were measured.
     is an allowlist in `.gitignore`, `run_bench.py` writes private sets to the ignored
     `results/meetings/bench/` and gives large-v3 its hint as `transcribe.py` does, and
     `compare_voiceprints.py` skips models that are not downloaded.
-37. Forced alignment for Cohere, tried after Tafrigh was built. Cohere returns text without word
+37. Forced alignment for Cohere, tried after Sedjem was built. Cohere returns text without word
     times, so with speaker labels its audio is cut wherever the voice changes, and each piece loses
     the context around it. The alternative is to transcribe whole chunks and then align the text to
     the audio, so each word gets a time and its own speaker as with Whisper. This used

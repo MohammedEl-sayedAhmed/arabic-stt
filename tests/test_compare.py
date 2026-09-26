@@ -64,7 +64,7 @@ def make_job(store, n, lines=None, audio=None, link=None, **meta):
 
 class Grouping(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="tafrigh-compare-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="sedjem-compare-"))
         self.store = Store(self.tmp / "data")
         self.a440 = tone(self.tmp / "a440.wav", 440)
         self.a660 = tone(self.tmp / "a660.wav", 660)
@@ -323,7 +323,7 @@ class Combining(unittest.TestCase):
 class Api(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = Path(tempfile.mkdtemp(prefix="tafrigh-compare-api-"))
+        cls.tmp = Path(tempfile.mkdtemp(prefix="sedjem-compare-api-"))
         storage = cls.tmp / "data"
         storage.mkdir()
         for var in ("ELEVENLABS_API_KEY", "SPEECHMATICS_API_KEY"):
@@ -354,7 +354,7 @@ class Api(unittest.TestCase):
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def call(self, method, path, body=None, headers=None):
-        h = {"X-Tafrigh": "1", **(headers or {})}
+        h = {"X-Sedjem": "1", **(headers or {})}
         data = None
         if body is not None:
             data, h["Content-Type"] = json.dumps(body).encode(), "application/json"
@@ -515,7 +515,7 @@ class Api(unittest.TestCase):
             self.assertEqual(self.call("POST", "/api/combine", bad)[0], 400, bad)
             self.assertEqual(self.call("POST", "/api/combine/preview", bad)[0], 400, bad)
         self.assertEqual(self.call("POST", "/api/combine", {**good, "ids": [a, self.running]})[0], 409)
-        self.assertEqual(self.call("POST", "/api/combine", good, headers={"X-Tafrigh": ""})[0], 403)
+        self.assertEqual(self.call("POST", "/api/combine", good, headers={"X-Sedjem": ""})[0], 403)
         self.assertEqual(self.call("GET", f"/api/jobs/{a}")[1]["lines"], self.base_lines, "nothing was saved")
         self.assertEqual([x["n"] for x in self.call("GET", f"/api/jobs/{a}/versions")[1]["versions"]], [0, 1])
 

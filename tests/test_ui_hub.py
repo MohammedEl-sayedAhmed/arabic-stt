@@ -1,5 +1,5 @@
 """Browser tests of the models added from Hugging Face: what was checked by hand while building it, in headless
-Chromium against a Tafrigh server (tests/ui_support.py) whose Hugging Face is the local stand-in of
+Chromium against a Sedjem server (tests/ui_support.py) whose Hugging Face is the local stand-in of
 tests/test_hub.py, so nothing comes from the internet. The model files are a few hundred bytes.
 Run: .venv/bin/python -m unittest discover -s tests -p "test_ui*.py" -v
 """
@@ -18,7 +18,7 @@ WHISPER_HF = "hf-org--whisper-hf"
 
 
 class HubTestCase(UiTestCase):
-    """A Tafrigh server whose Hugging Face is the stand-in (the catalog's repositories included), without the
+    """A Sedjem server whose Hugging Face is the stand-in (the catalog's repositories included), without the
     voiceprint download (it would come from GitHub), and where Transformers checkpoints can't be converted,
     as in the desktop build and in CI."""
 

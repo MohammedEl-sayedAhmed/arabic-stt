@@ -1,6 +1,7 @@
 """Builds the Sedjem logo SVGs in this folder: the lockup (icon and wordmark) and the wordmark alone, in colour for
 light and dark backgrounds, mono black and mono white. The letters are outlines taken from JetBrains Mono ExtraBold
-(SIL Open Font License 1.1), so the files need no font. The icons are copied from app/static.
+(SIL Open Font License 1.1), so the files need no font. The icons are copied from app/static, and the two colour
+logos are copied back there for the app's header.
 
 Needs fontTools and brotli (for the woff2 file):
     python docs/brand/build.py path/to/jetbrains-mono-800-normal.woff2
@@ -119,6 +120,8 @@ VERSIONS = {  # name: (text, accent, icon)
 for name, (text, accent, icon) in VERSIONS.items():
     (HERE / f"sedjem-logo-{name}.svg").write_text(logo(text, accent, icon))
     (HERE / f"sedjem-wordmark-{name}.svg").write_text(logo(text, accent))
+for name in ("colour", "colour-dark"):  # the app's header shows the logo, switching with the theme
+    (STATIC / f"logo-{name}.svg").write_text((HERE / f"sedjem-logo-{name}.svg").read_text())
 for src, dst in (("icon.svg", "colour"), ("icon-mono-black.svg", "mono-black"), ("icon-mono-white.svg", "mono-white")):
     (HERE / f"sedjem-icon-{dst}.svg").write_text((STATIC / src).read_text())
 print("ok")

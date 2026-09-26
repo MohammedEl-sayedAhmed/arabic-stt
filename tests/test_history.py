@@ -82,7 +82,7 @@ def changed(lines, i, text):
 
 class HistoryInStore(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="tafrigh-history-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="sedjem-history-"))
         self.store = Store(self.tmp)
 
     def tearDown(self):
@@ -310,7 +310,7 @@ class HistoryInStore(unittest.TestCase):
 class HistoryApi(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = Path(tempfile.mkdtemp(prefix="tafrigh-history-api-"))
+        cls.tmp = Path(tempfile.mkdtemp(prefix="sedjem-history-api-"))
         (cls.tmp / "data").mkdir()
         cls.cfg = Config(storage=cls.tmp / "data")
         cls.server, cls.app = make_server(cls.cfg, port=0)
@@ -325,7 +325,7 @@ class HistoryApi(unittest.TestCase):
 
     def call(self, method, path, body=None):
         data = json.dumps(body).encode() if body is not None else None
-        headers = {"X-Tafrigh": "1", **({"Content-Type": "application/json"} if data else {})}
+        headers = {"X-Sedjem": "1", **({"Content-Type": "application/json"} if data else {})}
         req = urllib.request.Request(self.base + path, data=data, method=method, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
@@ -454,7 +454,7 @@ class EditsAreSaved(unittest.TestCase):
     restarts on the same data folder."""
 
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="tafrigh-history-restart-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="sedjem-history-restart-"))
         (self.tmp / "data").mkdir()
 
     def tearDown(self):

@@ -22,8 +22,8 @@ The R2T2 and Qwen3-ASR model files (4.7 GB) were deleted once their benchmarks w
 disk space fell to 3.9 GB. `bench/fetch_models.py` with no arguments downloads them again. Audar
 (1.9 GB) can go too if you don't plan to use it.
 
-The desktop build keeps its data somewhere else: `%LOCALAPPDATA%\Tafrigh` on Windows and
-`~/.local/share/tafrigh` on Linux ([desktop app](10-desktop.md#where-things-are-kept)).
+The desktop build keeps its data somewhere else: `%LOCALAPPDATA%\Sedjem` on Windows and
+`~/.local/share/sedjem` on Linux ([desktop app](10-desktop.md#where-things-are-kept)).
 Uninstalling leaves that folder in place, so delete it by hand to remove the models and
 transcriptions.
 

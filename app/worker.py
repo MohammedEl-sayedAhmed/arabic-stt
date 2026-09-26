@@ -14,7 +14,7 @@ import sys
 
 
 def setup_output():
-    log = os.environ.get("TAFRIGH_LOG")
+    log = os.environ.get("SEDJEM_LOG")
     for name in ("stdout", "stderr"):
         stream = getattr(sys, name)
         if stream is None:  # no console: write straight to the log

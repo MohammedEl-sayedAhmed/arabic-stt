@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the desktop app with PyInstaller into dist/Tafrigh/ (Tafrigh.exe on Windows).
+"""Build the desktop app with PyInstaller into dist/Sedjem/ (Sedjem.exe on Windows).
 
   python desktop/build.py              windowed build (no console window)
   python desktop/build.py --console    with a console, to see errors while debugging
@@ -25,7 +25,7 @@ def main():
     args = ap.parse_args()
     sep = os.pathsep
     opts = [
-        str(ROOT / "desktop" / "tafrigh.py"), "--name", "Tafrigh", "--noconfirm", "--clean", "--onedir",
+        str(ROOT / "desktop" / "sedjem.py"), "--name", "Sedjem", "--noconfirm", "--clean", "--onedir",
         "--console" if args.console else "--windowed",
         "--distpath", str(ROOT / "dist"), "--workpath", str(ROOT / "build"), "--specpath", str(ROOT / "build"),
         "--paths", str(ROOT),
@@ -46,11 +46,11 @@ def main():
         "--exclude-module", "tkinter", "--exclude-module", "matplotlib", "--exclude-module", "IPython",
         "--exclude-module", "pytest", "--exclude-module", "hf_xet",
     ]
-    icon = ROOT / "desktop" / "tafrigh.ico"
+    icon = ROOT / "desktop" / "sedjem.ico"
     if sys.platform == "win32" and icon.exists():
         opts += ["--icon", str(icon)]
     PyInstaller.__main__.run(opts)
-    exe = ROOT / "dist" / "Tafrigh" / ("Tafrigh.exe" if sys.platform == "win32" else "Tafrigh")
+    exe = ROOT / "dist" / "Sedjem" / ("Sedjem.exe" if sys.platform == "win32" else "Sedjem")
     print(f"\nbuilt {exe}\ncheck it with: {exe} --self-test --report selftest.json")
 
 

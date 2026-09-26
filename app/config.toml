@@ -1,8 +1,8 @@
-# Tafrigh (تفريغ) — settings for the transcription app.
+# Sedjem — settings for the transcription app.
 #
 # Run from source: ./app.sh (browser tab) or .venv/bin/python -m app.desktop (desktop window).
 # Paths below are relative to the data folder: the project folder when run from source, a per-user
-# folder in the desktop build (%LOCALAPPDATA%\Tafrigh on Windows, ~/.local/share/tafrigh on Linux).
+# folder in the desktop build (%LOCALAPPDATA%\Sedjem on Windows, ~/.local/share/sedjem on Linux).
 # Personal overrides go in <data folder>/app_data/config.toml (same layout): a [[models]] entry there
 # with the same id replaces only the fields it lists. API keys are entered in the app (Settings),
 # which saves them to app_data/secrets.json, or come from the environment variables in key_env.

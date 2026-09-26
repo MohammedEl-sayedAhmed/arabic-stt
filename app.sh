@@ -1,5 +1,5 @@
 #!/bin/sh
-# Start Tafrigh, the local transcription app, at http://127.0.0.1:8765 (settings: app/config.toml).
+# Start Sedjem, the local transcription app, at http://127.0.0.1:8765 (settings: app/config.toml).
 #   ./app.sh                     start and open a browser tab
 #   ./app.sh --no-browser        start only
 #   ./app.sh --desktop           open it in its own window (app/desktop.py)

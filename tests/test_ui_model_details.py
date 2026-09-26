@@ -1,5 +1,5 @@
 """Browser tests of the model details in Settings: the line of key facts on each row of Models, Hosted services and
-Recommended, and everything known about a model when its row is opened. In headless Chromium against a Tafrigh
+Recommended, and everything known about a model when its row is opened. In headless Chromium against a Sedjem
 server whose Hugging Face is the local stand-in of tests/test_hub.py (see HubTestCase), so nothing comes from the
 internet.
 Run: .venv/bin/python -m unittest discover -s tests -p "test_ui*.py" -v

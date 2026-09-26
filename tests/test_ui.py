@@ -1,5 +1,5 @@
 """Browser tests of the interface: what was checked by hand while building it, run for real in headless
-Chromium against a Tafrigh server with demo transcripts (see tests/ui_support.py).
+Chromium against a Sedjem server with demo transcripts (see tests/ui_support.py).
 Run: .venv/bin/python -m unittest discover -s tests -p "test_ui*.py" -v
 """
 import unittest
@@ -145,7 +145,7 @@ class SettingsDialog(UiTestCase):
         self.assertIn("By Mohammed El-sayed Ahmed", about.inner_text())
         self.assertIn("AGPL-3.0", about.inner_text())
         links = about.locator("a").evaluate_all("els => els.map(a => a.href)")
-        self.assertIn("https://github.com/MohammedEl-sayedAhmed/arabic-stt", links)
+        self.assertIn("https://github.com/MohammedEl-sayedAhmed/sedjem", links)
 
     def test_one_tab_at_a_time_and_the_keyboard_moves_between_them(self):
         self.open()

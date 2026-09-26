@@ -1,11 +1,11 @@
-# The Tafrigh video
+# The Sedjem video
 
 A 60-second product video of the app, 1920 x 1080, 30 frames a second, H.264, in two versions that
 differ only in the music:
 
-- `tafrigh-tech.mp4`: a darker, electronic track in A minor, with a filtered synth sequence, digital
+- `sedjem-tech.mp4`: a darker, electronic track in A minor, with a filtered synth sequence, digital
   bleeps and two glitch stutters (the one the main README links to);
-- `tafrigh-bright.mp4`: a brighter track in C major, with a soft pad, plucks and a gentle groove.
+- `sedjem-bright.mp4`: a brighter track in C major, with a soft pad, plucks and a gentle groove.
 
 Both tracks are original, synthesised from nothing but code (`music/tech.py` and `music/bright.py`,
 numpy and soundfile only), so they are published with the project under its licence. Both follow the
@@ -14,7 +14,7 @@ breakdown under the compare scene so its text can be read, the full groove again
 44 s, the build from 48 s and the end card at 54 s. Small accents land on the screen's moments: each
 transcript line in Step 2, each "Kept" and the merge in the compare scene; the tech track also stutters
 at 25.5 s and 33.5 s, where the video glitches. The scene and accent times are constants at the top of
-each script. The GIF near the top of the main README (`docs/images/tafrigh-preview.gif`) is cut from the
+each script. The GIF near the top of the main README (`docs/images/sedjem-preview.gif`) is cut from the
 video.
 
 The video is a web page. `index.html` lays out every scene with the app's own colours, fonts, radii and
@@ -33,7 +33,9 @@ Everything shown is made up: the meeting, the names, the lines and the file.
 - `assets/brands.js`: a copy of `app/static/brands.js`, which names the brands and holds the app's
   logos. Every logo in the video is the brand's own file (`assets/logos/`, copied from
   `app/static/logos/`, with `SOURCES.md` saying where each came from and on what terms), on a white
-  tile as in the app. `assets/icon.svg` is the app's icon.
+  tile as in the app. `assets/icon.svg` is the app's icon. The logo in the video is
+  `docs/brand/sedjem-logo-colour.svg` placed inline, so its parts can move: the ear pops in and its inner
+  curve is drawn, the letters rise, the ear drops in as the dot of the j and the cursor blinks.
 - `fonts/`: IBM Plex Sans, IBM Plex Sans Arabic and IBM Plex Mono (the app's fonts), and Patrick Hand
   for the handwritten opening line. All are under the SIL Open Font License, in `OFL-IBM-Plex.txt` and
   `OFL-Patrick-Hand.txt`.
@@ -75,7 +77,7 @@ Node.js 22 or newer, FFmpeg and Google Chrome are needed. From this folder:
 ```sh
 npm install                 # HyperFrames and GSAP, into node_modules/
 npx hyperframes preview     # opens the studio in the browser, with a scrubbable timeline
-npx hyperframes render --fps 30 --quality delivery --workers 1 --no-browser-gpu --output renders/tafrigh-raw.mp4
+npx hyperframes render --fps 30 --quality delivery --workers 1 --no-browser-gpu --output renders/sedjem-raw.mp4
 ```
 
 Render with one worker and software drawing, as above. With several workers each draws its own part of
@@ -87,8 +89,8 @@ picture every time.
 The MP4 the music is added to is that render encoded again, smaller and ready to stream from the start:
 
 ```sh
-ffmpeg -i renders/tafrigh-raw.mp4 -an -c:v libx264 -preset slow -crf 20 -tune animation \
-  -pix_fmt yuv420p -movflags +faststart renders/tafrigh.mp4
+ffmpeg -i renders/sedjem-raw.mp4 -an -c:v libx264 -preset slow -crf 20 -tune animation \
+  -pix_fmt yuv420p -movflags +faststart renders/sedjem.mp4
 ```
 
 The music is made and added like this (with the project's Python, which has numpy and soundfile):
@@ -97,7 +99,7 @@ The music is made and added like this (with the project's Python, which has nump
 python music/tech.py renders/tech.wav        # or music/bright.py renders/bright.wav
 # bring it to -14 LUFS: measure with  ffmpeg -i renders/tech.wav -af ebur128 -f null -
 ffmpeg -i renders/tech.wav -af volume=<-14 minus the measured loudness>dB -c:a aac -b:a 192k music/tech.m4a
-ffmpeg -i renders/tafrigh.mp4 -i music/tech.m4a -map 0:v -map 1:a -c copy -shortest -movflags +faststart tafrigh-tech.mp4
+ffmpeg -i renders/sedjem.mp4 -i music/tech.m4a -map 0:v -map 1:a -c copy -shortest -movflags +faststart sedjem-tech.mp4
 ```
 
 The GIF is the compare scene, from 34.3 s to 43.55 s, at 900 pixels wide and 12 frames a second. Its
@@ -106,10 +108,10 @@ last frame is held for a moment and then fades back into its first, so the loop 
 
 ```sh
 LOOP="[0:v]fps=12,scale=900:-1:flags=lanczos,split=2[a][b];[b]trim=end_frame=1,loop=loop=11:size=1:start=0,setpts=N/12/TB[first];[a]tpad=stop_mode=clone:stop_duration=1.0[a2];[a2][first]xfade=transition=fade:duration=0.6:offset=9.65"
-ffmpeg -ss 34.3 -t 9.25 -i renders/tafrigh.mp4 -filter_complex "$LOOP,palettegen=stats_mode=diff" renders/palette.png
-ffmpeg -ss 34.3 -t 9.25 -i renders/tafrigh.mp4 -i renders/palette.png \
+ffmpeg -ss 34.3 -t 9.25 -i renders/sedjem.mp4 -filter_complex "$LOOP,palettegen=stats_mode=diff" renders/palette.png
+ffmpeg -ss 34.3 -t 9.25 -i renders/sedjem.mp4 -i renders/palette.png \
   -filter_complex "$LOOP[v];[v][1:v]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" \
-  -loop 0 ../images/tafrigh-preview.gif
+  -loop 0 ../images/sedjem-preview.gif
 ```
 
 To change a scene, edit its markup and its block in the timeline script (each block is headed with

@@ -3,8 +3,9 @@
 Two base folders:
   ROOT  where the code and bundled files are (the project folder, or the unpacked desktop build)
   home  where data and models go: the project folder when run from source, a per-user folder in
-        the desktop build (%LOCALAPPDATA%\\Tafrigh on Windows, ~/.local/share/tafrigh on Linux,
-        ~/Library/Application Support/Tafrigh on macOS); TAFRIGH_HOME overrides both
+        the desktop build (%LOCALAPPDATA%\\Sedjem on Windows, ~/.local/share/sedjem on Linux,
+        ~/Library/Application Support/Sedjem on macOS); SEDJEM_HOME overrides both. The app was called
+        Tafrigh before, so TAFRIGH_HOME still works and an existing Tafrigh folder is moved to the new name
 """
 import json
 import os
@@ -21,15 +22,23 @@ DEFAULT_CONFIG = ROOT / "app" / "config.toml"
 
 
 def home_dir():
-    if os.environ.get("TAFRIGH_HOME"):
-        return Path(os.environ["TAFRIGH_HOME"]).expanduser()
+    for var in ("SEDJEM_HOME", "TAFRIGH_HOME"):
+        if os.environ.get(var):
+            return Path(os.environ[var]).expanduser()
     if not FROZEN:
         return ROOT
     if sys.platform == "win32":
-        return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "Tafrigh"
-    if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "Tafrigh"
-    return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "tafrigh"
+        base, name, old = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local"), "Sedjem", "Tafrigh"
+    elif sys.platform == "darwin":
+        base, name, old = Path.home() / "Library" / "Application Support", "Sedjem", "Tafrigh"
+    else:
+        base, name, old = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share"), "sedjem", "tafrigh"
+    if not (base / name).exists() and (base / old).is_dir():
+        try:
+            (base / old).rename(base / name)
+        except OSError:
+            return base / old  # in use or not allowed: keep using the old folder
+    return base / name
 
 
 def replace_file(src, dst, tries=40):

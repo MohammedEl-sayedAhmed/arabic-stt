@@ -64,8 +64,8 @@ LICENCES = {"mit": "MIT", "apache-2.0": "Apache-2.0", "cc-by-4.0": "CC-BY-4.0", 
 
 NO_NETWORK = "Couldn't reach Hugging Face. Check the internet connection and try again."
 CANT_CONVERT = ("This Whisper model is in Transformers format and has to be converted for faster-whisper, which "
-                "needs the transformers and torch packages. This installation of Tafrigh doesn't have them. Look "
-                "for a faster-whisper (CTranslate2) version of the model, or run Tafrigh from source with "
+                "needs the transformers and torch packages. This installation of Sedjem doesn't have them. Look "
+                "for a faster-whisper (CTranslate2) version of the model, or run Sedjem from source with "
                 "transformers and torch installed.")
 
 
@@ -144,7 +144,7 @@ def json_of(r, kind):
     except ValueError:
         data = None
     if not isinstance(data, kind):
-        raise HubError("Hugging Face sent an answer Tafrigh doesn't understand. Try again later.")
+        raise HubError("Hugging Face sent an answer Sedjem doesn't understand. Try again later.")
     return data
 
 
@@ -155,13 +155,13 @@ def revision_info(http, repo, ref):
         raise HubError(f"{repo} has no branch, tag or commit called “{ref}”.")
     if r.status_code in (401, 403, 404):  # Hugging Face answers 401 for a private repository too
         raise HubError(f"There is no public model called {repo} on Hugging Face. Check the name. Private models "
-                       "can't be added, because Tafrigh doesn't log in to Hugging Face.")
+                       "can't be added, because Sedjem doesn't log in to Hugging Face.")
     if r.status_code >= 400:
         raise HubError(f"Hugging Face answered with an error (HTTP {r.status_code}). Try again later.")
     info = json_of(r, dict)
     if info.get("gated"):
         raise HubError(f"{repo} is gated: Hugging Face asks you to log in and accept its terms before "
-                       "downloading, and Tafrigh doesn't log in. Look for an open copy of the model.")
+                       "downloading, and Sedjem doesn't log in. Look for an open copy of the model.")
     if info.get("private") or info.get("disabled"):
         raise HubError(f"{repo} is private or disabled on Hugging Face.")
     if not re.fullmatch(r"[0-9a-f]{40}", str(info.get("sha", ""))):
@@ -396,11 +396,11 @@ def detect(cfg, http, info, files, path):
     if config and weights(here):
         return transformers(cfg, info, here, folder, dest, config)
     if is_ct2 and config:
-        raise HubError(f"{repo} is a CTranslate2 model, but not a Whisper one. Tafrigh runs CTranslate2 models "
+        raise HubError(f"{repo} is a CTranslate2 model, but not a Whisper one. Sedjem runs CTranslate2 models "
                        "through faster-whisper, which needs Whisper.")
     if "adapter_config.json" in here:
         raise HubError(f"{repo} is an adapter (LoRA) for another model, not a whole model, so it can't run on its own.")
-    raise HubError(f"Tafrigh didn't find a model it can run in {repo}. It can add Whisper models for faster-whisper "
+    raise HubError(f"Sedjem didn't find a model it can run in {repo}. It can add Whisper models for faster-whisper "
                    "(model.bin), Whisper models in Transformers format, and GGUF speech models for transcribe.cpp.")
 
 
@@ -434,7 +434,7 @@ def gguf(http, repo, sha, files, ggufs, pick, dest):
 def transformers(cfg, info, here, folder, dest, config):
     repo, sha = info["id"], info["sha"]
     if config.get("model_type") != "whisper":
-        raise HubError(f"{repo} is a Transformers model of the type “{config.get('model_type')}”. Tafrigh can "
+        raise HubError(f"{repo} is a Transformers model of the type “{config.get('model_type')}”. Sedjem can "
                        "convert only Whisper models from Transformers.")
     if "tokenizer.json" not in here and not {"vocab.json", "merges.txt"} <= here.keys():
         raise HubError(f"{repo} has no tokenizer files (tokenizer.json, or vocab.json and merges.txt), so it can't be converted.")
@@ -571,7 +571,7 @@ def forget(cfg, model_id):
 # ---------------------------------------------------------------------------------------------
 
 CATALOG = ROOT / "app" / "catalog.toml"
-NEEDS_SOURCE = "Needs Tafrigh run from source with transformers and torch, to convert it."
+NEEDS_SOURCE = "Needs Sedjem run from source with transformers and torch, to convert it."
 
 
 @functools.lru_cache(maxsize=None)

@@ -162,7 +162,7 @@ def tearDownModule():
 
 def temp_config(add_cleanup):
     """A Config on an empty data folder, without the voiceprint download (it would come from GitHub)."""
-    home = Path(tempfile.mkdtemp(prefix="tafrigh-hub-"))
+    home = Path(tempfile.mkdtemp(prefix="sedjem-hub-"))
     add_cleanup(shutil.rmtree, home, ignore_errors=True)
     (home / "app_data").mkdir()
     (home / "app_data" / "config.toml").write_text("[local]\nvoiceprint_files = []\n")
@@ -321,7 +321,7 @@ class InspectTests(unittest.TestCase):
             self.assertEqual(hub.inspect(self.cfg, "org/whisper-hf")["problem"], hub.CANT_CONVERT)
             with self.assertRaises(hub.HubError) as e:
                 hub.add(self.cfg, "org/whisper-hf")
-        self.assertIn("run Tafrigh from source with transformers and torch", str(e.exception))
+        self.assertIn("run Sedjem from source with transformers and torch", str(e.exception))
         self.assertIn("faster-whisper (CTranslate2) version", str(e.exception))
 
     def test_refusals(self):
@@ -629,7 +629,7 @@ class ApiTests(unittest.TestCase):
     def call(self, method, path, body=None):
         data = json.dumps(body).encode() if body is not None else None
         req = urllib.request.Request(self.base + path, data=data, method=method,
-                                     headers={"X-Tafrigh": "1", "Content-Type": "application/json"})
+                                     headers={"X-Sedjem": "1", "Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
                 return r.status, json.loads(r.read())

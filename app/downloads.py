@@ -99,7 +99,7 @@ class Downloads:
             self.jobs[i] = {"state": "queued", "done": self.status(i)["partial"], "total": self.status(i)["missing"],
                             "error": None}
         if todo:
-            threading.Thread(target=self.run, args=(todo,), daemon=True, name="tafrigh-download").start()
+            threading.Thread(target=self.run, args=(todo,), daemon=True, name="sedjem-download").start()
         return todo
 
     def cancel(self, item_id):

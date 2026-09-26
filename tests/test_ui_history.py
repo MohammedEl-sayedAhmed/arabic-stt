@@ -1,7 +1,7 @@
 """Browser tests of the version history: edits made in one session, reviewed as a diff and saved as one
 version (with a message, or with none), quick changes outside edit mode, the History dialog (the list,
 the changes in a version, comparing two versions, messages, going back to the original) and exports of a
-version. Headless Chromium against a Tafrigh server with demo transcripts (see tests/ui_support.py).
+version. Headless Chromium against a Sedjem server with demo transcripts (see tests/ui_support.py).
 Run: .venv/bin/python -m unittest discover -s tests -p "test_ui*.py" -v
 """
 import unittest

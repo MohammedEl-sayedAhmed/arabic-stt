@@ -91,7 +91,7 @@ def wait_for(send, cancelled, tick=None):
             box["result"] = send()
         except BaseException as e:  # handed over to the waiting thread
             box["error"] = e
-    thread = threading.Thread(target=run, daemon=True, name="tafrigh-request")
+    thread = threading.Thread(target=run, daemon=True, name="sedjem-request")
     thread.start()
     last = time.time()
     while thread.is_alive():
@@ -508,7 +508,7 @@ def assemblyai_delete(base, auth, tid, retry_s=30, tries=40):
             if attempt():
                 return
     if not attempt():
-        threading.Thread(target=retry, daemon=True, name="tafrigh-delete").start()
+        threading.Thread(target=retry, daemon=True, name="sedjem-delete").start()
 
 
 def assemblyai_lines(data):

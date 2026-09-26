@@ -1,4 +1,4 @@
-"""Tafrigh as a desktop app: the same local server, shown in its own window.
+"""Sedjem as a desktop app: the same local server, shown in its own window.
 
 The window, in order of preference:
   1. pywebview: a native window using the system's web engine (Edge WebView2 on Windows, WebKit on
@@ -10,7 +10,7 @@ The window, in order of preference:
 Closing the window (1 or 2) quits the app, and so does Settings → Quit.
 
 From source:   .venv/bin/python -m app.desktop        (Windows: .venv\\Scripts\\python -m app.desktop)
-Desktop build: Tafrigh / Tafrigh.exe (see desktop/build.py)
+Desktop build: Sedjem / Sedjem.exe (see desktop/build.py)
 """
 import argparse
 import json
@@ -31,10 +31,10 @@ from . import history
 from .config import FROZEN, ROOT, Config
 from .server import make_server, slug
 
-WM_CLASS = "Tafrigh"  # the window class on Linux, which the desktop matches to tafrigh.desktop for the icon
+WM_CLASS = "Sedjem"  # the window class on Linux, which the desktop matches to sedjem.desktop for the icon
 LAUNCHER = """[Desktop Entry]
 Type=Application
-Name=Tafrigh
+Name=Sedjem
 GenericName=Meeting transcription
 Comment=Transcribe recordings with speaker labels, on this computer or with a hosted service
 Exec={exec}
@@ -48,7 +48,7 @@ StartupWMClass={wm_class}
 
 def app_icon():
     """The icon file for the window: an .ico on Windows (from source; the built .exe carries its own), else PNG."""
-    ico = ROOT / "desktop" / "tafrigh.ico"
+    ico = ROOT / "desktop" / "sedjem.ico"
     if os.name == "nt":
         return str(ico) if ico.exists() else None
     png = ROOT / "app" / "static" / "icon-512.png"
@@ -63,14 +63,17 @@ def launch_command():
 
 
 def install_launcher():
-    """Linux: keep ~/.local/share/applications/tafrigh.desktop current, so the application menu lists Tafrigh
+    """Linux: keep ~/.local/share/applications/sedjem.desktop current, so the application menu lists Sedjem
     and the taskbar shows its icon for the app's window. Returns the file, or None elsewhere."""
     if not sys.platform.startswith("linux"):
         return None
     apps = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "applications"
-    dest = apps / "tafrigh.desktop"
+    dest = apps / "sedjem.desktop"
     text = LAUNCHER.format(exec=launch_command(), icon=app_icon() or "audio-x-generic", wm_class=WM_CLASS)
     try:
+        old = apps / "tafrigh.desktop"  # the app was called Tafrigh before: drop its entry, if it is ours
+        if old.is_file() and "StartupWMClass=Tafrigh" in old.read_text(encoding="utf-8", errors="replace"):
+            old.unlink()
         if not dest.exists() or dest.read_text(encoding="utf-8") != text:
             apps.mkdir(parents=True, exist_ok=True)
             dest.write_text(text, encoding="utf-8")
@@ -85,16 +88,16 @@ RECORDINGS = ("Recordings (*.mp3;*.m4a;*.wav;*.ogg;*.opus;*.flac;*.aac;*.amr;*.w
 
 
 def running_here(port):
-    """True if Tafrigh already answers on this port (then we just show it)."""
+    """True if Sedjem already answers on this port (then we just show it)."""
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=2) as r:
-            return json.load(r).get("app") == "tafrigh"
+            return json.load(r).get("app") == "sedjem"
     except (OSError, ValueError):
         return False
 
 
 def running_port(cfg, preferred):
-    """The port of a Tafrigh already running on this data folder: the preferred one, or the one it noted in
+    """The port of a Sedjem already running on this data folder: the preferred one, or the one it noted in
     <storage>/port when that one was taken. None if none is running."""
     ports = [preferred]
     try:
@@ -105,7 +108,7 @@ def running_port(cfg, preferred):
 
 
 def pick_port(preferred, wait=3.0):
-    """The preferred port, or any free one if something else keeps it. A Tafrigh that was just closed can hold
+    """The preferred port, or any free one if something else keeps it. A Sedjem that was just closed can hold
     it for a moment, so it is tried again for up to `wait` seconds."""
     deadline = time.monotonic() + wait
     while True:
@@ -198,14 +201,14 @@ def webview2_available():
 
 def show_address(url):
     """No window of any kind could be opened: keep serving and say where (a windowed build has no console)."""
-    text = f"Tafrigh is running at {url}\n\nOpen this address in a web browser. To stop it, use Settings → Quit."
+    text = f"Sedjem is running at {url}\n\nOpen this address in a web browser. To stop it, use Settings → Quit."
     print(text, flush=True)
     if os.name == "nt" and getattr(sys, "frozen", False):
         import ctypes
-        ctypes.windll.user32.MessageBoxW(None, text, "Tafrigh", 0x40)  # MB_ICONINFORMATION
+        ctypes.windll.user32.MessageBoxW(None, text, "Sedjem", 0x40)  # MB_ICONINFORMATION
 
 
-def native_window(url, app, title="Tafrigh"):
+def native_window(url, app, title="Sedjem"):
     """Show the app in a pywebview window until it is closed. False if no GUI backend is available."""
     try:
         import webview
@@ -261,7 +264,7 @@ def app_mode_browser(url, profile):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="tafrigh", description="Tafrigh: transcribe recordings with speaker labels.")
+    ap = argparse.ArgumentParser(prog="sedjem", description="Sedjem: transcribe recordings with speaker labels.")
     ap.add_argument("--browser", action="store_true", help="use a browser window instead of the native one")
     ap.add_argument("--no-window", "--server", action="store_true",
                     help="only run the server (open the printed address in any browser)")
@@ -280,7 +283,7 @@ def main(argv=None):
     install_launcher()
     if sys.stderr is None:  # a windowed build has no console: keep messages in a log file
         cfg.storage.mkdir(parents=True, exist_ok=True)
-        sys.stdout = sys.stderr = open(cfg.storage / "tafrigh.log", "a", encoding="utf-8", buffering=1)
+        sys.stdout = sys.stderr = open(cfg.storage / "sedjem.log", "a", encoding="utf-8", buffering=1)
     preferred = args.port or cfg.server["port"]
     running = running_port(cfg, preferred)
     if running:  # already running (e.g. started twice): just show it
@@ -293,7 +296,7 @@ def main(argv=None):
     server, app = make_server(cfg, port=pick_port(preferred))
     app.desktop = True
     url = f"http://127.0.0.1:{server.server_address[1]}/"
-    threading.Thread(target=server.serve_forever, daemon=True, name="tafrigh-server").start()
+    threading.Thread(target=server.serve_forever, daemon=True, name="sedjem-server").start()
     port_file = cfg.storage / "port"  # so that starting it again finds this one, whichever port it has
     try:
         port_file.write_text(str(server.server_address[1]), encoding="utf-8")
@@ -302,7 +305,7 @@ def main(argv=None):
     stopped = threading.Event()
     try:
         if args.no_window:
-            print(f"Tafrigh is running at {url} (stop with Settings → Quit or Ctrl+C)", flush=True)
+            print(f"Sedjem is running at {url} (stop with Settings → Quit or Ctrl+C)", flush=True)
             app.on_quit = stopped.set
             while not stopped.wait(1):
                 pass
@@ -321,7 +324,7 @@ def main(argv=None):
             # the browser handed the window to an instance that was already running: wait for Quit
         elif not webbrowser.open(url):
             show_address(url)
-        print(f"Tafrigh is running at {url} (close with Settings → Quit or Ctrl+C)", flush=True)
+        print(f"Sedjem is running at {url} (close with Settings → Quit or Ctrl+C)", flush=True)
         app.on_quit = stopped.set
         while not stopped.wait(1):
             pass

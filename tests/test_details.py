@@ -193,7 +193,7 @@ class MachineTests(unittest.TestCase):
         self.assertEqual(os_name(ubuntu, kubuntu, ""), "Kubuntu 24.04.4 LTS (Linux 7.0.0-31-generic)")
 
     def test_missing_files_and_failing_calls_give_none(self):
-        missing = Path(tempfile.gettempdir()) / "tafrigh-no-such-folder"
+        missing = Path(tempfile.gettempdir()) / "sedjem-no-such-folder"
         with mock.patch.object(sysinfo, "DMI", missing), mock.patch.object(sysinfo, "OS_RELEASE", missing / "os-release"), \
                 mock.patch.object(sysinfo, "CPUINFO", missing / "cpuinfo"), \
                 mock.patch("os.sysconf", create=True, side_effect=ValueError("no")), \
@@ -258,7 +258,7 @@ class MachineTests(unittest.TestCase):
 class RecordingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = Path(tempfile.mkdtemp(prefix="tafrigh-rec-"))
+        cls.tmp = Path(tempfile.mkdtemp(prefix="sedjem-rec-"))
         cls.wav, cls.flac, cls.text = cls.tmp / "call.wav", cls.tmp / "note.flac", cls.tmp / "notes.txt"
         sf.write(cls.wav, tone(1.5), 44100, subtype="PCM_16")
         sf.write(cls.flac, tone(1.0, rate=16000, channels=1), 16000, format="FLAC")
@@ -335,7 +335,7 @@ class DetailsTests(unittest.TestCase):
             ("Run", "Finished"): ("2026-09-25 22:01", True),
             ("Run", "Peak memory"): ("3.0 GB", True),
             ("Run", "Voiceprints"): ("nemo_en_titanet_small.onnx", True),
-            ("Run", "App"): ("Tafrigh 0.1.0", True),
+            ("Run", "App"): ("Sedjem 0.1.0", True),
             ("Computer", "Computer"): ("LENOVO ThinkPad L14 Gen 3", False),
             ("Computer", "Processor"): ("12th Gen Intel Core i5-1245U, 12 threads", False),
             ("Computer", "Memory"): ("15.3 GB", True),
@@ -348,7 +348,7 @@ class DetailsTests(unittest.TestCase):
             "Recording: Weekly sync.m4a, 1:02:15, AAC, 44.1 kHz, stereo",
             "Model: Cohere Transcribe Arabic, took 20 min (0.32× real time)",
             "Ran on: LENOVO ThinkPad L14 Gen 3, Graphics card: Intel Iris Xe Graphics (Vulkan)",
-            "Made: 2026-09-25 22:01 with Tafrigh 0.1.0"])
+            "Made: 2026-09-25 22:01 with Sedjem 0.1.0"])
 
     def test_a_hosted_job(self):
         d = report.details(HOSTED_JOB, LINES[:2])
@@ -365,7 +365,7 @@ class DetailsTests(unittest.TestCase):
         for key in (("Model", "Engine"), ("Model", "File"), ("Run", "Threads"), ("Run", "Use GPU"), ("Run", "Power mode")):
             self.assertNotIn(key, r)
         self.assertEqual(report.summary(d)[1:], ["Model: ElevenLabs Scribe (scribe_v2), took 2 min (1.07× real time)",
-                                                 "Ran on: ElevenLabs", "Made: 2026-09-25 22:17 with Tafrigh 0.1.0"])
+                                                 "Ran on: ElevenLabs", "Made: 2026-09-25 22:17 with Sedjem 0.1.0"])
 
     def test_computer_details_that_could_not_be_read_say_so(self):
         job = {**LOCAL_JOB, "machine": {**dict.fromkeys(sysinfo.MACHINE_KEYS), "cpu": "Apple M2", "threads": 8}}
@@ -401,7 +401,7 @@ class DetailsTests(unittest.TestCase):
         self.assertIn("Status: failed", report.summary(d))
 
     def test_run_facts(self):
-        home = Path(tempfile.mkdtemp(prefix="tafrigh-facts-"))
+        home = Path(tempfile.mkdtemp(prefix="sedjem-facts-"))
         try:
             (home / "app_data").mkdir()
             cfg = Config(home=home)
@@ -553,7 +553,7 @@ class FakeElevenLabs(BaseHTTPRequestHandler):
 class ApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = Path(tempfile.mkdtemp(prefix="tafrigh-details-"))
+        cls.tmp = Path(tempfile.mkdtemp(prefix="sedjem-details-"))
         cls.mock = ThreadingHTTPServer(("127.0.0.1", 0), FakeElevenLabs)
         threading.Thread(target=cls.mock.serve_forever, daemon=True).start()
         storage = cls.tmp / "app_data"
@@ -585,7 +585,7 @@ class ApiTests(unittest.TestCase):
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def call(self, method, path, body=None, raw=None, headers=None):
-        h = {"X-Tafrigh": "1", **(headers or {})}
+        h = {"X-Sedjem": "1", **(headers or {})}
         data = raw
         if body is not None:
             data, h["Content-Type"] = json.dumps(body).encode(), "application/json"

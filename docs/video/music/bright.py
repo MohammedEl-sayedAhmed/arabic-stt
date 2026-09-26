@@ -1,4 +1,4 @@
-"""The bright version of the Tafrigh video track: synthesised from scratch (numpy only), free to publish.
+"""The bright version of the Sedjem video track: synthesised from scratch (numpy only), free to publish.
 
 120 BPM, 4/4: a beat is 0.5 s and a bar 2 s. C major, I-V-vi-IV (C, G/B, Am, F), one chord per bar.
 One section per scene:
@@ -313,6 +313,6 @@ fade = int(1.5 * SR)
 stereo[-fade:] *= (np.linspace(1, 0, fade) ** 1.5)[:, None]
 stereo *= 10 ** (-1 / 20) / np.max(np.abs(stereo))
 
-out = sys.argv[1] if len(sys.argv) > 1 else "tafrigh-theme.wav"
+out = sys.argv[1] if len(sys.argv) > 1 else "sedjem-theme.wav"
 sf.write(out, stereo.astype(np.float32), SR, subtype="PCM_24")
 print("wrote", out, f"{len(stereo) / SR:.2f} s")

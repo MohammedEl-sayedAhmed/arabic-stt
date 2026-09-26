@@ -1,4 +1,4 @@
-/* Tafrigh: logos of the makers of the hardware, systems, models and services the app names: in the job
+/* Sedjem: logos of the makers of the hardware, systems, models and services the app names: in the job
    page's Details panel, on the model cards and in Settings.
 
    LOGOS: each brand's own logo in its own colours, a file in app/static/logos/ taken from the brand's

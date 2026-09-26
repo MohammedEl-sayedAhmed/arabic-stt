@@ -81,7 +81,7 @@ def container(data):
 class Splitting(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = Path(tempfile.mkdtemp(prefix="tafrigh-split-"))
+        cls.tmp = Path(tempfile.mkdtemp(prefix="sedjem-split-"))
         cls.audio = cls.tmp / "audio.flac"
         sf.write(cls.audio, recording(), SR, subtype="PCM_16", format="FLAC")
 
@@ -304,7 +304,7 @@ class Flow(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.tmp = Path(tempfile.mkdtemp(prefix="tafrigh-providers-"))
+        cls.tmp = Path(tempfile.mkdtemp(prefix="sedjem-providers-"))
         cls.mock = ThreadingHTTPServer(("127.0.0.1", 0), MockApi)
         threading.Thread(target=cls.mock.serve_forever, daemon=True).start()
         url = f"http://127.0.0.1:{cls.mock.server_address[1]}"
@@ -348,7 +348,7 @@ class Flow(unittest.TestCase):
     @classmethod
     def call(cls, method, path, body=None):
         req = urllib.request.Request(cls.base + path, data=None if body is None else json.dumps(body).encode(),
-                                     method=method, headers={"X-Tafrigh": "1", "Content-Type": "application/json"})
+                                     method=method, headers={"X-Sedjem": "1", "Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
                 return r.status, json.loads(r.read())
@@ -550,7 +550,7 @@ class VoiceStep(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.tmp = Path(tempfile.mkdtemp(prefix="tafrigh-voices-"))
+        cls.tmp = Path(tempfile.mkdtemp(prefix="sedjem-voices-"))
         sf.write(cls.tmp / "audio.flac", recording(10.0), SR, subtype="PCM_16", format="FLAC")
         cls.fake = cls.tmp / "fake_worker.py"
         cls.fake.write_text(FAKE_WORKER, encoding="utf-8")
@@ -612,7 +612,7 @@ class Direct(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.tmp = Path(tempfile.mkdtemp(prefix="tafrigh-direct-"))
+        cls.tmp = Path(tempfile.mkdtemp(prefix="sedjem-direct-"))
         cls.mock = ThreadingHTTPServer(("127.0.0.1", 0), MockApi)
         threading.Thread(target=cls.mock.serve_forever, daemon=True).start()
         cls.url = f"http://127.0.0.1:{cls.mock.server_address[1]}"

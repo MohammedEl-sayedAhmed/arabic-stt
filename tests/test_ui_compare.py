@@ -2,7 +2,7 @@
 shown once in the sidebar with its transcripts, the switcher on the job page, the compare view (rows lined
 up by time, the words that differ, only the rows that differ, a third transcript), and combining: rows and
 a time range picked from other models, reviewed as a diff and saved as a new version of the base, which
-shows in History and survives a reload. Headless Chromium against a Tafrigh server with demo transcripts
+shows in History and survives a reload. Headless Chromium against a Sedjem server with demo transcripts
 (see tests/ui_support.py).
 Run: .venv/bin/python -m unittest discover -s tests -p "test_ui*.py" -v
 """

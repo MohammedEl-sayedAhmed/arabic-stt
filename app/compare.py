@@ -115,7 +115,7 @@ def fill_later(store, jobs):
         finally:
             with _state_lock:
                 _filling.discard(store.root)
-    threading.Thread(target=run, daemon=True, name="tafrigh-fingerprints").start()
+    threading.Thread(target=run, daemon=True, name="sedjem-fingerprints").start()
 
 
 def group_ids(jobs):

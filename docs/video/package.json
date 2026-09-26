@@ -1,12 +1,12 @@
 {
-  "name": "tafrigh-video",
+  "name": "sedjem-video",
   "private": true,
-  "description": "The silent 40-second Tafrigh product video, as a HyperFrames composition",
+  "description": "The silent 40-second Sedjem product video, as a HyperFrames composition",
   "license": "AGPL-3.0-only",
   "scripts": {
     "preview": "hyperframes preview",
     "check": "hyperframes check",
-    "render": "hyperframes render --fps 30 --quality delivery --workers 1 --no-browser-gpu --output renders/tafrigh-raw.mp4"
+    "render": "hyperframes render --fps 30 --quality delivery --workers 1 --no-browser-gpu --output renders/sedjem-raw.mp4"
   },
   "devDependencies": {
     "gsap": "3.14.2",

@@ -1,8 +1,9 @@
-<p align="center">
-  <img src="app/static/icon.svg" width="84" alt="">
-</p>
-
-<h1 align="center">Tafrigh <sub>تفريغ</sub></h1>
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/sedjem-logo-colour-dark.svg">
+    <img src="docs/brand/sedjem-logo-colour.svg" width="380" alt="Sedjem">
+  </picture>
+</h1>
 
 <p align="center">
   Transcripts of Egyptian Arabic–English meetings and calls, made on your own computer,<br>
@@ -20,22 +21,22 @@
        <picture> below: <source media="(prefers-color-scheme: dark)" srcset="docs/images/transcript-dark.png">
        (or use transcript-dark.png as the img to always show the dark one). -->
   <picture>
-    <img src="docs/images/transcript.png" width="900" alt="A sprint planning transcript in Tafrigh: Arabic lines with English terms such as sprint, login bug and dashboard, four named speakers with their share of the talking, the run details with the NVIDIA logo next to the graphics card, and the audio player along the bottom">
+    <img src="docs/images/transcript.png" width="900" alt="A sprint planning transcript in Sedjem: Arabic lines with English terms such as sprint, login bug and dashboard, four named speakers with their share of the talking, the run details with the NVIDIA logo next to the graphics card, and the audio player along the bottom">
   </picture>
 </p>
 
 Egyptian tech teams talk in Arabic sentences full of English words: *deadline*, *sprint*,
 *merge request*. Many speech-to-text models handle this badly. Some write the English words in
 Arabic letters (on the Egyptian test set, several kept only 8–25% of them in Latin script), others
-turn Egyptian speech into formal Arabic. Tafrigh (Arabic for writing out a recording) runs models
+turn Egyptian speech into formal Arabic. Sedjem (the ancient Egyptian word for "to hear") runs models
 that were measured to do better, labels who said what by listening to their voices, and keeps the
 recording on your machine unless you choose a hosted service.
 
 <p align="center">
-  <a href="docs/video/tafrigh-tech.mp4"><img src="docs/images/tafrigh-preview.gif" width="900" alt="An animated look at comparing two models in Tafrigh: Cohere Transcribe Arabic writes some English terms in Arabic letters, whisper-medium code-switching turns some Egyptian words into formal Arabic, the differing words are marked, the better row is kept in each and the rows merge into one best transcript"></a>
+  <a href="docs/video/sedjem-tech.mp4"><img src="docs/images/sedjem-preview.gif" width="900" alt="An animated look at comparing two models in Sedjem: Cohere Transcribe Arabic writes some English terms in Arabic letters, whisper-medium code-switching turns some Egyptian words into formal Arabic, the differing words are marked, the better row is kept in each and the rows merge into one best transcript"></a>
 </p>
 
-<p align="center"><a href="docs/video/tafrigh-tech.mp4">Watch the 60-second video</a> (1920 x 1080, with music; <a href="docs/video/tafrigh-bright.mp4">another soundtrack</a>). Its source is in <a href="docs/video/">docs/video/</a>.</p>
+<p align="center"><a href="docs/video/sedjem-tech.mp4">Watch the 60-second video</a> (1920 x 1080, with music; <a href="docs/video/sedjem-bright.mp4">another soundtrack</a>). Its source is in <a href="docs/video/">docs/video/</a>.</p>
 
 ## What it does
 
@@ -181,8 +182,8 @@ The transcripts in the screenshots are made up, and so are the names.
 ### Windows
 
 There is no signed release yet. The installer (per user, no admin rights, 77 MB) is built by this
-repository's [Desktop build workflow](https://github.com/MohammedEl-sayedAhmed/arabic-stt/actions/workflows/desktop.yml):
-open the latest successful run and download `Tafrigh-windows-setup`. GitHub asks you to sign in
+repository's [Desktop build workflow](https://github.com/MohammedEl-sayedAhmed/sedjem/actions/workflows/desktop.yml):
+open the latest successful run and download `Sedjem-windows-setup`. GitHub asks you to sign in
 for this, and keeps each build for 7 days. Windows SmartScreen will warn about an unknown publisher;
 choose *More info*, then *Run anyway*. To build the installer yourself, see
 [the desktop notes](docs/10-desktop.md#build-it).
@@ -192,11 +193,11 @@ choose *More info*, then *Run anyway*. To build the installer yourself, see
 You need Python 3.12 and [uv](https://docs.astral.sh/uv/).
 
 ```sh
-git clone https://github.com/MohammedEl-sayedAhmed/arabic-stt.git
-cd arabic-stt
+git clone https://github.com/MohammedEl-sayedAhmed/sedjem.git
+cd sedjem
 uv venv .venv --python 3.12
 VIRTUAL_ENV=.venv uv pip install -r requirements.txt
-./app.sh              # opens Tafrigh at http://127.0.0.1:8765
+./app.sh              # opens Sedjem at http://127.0.0.1:8765
 ./app.sh --desktop    # or in a window of its own
 ```
 
@@ -207,7 +208,7 @@ Cohere (1.6 GB). The voiceprint model for speaker labels (40 MB) comes with the 
 
 ### The desktop app
 
-The desktop app opens Tafrigh in a native window (Edge WebView2 on Windows, GTK WebKit or Qt on
+The desktop app opens Sedjem in a native window (Edge WebView2 on Windows, GTK WebKit or Qt on
 Linux) with native open and save dialogs. Where that isn't available it uses an app-mode browser
 window, then a browser tab. `--browser` goes straight to the browser window, and `--server` runs only
 the server, for any browser to use. The details are in [the desktop notes](docs/10-desktop.md).
@@ -239,9 +240,9 @@ and speeds are in [the command-line notes](docs/05-command-line.md).
 
 ## Background
 
-Tafrigh came out of a search for speech-to-text models that handle Egyptian Arabic–English meetings
+Sedjem came out of a search for speech-to-text models that handle Egyptian Arabic–English meetings
 on an ordinary laptop. Open models were measured on public Egyptian code-switching test sets and on
-real work meetings, and Tafrigh runs the ones that did best. R2T2, the model the search started from,
+real work meetings, and Sedjem runs the ones that did best. R2T2, the model the search started from,
 was tried first and is not usable for this: it wrote most English terms in Arabic letters. The
 [project notes](docs/README.md) have the whole story:
 
@@ -255,12 +256,12 @@ was tried first and is not usable for this: it wrote most English terms in Arabi
 | [Market research](docs/06-market-research.md) | hosted services and open models, free tiers, privacy terms |
 | [Recommendation](docs/07-recommendation.md) | what to use for which job |
 | [Disk space and cleanup](docs/08-disk-and-cleanup.md) | what gets installed where, and how to remove it |
-| [The app](docs/09-app.md) | using Tafrigh, versions, comparing, its settings, API keys, privacy |
+| [The app](docs/09-app.md) | using Sedjem, versions, comparing, its settings, API keys, privacy |
 | [Desktop app](docs/10-desktop.md) | running, building and testing on Windows and Linux |
 
 ## Thanks
 
-Tafrigh stands on other people's work: the
+Sedjem stands on other people's work: the
 [whisper-medium Arabic–English code-switching fine-tune](https://huggingface.co/Seif-Eldeen-Sameh/whisper-medium-arabic-codeswitched-ct2),
 Cohere Transcribe Arabic (the
 [GGUF build](https://huggingface.co/handy-computer/cohere-transcribe-arabic-07-2026-gguf) from
@@ -272,7 +273,7 @@ handy-computer, run with transcribe.cpp), OpenAI Whisper through
 
 ## Licence
 
-Tafrigh is made by Mohammed El-sayed Ahmed and is free software under the
+Sedjem is made by Mohammed El-sayed Ahmed and is free software under the
 [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-only). You can use, study, change and
 share it. If you distribute a modified version, or run one as a service for others, you must publish
 its source under the same licence, and keep the author credit in its About section and README (the
@@ -295,4 +296,4 @@ found for it are listed in [app/static/logos/SOURCES.md](app/static/logos/SOURCE
 single-colour logos of the hardware and the other systems come from
 [Simple Icons](https://simpleicons.org) (CC0). The trademarks belong to their owners, and the logos
 are shown only to identify the hardware, systems, models and services the app names; this does not
-mean that any of them endorses Tafrigh.
+mean that any of them endorses Sedjem.

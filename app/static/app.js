@@ -1,4 +1,4 @@
-/* Tafrigh — local transcription app (no build step, no external requests). */
+/* Sedjem — local transcription app (no build step, no external requests). */
 "use strict";
 
 // ---------------------------------------------------------------------------------------------
@@ -101,7 +101,7 @@ function raiseToasts(box) {
 // ---------------------------------------------------------------------------------------------
 const api = {
   async req(method, path, body) {
-    const opt = { method, headers: { "X-Tafrigh": "1" } };
+    const opt = { method, headers: { "X-Sedjem": "1" } };
     if (body !== undefined) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
     const r = await fetch(path, opt);
     const data = await r.json().catch(() => ({}));
@@ -116,7 +116,7 @@ const api = {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/jobs?" + new URLSearchParams(params));
-      xhr.setRequestHeader("X-Tafrigh", "1");
+      xhr.setRequestHeader("X-Sedjem", "1");
       xhr.setRequestHeader("Content-Type", file.type && file.type !== "application/json" ? file.type : "application/octet-stream");
       xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded, e.total);
       xhr.onload = () => {
@@ -1703,12 +1703,12 @@ function aboutPanel() {
       <div class="about">
         <img src="/static/icon.svg" alt="" width="44" height="44">
         <div class="about-text">
-          <b>Tafrigh ${esc(st.version || "")}</b>
+          <b>Sedjem ${esc(st.version || "")}</b>
           <span>Transcripts of Egyptian Arabic–English meetings, made on your own computer.</span>
           <span>By Mohammed El-sayed Ahmed. Free software under the AGPL-3.0; commercial licences are available.</span>
-          <span class="links"><a href="https://github.com/MohammedEl-sayedAhmed/arabic-stt" target="_blank" rel="noopener noreferrer">${ICON.external} Source code</a>
-            <a href="https://github.com/MohammedEl-sayedAhmed/arabic-stt/releases" target="_blank" rel="noopener noreferrer">${ICON.external} Releases</a>
-            <a href="https://github.com/MohammedEl-sayedAhmed/arabic-stt/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">${ICON.external} Licence</a></span>
+          <span class="links"><a href="https://github.com/MohammedEl-sayedAhmed/sedjem" target="_blank" rel="noopener noreferrer">${ICON.external} Source code</a>
+            <a href="https://github.com/MohammedEl-sayedAhmed/sedjem/releases" target="_blank" rel="noopener noreferrer">${ICON.external} Releases</a>
+            <a href="https://github.com/MohammedEl-sayedAhmed/sedjem/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">${ICON.external} Licence</a></span>
         </div>
       </div>
       <div class="set-list">
@@ -1939,9 +1939,9 @@ $$("#settings [data-close]").forEach((b) => (b.onclick = () => $("#settings").cl
 $("#settingsBtn").onclick = () => openSettings();
 $("#quitBtn").onclick = async () => {
   const active = S.jobs.filter((j) => ACTIVE.has(j.status)).length;
-  if (!confirm(active ? `${active} transcription${active > 1 ? "s are" : " is"} still running and will be stopped. Quit Tafrigh?` : "Quit Tafrigh? You can start it again with ./app.sh.")) return;
+  if (!confirm(active ? `${active} transcription${active > 1 ? "s are" : " is"} still running and will be stopped. Quit Sedjem?` : "Quit Sedjem? You can start it again with ./app.sh.")) return;
   try { await api.post("/api/quit"); } catch (e) { /* the server is going away */ }
-  document.body.innerHTML = `<div class="welcome" style="padding-top:20vh"><h1>Tafrigh has stopped</h1><p>Start it again with <code>./app.sh</code> in the project folder.</p></div>`;
+  document.body.innerHTML = `<div class="welcome" style="padding-top:20vh"><h1>Sedjem has stopped</h1><p>Start it again with <code>./app.sh</code> in the project folder.</p></div>`;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -1969,7 +1969,7 @@ document.addEventListener("click", (e) => {
 $("#themeBtn").onclick = () => {
   const dark = document.documentElement.dataset.theme !== "dark";
   document.documentElement.dataset.theme = dark ? "dark" : "light";
-  try { localStorage.setItem("tafrigh-theme", dark ? "dark" : "light"); } catch (e) { /* private mode */ }
+  try { localStorage.setItem("sedjem-theme", dark ? "dark" : "light"); } catch (e) { /* private mode */ }
 };
 $("#menuToggle").onclick = () => $("#sidebar").classList.toggle("open");
 $("#jobSearch").oninput = renderSidebar;

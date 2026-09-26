@@ -1,10 +1,10 @@
-"""Helpers for the browser tests (tests/test_ui*.py): a Tafrigh server on a free port with a throwaway
+"""Helpers for the browser tests (tests/test_ui*.py): a Sedjem server on a free port with a throwaway
 data folder and demo transcripts, and a headless Chromium driven by Playwright. Nothing here touches your
 own data or the network.
 
 The browser: the Chromium that `playwright install chromium` downloads if it is there, else the installed
-Chrome or Edge (GitHub's runners have both). Set TAFRIGH_UI_HEADED=1 to watch the tests, and
-TAFRIGH_UI_REQUIRED=1 (as CI does) to fail instead of skipping when Playwright or a browser is missing.
+Chrome or Edge (GitHub's runners have both). Set SEDJEM_UI_HEADED=1 to watch the tests, and
+SEDJEM_UI_REQUIRED=1 (as CI does) to fail instead of skipping when Playwright or a browser is missing.
 
 Run: .venv/bin/python -m unittest discover -s tests -p "test_ui*.py" -v
 Needs: pip install -r requirements-dev.txt
@@ -35,7 +35,7 @@ try:
 except ImportError:
     sync_playwright = None
 
-REQUIRED = os.environ.get("TAFRIGH_UI_REQUIRED") == "1"
+REQUIRED = os.environ.get("SEDJEM_UI_REQUIRED") == "1"
 
 # What the app's GPU check and the computer look like in the demo (a laptop with an Intel GPU)
 GPU = {"devices": [{"name": "Intel(R) Iris(R) Xe Graphics (ADL GT2)", "kind": "vulkan", "type": "igpu", "memory": 0}],
@@ -81,7 +81,7 @@ def demo_job(home, jid, title="Sprint review", lines=LINES, seconds=21.0, **fiel
 
 
 def launch(playwright):
-    headless = os.environ.get("TAFRIGH_UI_HEADED") != "1"
+    headless = os.environ.get("SEDJEM_UI_HEADED") != "1"
     tried = []
     for options in ({}, {"channel": "chrome"}, {"channel": "msedge"}):
         try:
@@ -95,7 +95,7 @@ def launch(playwright):
 
 
 class UiTestCase(unittest.TestCase):
-    """One Tafrigh server and one browser per test class; a fresh page per test. A test fails if the page
+    """One Sedjem server and one browser per test class; a fresh page per test. A test fails if the page
     logs a JavaScript error. Subclasses list demo jobs as `jobs = ({"jid": ..., ...}, ...)`."""
     jobs = ()
 
@@ -105,7 +105,7 @@ class UiTestCase(unittest.TestCase):
             if REQUIRED:
                 raise RuntimeError("Playwright is not installed: pip install -r requirements-dev.txt")
             raise unittest.SkipTest("Playwright is not installed (pip install -r requirements-dev.txt)")
-        cls.home = Path(tempfile.mkdtemp(prefix="tafrigh-ui-"))
+        cls.home = Path(tempfile.mkdtemp(prefix="sedjem-ui-"))
         (cls.home / "app_data").mkdir()
         for job in cls.jobs:
             demo_job(cls.home, **job)
@@ -155,7 +155,7 @@ class UiTestCase(unittest.TestCase):
         """Call the app's API from the page (with the header every change needs)."""
         return self.page.evaluate(
             """async ([method, path, body]) => {
-                const r = await fetch(path, { method, headers: { "X-Tafrigh": "1", "Content-Type": "application/json" },
+                const r = await fetch(path, { method, headers: { "X-Sedjem": "1", "Content-Type": "application/json" },
                                               body: body === null ? undefined : JSON.stringify(body) });
                 return { status: r.status, json: await r.json().catch(() => null) };
             }""", [method, path, body])

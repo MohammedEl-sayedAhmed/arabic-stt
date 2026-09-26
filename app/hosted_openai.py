@@ -323,7 +323,7 @@ def voice_timeline(cfg, job_dir, opts, on_progress, cancelled):
         "--voiceprint-model", str(cfg.path(cfg.local["voiceprint_model"])),
         "--threads", str(min(4, int(cfg.setting("threads"))))]  # as transcribe.py's voice step
     env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8",
-           "PYTHONPATH": str(ROOT), "TAFRIGH_LOG": str(log_path)}
+           "PYTHONPATH": str(ROOT), "SEDJEM_LOG": str(log_path)}
     with open(log_path, "a", encoding="utf-8") as log:
         proc = engines.spawn(cmd, log, env)
         while proc.poll() is None:

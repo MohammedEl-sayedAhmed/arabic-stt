@@ -1,5 +1,5 @@
 """Browser tests of adding models in Settings: from a Hugging Face link, and from the Recommended list (Settings →
-Add models), then finding them under Models. In headless Chromium against a Tafrigh server whose Hugging Face is
+Add models), then finding them under Models. In headless Chromium against a Sedjem server whose Hugging Face is
 the local stand-in of tests/test_hub.py (see HubTestCase), so nothing comes from the internet.
 Run: .venv/bin/python -m unittest discover -s tests -p "test_ui*.py" -v
 """

@@ -1,6 +1,6 @@
 # The desktop app (Windows and Linux)
 
-Tafrigh ([the app](09-app.md)) also runs as a desktop application, with its own window, a Start menu
+Sedjem ([the app](09-app.md)) also runs as a desktop application, with its own window, a Start menu
 or application menu entry, models downloaded from inside the app, and a Windows build and installer.
 It is the same code, the local server and the web interface, shown in a native window, so every
 feature works the same way in the browser and on the desktop.
@@ -12,34 +12,34 @@ auto-update and Linux packages are not done yet (see the end of this page).
 
 | | From source | Desktop build |
 |---|---|---|
-| Linux | `./app.sh --desktop` | `dist/Tafrigh/Tafrigh` |
-| Windows | `app.cmd` (after the one-time setup below) | Start menu → Tafrigh (installer), or `Tafrigh.exe` |
+| Linux | `./app.sh --desktop` | `dist/Sedjem/Sedjem` |
+| Windows | `app.cmd` (after the one-time setup below) | Start menu → Sedjem (installer), or `Sedjem.exe` |
 
 To set up on Windows from source, once: install Python 3.12, then in the project folder run
 `py -3.12 -m venv .venv` and `.venv\Scripts\pip install -r requirements.txt -r requirements-desktop.txt`.
 
-Tafrigh picks the first of these that works:
+Sedjem picks the first of these that works:
 
 1. A native window (pywebview) using the system's web engine: Edge WebView2 on Windows (part of
    Windows 10 and 11), WebKit on macOS, GTK WebKit or Qt on Linux. It adds native *Open* and *Save*
    dialogs: a recording picked with *choose a file* is read in place rather than copied, and exports
-   are saved where you choose. On Windows, Tafrigh first checks that the WebView2 runtime is
+   are saved where you choose. On Windows, Sedjem first checks that the WebView2 runtime is
    installed, because without it pywebview would quietly fall back to the old Internet Explorer
    engine, which can't run the app.
 2. An app-mode browser window: Edge, Chrome, Chromium or Brave with `--app` (no tabs or address bar)
    and a profile of its own. On Linux this is used when neither GTK WebKit nor Qt is available, as on
    the test laptop.
 3. A tab in the default browser.
-4. If no window of any kind can be opened, the server keeps running and Tafrigh shows its address
+4. If no window of any kind can be opened, the server keeps running and Sedjem shows its address
    (in a message box on Windows), so any browser can use it.
 
-On Linux the desktop app keeps `~/.local/share/applications/tafrigh.desktop` current, so Tafrigh is
-in the application menu and its window shows the Tafrigh icon: the browser window gets the window class
-`Tafrigh` (`--class`), which the entry names. On Windows the built `Tafrigh.exe` carries the icon.
+On Linux the desktop app keeps `~/.local/share/applications/sedjem.desktop` current, so Sedjem is
+in the application menu and its window shows the Sedjem icon: the browser window gets the window class
+`Sedjem` (`--class`), which the entry names. On Windows the built `Sedjem.exe` carries the icon.
 
-Closing the window quits the app, and so does *Quit Tafrigh* in *Settings*. `--browser` skips the native window,
+Closing the window quits the app, and so does *Quit Sedjem* in *Settings*. `--browser` skips the native window,
 `--server` (or `--no-window`) runs only the server, and `--port N` picks the port (the default is
-8765, or any free one). The Windows installer also adds a *Tafrigh (browser window)* shortcut, which
+8765, or any free one). The Windows installer also adds a *Sedjem (browser window)* shortcut, which
 starts it with `--browser`.
 
 On Linux the native window needs Python bindings for one of the two engines. On KDE the simplest
@@ -49,14 +49,14 @@ app-mode browser window is used, which works just as well apart from the native 
 
 ## Where things are kept
 
-| | Data folder (transcriptions, keys, downloaded models, `tafrigh.log`) |
+| | Data folder (transcriptions, keys, downloaded models, `sedjem.log`) |
 |---|---|
 | From source | the project folder, as before (`app_data/`, `models/`) |
-| Windows build | `%LOCALAPPDATA%\Tafrigh` |
-| Linux build | `~/.local/share/tafrigh` |
-| macOS build | `~/Library/Application Support/Tafrigh` |
+| Windows build | `%LOCALAPPDATA%\Sedjem` |
+| Linux build | `~/.local/share/sedjem` |
+| macOS build | `~/Library/Application Support/Sedjem` |
 
-`TAFRIGH_HOME=<folder>` overrides it. Uninstalling keeps this folder.
+`SEDJEM_HOME=<folder>` overrides it. Uninstalling keeps this folder.
 
 ## Models are downloaded in the app
 
@@ -79,16 +79,16 @@ Speechmatics) need no download, only an API key.
 
 ```sh
 pip install -r requirements.txt -r requirements-desktop.txt
-python desktop/build.py              # dist/Tafrigh/ (Tafrigh.exe on Windows); --console to debug
-dist/Tafrigh/Tafrigh --self-test     # on Windows add --report selftest.json (a windowed app has no console)
-iscc desktop/installer.iss           # Windows only (Inno Setup 6): dist/Tafrigh-0.1.0-setup.exe
+python desktop/build.py              # dist/Sedjem/ (Sedjem.exe on Windows); --console to debug
+dist/Sedjem/Sedjem --self-test     # on Windows add --report selftest.json (a windowed app has no console)
+iscc desktop/installer.iss           # Windows only (Inno Setup 6): dist/Sedjem-0.1.0-setup.exe
 ```
 
 Build on the system you are building for, since PyInstaller doesn't cross-compile. The build is one
 folder, about 470 MB on Linux (CTranslate2, onnxruntime, sherpa-onnx, the FFmpeg libraries,
 transcribe.cpp with its CPU and Vulkan backends, numpy); models and NVIDIA's CUDA libraries are not
 included, and the app downloads them when asked. The same executable
-runs the model worker (`Tafrigh --transcribe …`), so each transcription still gets its own process.
+runs the model worker (`Sedjem --transcribe …`), so each transcription still gets its own process.
 
 The GitHub Actions workflow [`.github/workflows/desktop.yml`](../.github/workflows/desktop.yml)
 builds and checks the app on Windows and Linux. It runs the unit tests, a self-test from source, the
@@ -99,7 +99,7 @@ the installer, which it uploads and keeps for 7 days. It only runs when started 
 
 ## Self-test
 
-`Tafrigh --self-test [--window] [--models] [--report file.json]` checks an installation without
+`Sedjem --self-test [--window] [--models] [--report file.json]` checks an installation without
 touching your data. It starts the model process and has it import everything a local run needs,
 checks that the interface and API answer, then uploads a generated tone, converts it to 16 kHz FLAC
 and has it "transcribed" by a stand-in for the ElevenLabs API on 127.0.0.1. With `--window`, a native
@@ -133,10 +133,10 @@ On the Linux test laptop:
   published size.
 
 On Windows (GitHub Actions, `windows-latest`, 25 September 2026) all checks passed: the unit tests,
-the self-test from source and of the built `Tafrigh.exe`, the real-model test (whisper-medium and the
+the self-test from source and of the built `Sedjem.exe`, the real-model test (whisper-medium and the
 voiceprint model downloaded in 15 s, and the speech sample transcribed in 13 s: *"and so my fellow
 americans, ask not what your country can do for you…"*), the native window (it opened, loaded the
-app and closed, through Edge WebView2), and the installer (`Tafrigh-0.1.0-setup.exe`, 77 MB). The
+app and closed, through Edge WebView2), and the installer (`Sedjem-0.1.0-setup.exe`, 77 MB). The
 first Windows run found one real bug: reading a job's status file while another thread replaced it
 failed on Windows, never on Linux. Such reads are now retried. The whole run took about 4 minutes.
 
@@ -150,7 +150,7 @@ hand.
 - Updates. There is no auto-update; install a new version over the old one.
 - macOS. pywebview and PyInstaller support it, but it hasn't been built or tested by the project.
 - Linux packages. There is no AppImage or .deb yet.
-- Windows before 10 may lack WebView2, and the installer doesn't bundle its bootstrapper; Tafrigh
+- Windows before 10 may lack WebView2, and the installer doesn't bundle its bootstrapper; Sedjem
   then opens in a browser window.
 - GPU on real NVIDIA hardware. Cohere runs on any GPU through the bundled Vulkan backend, and Whisper on
   NVIDIA GPUs once the NVIDIA libraries are downloaded ([the command line](05-command-line.md#gpu)). The

@@ -174,7 +174,7 @@ class WhisperGgufPromptTests(unittest.TestCase):
             self.assertEqual(transcribe.gets_style_hint(name), hint, name)
 
     def test_the_app_puts_the_hint_before_the_terms(self):
-        cfg = Config(home=Path(tempfile.mkdtemp(prefix="tafrigh-hint-")))
+        cfg = Config(home=Path(tempfile.mkdtemp(prefix="sedjem-hint-")))
         self.addCleanup(shutil.rmtree, cfg.home, True)
         m = {"id": "hf-x", "kind": "local", "engine": "gguf", "prompt": True, "cohere_model": "models/hf/x/whisper-large-v3-Q8_0.gguf",
              "hub": {"architecture": "whisper"}}
@@ -306,7 +306,7 @@ class UnpackTests(unittest.TestCase):
         cls.server.server_close()
 
     def setUp(self):
-        self.home = Path(tempfile.mkdtemp(prefix="tafrigh-gpu-"))
+        self.home = Path(tempfile.mkdtemp(prefix="sedjem-gpu-"))
         (self.home / "app_data").mkdir()
         self.cfg = Config(home=self.home)
 
@@ -372,7 +372,7 @@ class UnpackTests(unittest.TestCase):
 
 class SettingsTests(unittest.TestCase):
     def setUp(self):
-        self.home = Path(tempfile.mkdtemp(prefix="tafrigh-set-"))
+        self.home = Path(tempfile.mkdtemp(prefix="sedjem-set-"))
         (self.home / "app_data").mkdir()
         self.cfg = Config(home=self.home)
 
@@ -443,7 +443,7 @@ class SettingsTests(unittest.TestCase):
 
 class SettingsApiTests(unittest.TestCase):
     def setUp(self):
-        self.home = Path(tempfile.mkdtemp(prefix="tafrigh-api-"))
+        self.home = Path(tempfile.mkdtemp(prefix="sedjem-api-"))
         (self.home / "app_data").mkdir()
         with mock.patch.object(engines, "gpu_info", return_value={"devices": [], "cuda_devices": 0, "cuda_libs": None}):
             self.server, self.app = make_server(Config(home=self.home), port=0)
@@ -457,7 +457,7 @@ class SettingsApiTests(unittest.TestCase):
 
     def call(self, method, path, body=None):
         req = urllib.request.Request(self.base + path, method=method, data=json.dumps(body).encode() if body else None,
-                                     headers={"X-Tafrigh": "1", "Content-Type": "application/json"})
+                                     headers={"X-Sedjem": "1", "Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=10) as r:
                 return r.status, json.load(r)

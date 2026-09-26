@@ -1,5 +1,5 @@
 @echo off
-rem Start Tafrigh from source on Windows (settings: app\config.toml).
+rem Start Sedjem from source on Windows (settings: app\config.toml).
 rem   app.cmd              desktop window
 rem   app.cmd --browser    in a browser window instead
 rem Setup once:  py -3.12 -m venv .venv

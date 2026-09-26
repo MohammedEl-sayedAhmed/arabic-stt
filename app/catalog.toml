@@ -54,7 +54,7 @@ architecture = "whisper"
 size = 968904103
 name = "Egyptian code-switching whisper-small"
 good_for = "A small Whisper fine-tuned on Egyptian Arabic with English terms."
-evidence = "Not tested by the project, and no independent WER is published for it. It is converted on this computer after the download, which needs Tafrigh run from source with transformers and torch."
+evidence = "Not tested by the project, and no independent WER is published for it. It is converted on this computer after the download, which needs Sedjem run from source with transformers and torch."
 gpu = "nvidia"
 licence = "Apache-2.0"
 

@@ -1,4 +1,4 @@
-/* Tafrigh product video: the app's own colours, type, radii and shadows (app/static/app.css),
+/* Sedjem product video: the app's own colours, type, radii and shadows (app/static/app.css),
    drawn about 1.7 times the app's size so the panels read on a 1920 x 1080 frame. */
 :root {
   --bg: #f4f5f7;
@@ -54,10 +54,8 @@ svg { display: block; }
 
 /* ---------- the brand: one element that moves between the centre and the corner ---------- */
 #brand { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 44px; transform-origin: 0 0; white-space: nowrap; }
-#brand .b-icon { width: 170px; height: 170px; flex: none; filter: drop-shadow(0 18px 30px rgba(10, 99, 98, .28)); }
-#brand .b-name { font-weight: 600; font-size: 132px; letter-spacing: -.02em; line-height: 1; }
-#brand .b-ar { font-family: var(--font-ar); font-weight: 500; font-size: 118px; color: var(--muted); line-height: 1; margin-top: 6px; }
-#brand .b-words { display: flex; align-items: center; gap: 36px; }
+#brand .b-logo { height: 176px; width: auto; display: block; overflow: visible; }
+#brand #bIcon { filter: drop-shadow(0 18px 30px rgba(10, 99, 98, .28)); }
 
 /* ---------- type ---------- */
 .hand { font-family: var(--hand); }

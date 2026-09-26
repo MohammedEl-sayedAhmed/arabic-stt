@@ -1,6 +1,6 @@
-# The app: Tafrigh (تفريغ)
+# The app: Sedjem
 
-Tafrigh is a local web app for everyday use of the models the project tested. You drop in a recording and
+Sedjem is a local web app for everyday use of the models the project tested. You drop in a recording and
 pick a model, and you get a transcript with speaker labels that you can play back, search, correct
 and export.
 
@@ -8,10 +8,10 @@ and export.
 ./app.sh                      # starts it and opens http://127.0.0.1:8765 in the browser
 ./app.sh --no-browser         # starts the server only
 ./app.sh --desktop            # opens it in a window of its own (see the desktop notes)
-./app.sh --install-launcher   # optional: adds Tafrigh to the desktop's application menu
+./app.sh --install-launcher   # optional: adds Sedjem to the desktop's application menu
 ```
 
-Stop it with Ctrl+C in the terminal or with *Quit Tafrigh* at the bottom of *Settings*. Starting it
+Stop it with Ctrl+C in the terminal or with *Quit Sedjem* at the bottom of *Settings*. Starting it
 again while it runs just opens the page. It can also be built as a Windows or Linux desktop app
 ([desktop app](10-desktop.md)).
 
@@ -183,7 +183,7 @@ shipped. A `[[models]]` entry there with the same `id` changes only the fields i
 ### Models from Hugging Face
 
 *Settings → Add models → From Hugging Face* adds a model from Hugging Face. Paste the link to the
-model's page or to one of its files, or its name (`org/name`), and choose *Check*. Tafrigh reads the
+model's page or to one of its files, or its name (`org/name`), and choose *Check*. Sedjem reads the
 model's file list from the Hugging Face API, without logging in, and shows the kind of model, its
 family, the file, the size, the licence and the revision. *Add and download* saves it and downloads
 it like the built-in models. It then has a card of its own, marked *From Hugging Face*, and *Remove
@@ -204,11 +204,11 @@ before it; large-v3-turbo gets only your terms, since the hint was measured on l
 | GGUF | `.gguf` files of a family transcribe.cpp runs: whisper, cohere_asr, parakeet, canary, moonshine, qwen3_asr, granite_speech, voxtral, sensevoice and a few more | like Cohere (`engine = "gguf"`); the family is read from the file's header before anything is downloaded |
 | Transformers | a Whisper checkpoint: `config.json` with `"model_type": "whisper"`, and `.safetensors` or `pytorch_model.bin` | converted to CTranslate2 (float16) after the download, then like faster-whisper |
 
-When a repository has several GGUF files, Tafrigh picks Q4_K_M (else Q5_K_M, Q8_0 or the smallest),
+When a repository has several GGUF files, Sedjem picks Q4_K_M (else Q5_K_M, Q8_0 or the smallest),
 and the others can be chosen from a list. A GGUF family that doesn't take a language setting runs
 without one. Converting a Transformers checkpoint needs the `transformers` and `torch` packages. A
 source installation can have them (`pip install transformers torch`), but the desktop build
-doesn't, and Tafrigh then says so; a faster-whisper version of the same model avoids the conversion.
+doesn't, and Sedjem then says so; a faster-whisper version of the same model avoids the conversion.
 Gated and private repositories, language models in GGUF, adapters (LoRA) and other model types are
 refused with the reason.
 
@@ -510,7 +510,7 @@ Run the tests with `.venv/bin/python -m unittest discover -s tests -v`.
 
 ## API for scripts
 
-Every change needs the header `X-Tafrigh: 1`.
+Every change needs the header `X-Sedjem: 1`.
 
 | Call | What |
 |---|---|

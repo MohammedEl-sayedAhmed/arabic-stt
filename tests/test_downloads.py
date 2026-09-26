@@ -62,7 +62,7 @@ class DownloadTests(unittest.TestCase):
         cls.server.server_close()
 
     def setUp(self):
-        self.home = Path(tempfile.mkdtemp(prefix="tafrigh-dl-"))
+        self.home = Path(tempfile.mkdtemp(prefix="sedjem-dl-"))
         (self.home / "app_data").mkdir()
         self.cfg = Config(home=self.home)
 
@@ -143,7 +143,7 @@ class DownloadTests(unittest.TestCase):
 
 class PathTests(unittest.TestCase):
     def test_models_resolve_under_the_data_folder(self):
-        home = Path(tempfile.mkdtemp(prefix="tafrigh-home-"))
+        home = Path(tempfile.mkdtemp(prefix="sedjem-home-"))
         try:
             cfg = Config(home=home)
             self.assertEqual(cfg.storage, home / "app_data")
