@@ -244,16 +244,19 @@ function jobPercent(j) {
 
 function renderSidebar() {
   const q = $("#jobSearch").value.trim().toLowerCase();
-  const jobs = S.jobs.filter((j) => !q || (j.title || "").toLowerCase().includes(q) || (j.model_title || "").toLowerCase().includes(q));
-  if (!jobs.length) {
+  const hit = (j) => !q || (j.title || "").toLowerCase().includes(q) || (j.model_title || "").toLowerCase().includes(q);
+  const recordings = jobGroups(S.jobs).filter((r) => r.jobs.some(hit));  // a recording once, with its transcripts (compare.js)
+  if (!recordings.length) {
     $("#jobList").innerHTML = `<div class="empty-list">${S.jobs.length ? "No matches" : "Your transcriptions will appear here."}</div>`;
     return;
   }
   const today = new Date().toDateString();
   let group = null;
-  $("#jobList").innerHTML = jobs.map((j) => {
+  $("#jobList").innerHTML = recordings.map((r) => {
+    const j = r.main;
     const g = new Date(j.created).toDateString() === today ? "Today" : "Earlier";
     const head = g !== group ? `<div class="job-group">${(group = g)}</div>` : "";
+    if (r.jobs.length > 1) return head + groupItem(r);
     const activeCls = S.route.name === "job" && S.route.id === j.id ? " active" : "";
     const bar = ACTIVE.has(j.status) ? `<div class="bar"><i style="width:${jobPercent(j).toFixed(1)}%"></i></div>` : "";
     return `${head}<a class="job-item${activeCls}" href="#/job/${j.id}">
@@ -261,6 +264,7 @@ function renderSidebar() {
       <span class="d">${j.kind === "hosted" ? ICON.cloud.replace("<svg", '<svg style="width:13px;height:13px"') : ""}${esc(j.model_title || j.model)}${j.audio_s ? ` · ${clock(j.audio_s)}` : ""}</span>
       ${bar}</a>`;
   }).join("");
+  refreshGroupBar();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -614,6 +618,7 @@ function renderJob() {
       <h1 class="job-title" id="jobTitle" contenteditable="plaintext-only" spellcheck="false" dir="${mixDir(j.title || "Untitled")}" data-mixdir title="Click to rename">${esc(j.title || "Untitled")}</h1>
     </div>
     <div class="meta">${meta}</div>
+    ${groupBar(j)}
     <div class="actions">
       <div class="menu-wrap"><button class="btn" data-menu="exportMenu" ${hasLines ? "" : "disabled"}>${ICON.download} Export ${ICON.chevron}</button><div class="menu" id="exportMenu">${exportMenu}</div></div>
       <button class="btn" id="copyBtn" ${hasLines ? "" : "disabled"}>${ICON.copy} Copy text</button>
@@ -674,7 +679,7 @@ function detailsPanel() {
     return list.length ? `<h4>${esc(g.title)}</h4><dl class="kv">${list.map((r) => `<dt>${esc(r.label)}</dt><dd dir="${mixDir(r.value)}">${esc(r.value)}</dd>`).join("")}</dl>` : "";
   }).join("");
   const copy = `<button type="button" class="btn btn-sm" id="copyDetails">${ICON.copy} Copy details</button>`;
-  if (!d || !d.run) {  // an older job: the plain list
+  if (!d || !d.run || S.job.kind === "combined") {  // an older job, or one combined from others (no run): the plain list
     const more = rows(true);
     return `<div class="panel job-details"><h3>Details</h3>${rows(false)}
       ${more ? `<details class="more" id="moreDetails"${S.moreDetails ? " open" : ""}><summary>More details</summary>${more}</details>` : ""}${copy}</div>`;
@@ -1428,7 +1433,8 @@ window.addEventListener("beforeunload", (e) => {
 
 function route() {
   const h = location.hash;
-  const m = h.match(/^#\/job\/([\w-]+)$/);
+  const m = h.match(/^#\/job\/([\w-]+)$/), c = h.match(/^#\/compare\/([\w,-]+)$/);
+  if (!leaveCompare(h)) return;  // unsaved picks in the compare view (compare.js)
   if (S.dirty && !(m && S.job && m[1] === S.job.id) && !confirm("Discard your unsaved changes?")) {
     history.replaceState(null, "", `#/job/${S.job.id}`);
     return;
@@ -1440,6 +1446,10 @@ function route() {
     S.route = { name: "job", id: m[1] };
     if (changed) { S.job = null; S.lines = []; S.editing = false; S.search = ""; S.lineSig = ""; stopJobPoll(); renderJob(); }
     loadJob(m[1]);
+  } else if (c) {
+    S.route = { name: "compare", ids: c[1].split(",") };
+    stopJobPoll();
+    renderCompare(S.route.ids);
   } else {
     S.route = { name: "new" };
     renderNew();

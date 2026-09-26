@@ -29,6 +29,7 @@ import unicodedata
 
 import soundfile as sf
 
+from . import __version__
 from . import transcript as T
 from .engines import partial_lines
 from .jobs import ACTIVE, now, write_json
@@ -536,10 +537,11 @@ def create_combined(store, body):
                 names[t] = own[s]
     sources = [base] + [jid for jid in ids if jid != base and any(o == jid for _, _, o in ranges)]
     meta = {"id": store.new_id(), "title": str(body.get("title") or "").strip()[:200] or base_job.get("title"),
-            "source_name": base_job.get("source_name"), "created": now(), "model": "combined",
-            "model_title": "Combined", "kind": "combined", "options": base_job.get("options") or {},
-            "status": "done", "stage": None, "finished": now(), "speaker_names": names,
-            "audio_s": base_job.get("audio_s"), "fingerprint": base_job.get("fingerprint"),
+            "source_name": base_job.get("source_name"), "source": base_job.get("source"), "created": now(),
+            "model": "combined", "model_title": "Combined", "kind": "combined",
+            "options": base_job.get("options") or {}, "status": "done", "stage": None, "finished": now(),
+            "speaker_names": names, "audio_s": base_job.get("audio_s"), "fingerprint": base_job.get("fingerprint"),
+            "app_version": __version__,
             "combined": {"base": base,
                          "sources": [{"id": jid, "model_title": by_id[jid].get("model_title"),
                                       "title": by_id[jid].get("title")} for jid in sources],
