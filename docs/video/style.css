@@ -233,7 +233,7 @@ svg { display: block; }
 .logo.img img { display: block; width: 66%; height: 66%; object-fit: contain; }
 /* an app icon with its own margin fills the tile (rounded with it, so the selection ring stays visible) */
 .logo.img.fill img { width: 100%; height: 100%; border-radius: 25px; }
-.logo.img.fill.wide img { width: 80%; height: 80%; border-radius: 0; }
+.logo.img.wide img { width: 80%; height: 80%; }
 .logo.letter { color: var(--muted); background: var(--sunken); border-color: var(--border); font-size: 48px; font-weight: 700; }
 .logo .ring { position: absolute; inset: -9px; border-radius: 37px; border: 4px solid var(--accent); opacity: 0; }
 .tile .nm { font-size: 20px; font-weight: 550; color: var(--muted); white-space: nowrap; }
