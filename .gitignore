@@ -39,6 +39,13 @@ results/*
 *.[Mm][Oo][Vv]
 *.[Aa][Vv][Ii]
 *.[Cc][Aa][Ff]
+# except the silent product video, made from docs/video/
+!docs/video/tafrigh.mp4
+
+# the video's tooling (npm install in docs/video/) and its render leftovers
+docs/video/node_modules
+docs/video/renders/
+docs/video/.hyperframes/
 
 # Large or machine-specific (see docs/08-disk-and-cleanup.md to recreate)
 models/
