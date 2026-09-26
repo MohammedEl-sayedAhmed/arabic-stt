@@ -93,7 +93,7 @@ const BRANDS = {
 const LOGOS = {
   googlegemini: { title: "Google Gemini", file: "googlegemini.svg" },  // vector, from LobeHub
   assemblyai: { title: "AssemblyAI", file: "assemblyai.svg" },  // its blue product mark, from LobeHub
-  azure: { title: "Azure AI Speech", file: "azure.png" },
+  azure: { title: "Azure AI Speech", file: "azure.svg" },  // the Speech services icon of the Azure icon set
   openai: { title: "OpenAI", file: "openai.svg" },
   speechmatics: { title: "Speechmatics", file: "speechmatics.png", fill: true },  // an app icon, with its own margin
   cohere: { title: "Cohere", file: "cohere.svg" },  // vector, from LobeHub
@@ -101,18 +101,18 @@ const LOGOS = {
   deepgram: { title: "Deepgram", file: "deepgram.svg" },
   mistralai: { title: "Mistral AI", file: "mistralai.svg", dark: "mistralai.svg" },  // its gradient is made for both
   huggingface: { title: "Hugging Face", file: "huggingface.svg" },
-  qwen: { title: "Qwen", file: "qwen.png" },
+  qwen: { title: "Qwen", file: "qwen.svg" },  // vector, from LobeHub
   meta: { title: "Meta", file: "meta.svg", dark: "meta.svg" },  // the same symbol on Meta's dark lockup
   fedora: { title: "Fedora", file: "fedora.svg" },
   debian: { title: "Debian", file: "debian.svg" },
   nvidia: { title: "NVIDIA", file: "nvidia.svg" },  // from LobeHub
   alibabacloud: { title: "Alibaba Cloud", file: "alibabacloud.svg" },  // from LobeHub
   groq: { title: "Groq", file: "groq.svg", dark: "groq-dark.svg" },
-  intel: { title: "Intel", file: "intel.svg", fill: true },  // wordmarks: the whole width of the tile
-  amd: { title: "AMD", file: "amd.svg", fill: true },
+  intel: { title: "Intel", file: "intel.svg", wide: true },  // wordmarks: most of the tile's width
+  amd: { title: "AMD", file: "amd.svg", wide: true },
   hp: { title: "HP", file: "hp.svg" },
-  dell: { title: "Dell", file: "dell.svg", fill: true },
-  lenovo: { title: "Lenovo", file: "lenovo.svg", fill: true },  // a wordmark: the whole width of the tile
+  dell: { title: "Dell", file: "dell.svg", wide: true },
+  lenovo: { title: "Lenovo", file: "lenovo.svg", wide: true },  // a wordmark: the whole width of the tile
   huawei: { title: "Huawei", file: "huawei.svg" },
   kubuntu: { title: "Kubuntu", file: "kubuntu.svg" },
   ubuntu: { title: "Ubuntu", file: "ubuntu.svg" },

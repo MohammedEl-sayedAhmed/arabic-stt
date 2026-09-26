@@ -501,7 +501,7 @@ class VendorLogoTests(unittest.TestCase):
         """app/static/brands.js: a name pointing to a missing logo would break the whole Details panel."""
         js = (ROOT / "app" / "static" / "brands.js").read_text(encoding="utf-8")
         glyphs = dict(re.findall(r'^  (\w+): \{ title: "[^"]+", hex: "([0-9A-F]{6})",\n    path: "M[^"]+" \},$', js, re.M))
-        files = re.findall(r'^  (\w+): \{ title: "[^"]+", file: "([\w.-]+)"(?:, dark: "([\w.-]+)")?(?:, fill: true)? \},', js, re.M)
+        files = re.findall(r'^  (\w+): \{ title: "[^"]+", file: "([\w.-]+)"(?:, dark: "([\w.-]+)")?(?:, (?:fill|wide): true)? \},', js, re.M)
         names = re.findall(r'^  \["(\w+)", /.+/i\],$', js, re.M)
         self.assertGreater(len(glyphs), 10)
         self.assertGreater(len(files), 10)
