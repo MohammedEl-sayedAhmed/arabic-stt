@@ -11,14 +11,14 @@
 
 <p align="center">
   <img alt="Windows and Linux" src="https://img.shields.io/badge/runs_on-Windows%20%7C%20Linux-0b7f7d">
-  <img alt="CPU only" src="https://img.shields.io/badge/GPU-not_needed-0b7f7d">
+  <img alt="GPU optional" src="https://img.shields.io/badge/GPU-optional-0b7f7d">
   <img alt="AGPL-3.0 licence" src="https://img.shields.io/badge/licence-AGPL--3.0-0b7f7d">
 </p>
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/transcript-dark.png">
-    <img src="docs/images/transcript.png" width="900" alt="A finished transcript in Tafrigh: Arabic lines with English terms, seven named speakers, and the audio player along the bottom">
+    <img src="docs/images/transcript.png" width="900" alt="A sprint planning transcript in Tafrigh: Arabic lines with English terms such as sprint, login bug and dashboard, four named speakers with their share of the talking, the run details with the NVIDIA logo next to the graphics card, and the audio player along the bottom">
   </picture>
 </p>
 
@@ -31,17 +31,50 @@ recording on your machine unless you choose a hosted service.
 
 ## What it does
 
-- Opens audio or video recordings (mp3, m4a, wav, ogg, flac, mp4, mkv, webm and more).
-- Transcribes with one of three models that run on your computer, or with ElevenLabs or
-  Speechmatics using your own API key. A hosted model gets the recording only after you tick the
-  box that allows the upload.
-- Labels speakers by voice. Give the number of people, or let it estimate.
-- Shows the transcript as it is written, with the time left.
+### Transcribe
+
+- Opens audio or video recordings (mp3, m4a, wav, ogg, flac, mp4, mkv, webm and more), dropped in,
+  chosen, or read in place from a path on the computer.
+- Runs three models on your computer: Cohere Transcribe Arabic, a whisper-medium fine-tune for
+  Arabic–English code-switching, and Whisper large-v3 with an Egyptian style hint.
+- Labels speakers by their voiceprints. Give the number of people, or let it estimate.
+- Or sends the recording to one of nine hosted services with your own API key: ElevenLabs,
+  Speechmatics, Google Gemini, Deepgram, AssemblyAI, Azure AI Speech, OpenAI, Groq and Mistral.
+  A recording is uploaded only after you tick the box that allows it, every time.
+- Uses a graphics card when one works: Cohere through Vulkan on any GPU, Whisper through CUDA on
+  NVIDIA cards. Without one it runs on the processor.
+- Shows the transcript as it is written, with the time left, and can be cancelled at any time.
+
+### Read, correct and export
+
 - Plays the audio in step with the text. Click a line to hear it, search, rename or merge speakers,
   and correct lines by hand.
-- Exports plain text, SRT or WebVTT subtitles, Markdown or JSON.
-- Lays Arabic out right to left and has a dark theme. It contacts nothing on the internet except
-  the model downloads and hosted services you choose.
+- Lays out each line in its own direction, so an Arabic line that starts with an English word still
+  reads right to left.
+- Exports plain text, SRT or WebVTT subtitles, Markdown or JSON, through a save dialog in the
+  desktop app.
+- Keeps the details of every run with its transcript: the model, the recording, the computer and
+  the speed, with the makers' logos next to the hardware and the system. The exports carry them too.
+
+### Keep versions, compare models
+
+- Keeps a history for every transcript. Version 0 is what the model wrote and never changes. Each
+  edit session is shown as a diff, the way `git diff` shows one, and saved as a new version with an
+  optional message. Any version can be viewed, exported or restored.
+- Groups the transcripts of one recording made with different models, whether with *Run again with*
+  or by adding the same file twice.
+- Compares them side by side, with the words that differ marked, and combines the best parts: keep
+  a row or a time range from another model, review the result as a diff, and save it as a new
+  version.
+
+### Models and settings
+
+- Adds models from a Hugging Face link, or with one click from a Recommended list that gives the
+  evidence, size, licence and graphics cards for each.
+- Settings has tabs for Models, Add models, Hosted services, Speed and About.
+- Downloads resume if the connection drops and are checked against pinned checksums.
+- Has a dark theme, and contacts nothing on the internet except the model downloads and the hosted
+  services you choose.
 
 ## Models
 
@@ -51,7 +84,6 @@ recording on your machine unless you choose a hosted service.
 | whisper-medium code-switching (default) | your computer | 18.5% | 90% | 30–45 min |
 | Whisper large-v3 with an Egyptian style hint | your computer | 20.8% | 88% | about 2 h |
 | ElevenLabs Scribe v2 | ElevenLabs | 13.1% (published) | not measured | not measured |
-| Speechmatics, Arabic–English pack | Speechmatics | not measured | not measured | not measured |
 
 ![Bar charts of the word error rate and of the English terms kept in English for Cohere Transcribe Arabic, whisper-medium and Whisper large-v3 with the style hint](docs/images/charts/models.svg)
 
@@ -72,29 +104,69 @@ the wrong person, against 6% for ElevenLabs' own labels. Treat the local transcr
 drafts. For minutes that people will rely on, a hosted model is still more accurate. The method and
 every number are in [the results](docs/03-results.md).
 
+### Hosted services
+
+Each one needs your own API key, entered in *Settings → Hosted services*. Apart from ElevenLabs'
+published figure, none of them has been measured on Egyptian speech by the project.
+
+| Service | Model the app uses | Arabic–English | Speaker labels |
+|---|---|---|---|
+| ElevenLabs | Scribe v2 | code-switching, the best published result | built in |
+| Speechmatics | Arabic–English bilingual pack | code-switching | built in |
+| Google Gemini | Gemini 3.5 Transcribe | code-switching | built in |
+| AssemblyAI | Universal-3.5 Pro | code-switching | built in |
+| OpenAI | gpt-transcribe, or gpt-4o-transcribe-diarize for labels | told to expect both | built in |
+| Groq | Whisper large-v3 with the Egyptian hint | like the local Whisper large-v3 | from voiceprints on your computer |
+| Mistral | Voxtral Mini Transcribe 2 | detects the language | built in |
+| Deepgram | Nova-3, `ar-EG` | one language per recording | built in |
+| Azure AI Speech | fast transcription, `ar-EG` | one language per recording | built in |
+
+Prices, free tiers, what each service keeps and whether it trains on your audio are in
+[the app notes](docs/09-app.md#the-models-and-their-settings).
+
 ## Screenshots
+
+<p align="center">
+  <img src="docs/images/compare.png" width="900" alt="Compare transcripts: the Cohere and whisper-medium transcripts of the sprint planning side by side, lined up by time, with only the rows that differ shown, the differing words marked, and one row from whisper-medium kept for a new version">
+</p>
+<p align="center"><i>Two models on the same recording, side by side. Keep the rows each one got right and save the result as a new version.</i></p>
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/new-transcription.png" alt="New transcription: the recording, and cards for the five models with their measured strengths"></td>
-    <td width="50%"><img src="docs/images/live-progress.png" alt="A transcription in progress: progress bar, time left and the first lines of the transcript"></td>
+    <td width="50%"><img src="docs/images/history-review.png" alt="Review your changes: two edited lines shown as they were in red and as they are now in green, the changed words marked, and a message for the new version"></td>
+    <td width="50%"><img src="docs/images/history.png" alt="History: four versions, newest first: a combined version, an edit, the speakers named, and version 0 from Cohere Transcribe Arabic"></td>
+  </tr>
+  <tr>
+    <td>Every edit session is reviewed as a diff before it is saved.</td>
+    <td>The history keeps the model's output as version 0 and every change after it.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/new-transcription.png" alt="New transcription: a chosen recording, and cards for the local and hosted models with their logos, measured strengths and estimated time"></td>
+    <td><img src="docs/images/live-progress.png" alt="A transcription in progress: part 52 of 128, a progress bar, the time left, and the first lines of the transcript"></td>
   </tr>
   <tr>
     <td>Pick a recording and a model. Each card lists what that model is good at.</td>
     <td>The lines appear while the model works. Cancel at any time.</td>
   </tr>
   <tr>
-    <td><img src="docs/images/transcript-dark.png" alt="The transcript view in the dark theme"></td>
-    <td><img src="docs/images/settings-models.png" alt="Settings: models on this computer, with download and delete buttons, and API keys for the hosted models"></td>
+    <td><img src="docs/images/settings-models.png" alt="Settings, Models tab: whisper-medium, Cohere and the voiceprint model downloaded, and Whisper large-v3 ready to download"></td>
+    <td><img src="docs/images/settings-hosted.png" alt="Settings, Hosted services tab: keys saved for ElevenLabs and Google Gemini, the Deepgram key form open, and the other services with an Add key button"></td>
   </tr>
   <tr>
+    <td>Download or remove the local models.</td>
+    <td>Add a key for a hosted service. Each form opens only when asked.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/settings-recommended.png" alt="Settings, Add models, Recommended: Cohere at higher precision, the Egyptian code-switching whisper-small and Whisper large-v3 for any graphics card, each with its evidence, size, licence and an Add button"></td>
+    <td><img src="docs/images/transcript-dark.png" alt="The sprint planning transcript in the dark theme"></td>
+  </tr>
+  <tr>
+    <td>More models for these meetings, added in one click.</td>
     <td>Dark theme.</td>
-    <td>Download or remove models from the app, and add API keys.</td>
   </tr>
 </table>
 
-The recording in the screenshots is stitched together from public Perle clips; the speaker names
-are made up.
+The transcripts in the screenshots are made up, and so are the names.
 
 ## Install
 
@@ -124,7 +196,13 @@ On Windows, run `app.cmd` after the setup in [the desktop notes](docs/10-desktop
 
 On first start, open *Settings → Models* and download whisper-medium (778 MB) or
 Cohere (1.6 GB). The voiceprint model for speaker labels (40 MB) comes with the first one.
-Downloads resume if the connection drops and are checked against pinned checksums.
+
+### The desktop app
+
+The desktop app opens Tafrigh in a native window (Edge WebView2 on Windows, GTK WebKit or Qt on
+Linux) with native open and save dialogs. Where that isn't available it uses an app-mode browser
+window, then a browser tab. `--browser` goes straight to the browser window, and `--server` runs only
+the server, for any browser to use. The details are in [the desktop notes](docs/10-desktop.md).
 
 ## How it works
 
@@ -133,12 +211,11 @@ the speech model. Separately, a voiceprint model (NVIDIA TitaNet-small) describe
 sounds like every 0.75 seconds, and spectral clustering groups those voiceprints into speakers.
 Whisper gives every word a time, so each word gets the speaker whose voice is heard at that
 moment; for Cohere, which gives no word times, the pieces are cut where the voice changes.
-Everything runs on the CPU.
+It all runs on the processor, or on a graphics card when one works.
 
 The app is a small Python web server bound to 127.0.0.1 with a plain HTML and JavaScript interface.
-The desktop version shows the same interface in a native window (Edge WebView2 on Windows) and is
-packaged with PyInstaller. Your transcriptions, audio copies and API keys stay in the app's data
-folder.
+The desktop version shows the same interface in a native window and is packaged with PyInstaller.
+Your transcriptions, their versions, audio copies and API keys stay in the app's data folder.
 
 ## Command line
 
@@ -170,7 +247,7 @@ was tried first and is not usable for this: it wrote most English terms in Arabi
 | [Market research](docs/06-market-research.md) | hosted services and open models, free tiers, privacy terms |
 | [Recommendation](docs/07-recommendation.md) | what to use for which job |
 | [Disk space and cleanup](docs/08-disk-and-cleanup.md) | what gets installed where, and how to remove it |
-| [The app](docs/09-app.md) | using Tafrigh, its settings, API keys, privacy |
+| [The app](docs/09-app.md) | using Tafrigh, versions, comparing, its settings, API keys, privacy |
 | [Desktop app](docs/10-desktop.md) | running, building and testing on Windows and Linux |
 
 ## Thanks
@@ -203,7 +280,7 @@ The models keep their own licences: the whisper-medium fine-tune and Whisper lar
 the fine-tune's card for its training data), Cohere Transcribe Arabic and the Whisper tokenizer are
 Apache-2.0, and NVIDIA TitaNet through sherpa-onnx is CC-BY-4.0. The desktop build bundles
 third-party packages under their own licences, including the FFmpeg libraries that come with PyAV
-(LGPL). ElevenLabs and Speechmatics are used under their own terms. The vendor logos in a
+(LGPL). The hosted services are used under their own terms. The vendor logos in a
 transcription's details come from [Simple Icons](https://simpleicons.org) (CC0). The trademarks
 belong to their owners, and the logos are shown only to identify the hardware and system a
 transcription was made on.
