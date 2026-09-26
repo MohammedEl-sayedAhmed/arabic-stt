@@ -16,6 +16,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import zlib
 from pathlib import Path
 from unittest import mock
 
@@ -55,11 +56,13 @@ LINES = [
 
 
 def demo_job(home, jid, title="Sprint review", lines=LINES, seconds=21.0, **fields):
-    """A finished local job as the app stores it: job.json, transcript.json and a 16 kHz FLAC (a quiet tone)."""
+    """A finished local job as the app stores it: job.json, transcript.json and a 16 kHz FLAC (a quiet tone,
+    a different one for each job: jobs with the same audio count as one recording, see app/compare.py)."""
     folder = Path(home) / "app_data" / "jobs" / jid
     folder.mkdir(parents=True)
     t = np.arange(int(seconds * 16000)) / 16000
-    sf.write(folder / "audio.flac", (0.05 * np.sin(2 * np.pi * 220 * t)).astype(np.float32), 16000)
+    freq = 180 + zlib.crc32(jid.encode()) % 200
+    sf.write(folder / "audio.flac", (0.05 * np.sin(2 * np.pi * freq * t)).astype(np.float32), 16000)
     job = {"id": jid, "title": title, "source_name": "planning.m4a", "created": "2026-09-25T22:00:00+03:00",
            "model": "cohere", "model_title": "Cohere Transcribe Arabic", "kind": "local", "engine": "cohere",
            "model_file": "cohere-transcribe-arabic-07-2026-Q4_K_M.gguf", "status": "done", "stage": None,

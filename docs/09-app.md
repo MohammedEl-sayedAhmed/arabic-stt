@@ -102,6 +102,44 @@ returns one with its changes (`?against=<m>` compares it with another), `PATCH` 
 change, without saving. `PATCH /api/jobs/<id>` also takes a `message`, and the exports take
 `?version=<n>`.
 
+## Comparing and combining transcripts
+
+A recording is often run with more than one model. The transcriptions of one recording are shown
+together: once in the sidebar, with a small label for each model, and as a row of labels under the
+title of each of them, so you can switch between them. Transcriptions count as one recording when
+one was made from the other with *Run again with*, or when their audio is the same. The app keeps a
+fingerprint of the decoded audio of each transcription to tell, so the same file added twice is
+grouped as well. For transcriptions made before this was added, the fingerprint is worked out in the
+background the first time the list is shown.
+
+*Compare* opens two of them side by side, and *Add a transcript* adds a third. The lines are put in
+rows by time, so each row holds what every model wrote for the same stretch of the recording. Words
+that differ are marked: strongly when no other model has them, lightly when only some do. Punctuation,
+case, diacritics and the usual spelling variants (أ and ا, ة and ه, ى and ي) are not counted as
+differences. *Only rows that differ* hides the rest, and clicking a row plays it. Each model numbers
+the speakers its own way, so the other columns' speakers are matched to the first column's by who is
+talking at the same time. The match can be changed in the Speakers panel.
+
+The first column is the base. To make your own version, press *Keep* in the rows where another model
+got it right, or give a time range (from 1:05 to 2:30, say) and the model to take it from. Shift
+with *Keep* takes every row from the last one kept in that column. Where the picks overlap, the later
+one wins, and everywhere else the base's text stays. A line is taken or left whole, by where its
+middle falls. *Use as base* makes another column the base.
+
+*Save as a new version* shows the change first, the same way an edit is reviewed, with an optional
+message. It is saved as a new version of the base transcript, so it shows in that transcript's
+History as a version of kind "Combined", with a summary of what came from where (for example "With
+the text of ElevenLabs Scribe v2 for 00:03 to 00:07: 1 line changed"). Version 0 is still the
+model's output, the other transcriptions are not changed, and restoring an earlier version undoes the
+combination. Speakers keep the base's numbers and names; a speaker the base does not have keeps the
+name it had in its own transcript. The code is in `app/compare.py` and `app/static/compare.js`.
+
+For scripts: `GET /api/jobs/<id>/group` lists the transcriptions of a recording, and `GET
+/api/jobs` gives each one a `group`. `GET /api/compare?ids=<a>,<b>[,<c>]&base=<a>` returns the rows.
+`POST /api/combine` with `{"ids": […], "base": …, "picks": [{"start", "end", "from"}], "speakers":
+{…}, "message": …}` saves the combination, and `POST /api/combine/preview` with the same body returns
+what it would change, without saving.
+
 ## The models and their settings
 
 All model settings live in [`app/config.toml`](../app/config.toml). Each `[[models]]` entry has an
@@ -446,6 +484,7 @@ Local jobs run one at a time. Hosted jobs have their own queue and don't wait fo
 | `app/hub.py` | models added from Hugging Face: links, the API, GGUF headers, conversion, `models.json` |
 | `app/desktop.py`, `app/selftest.py` | the desktop window and the installation check ([desktop app](10-desktop.md)) |
 | `app/transcript.py` | lines from words, and the exports |
+| `app/compare.py` | transcriptions of one recording: grouping them, lining them up by time, and combining them into a new version |
 | `app/report.py` | the details of each transcription: what a job records, and how the page and the exports word it |
 | `sysinfo.py` | this computer and a recording's format (PyAV), for the details and `transcribe.py`'s `.meta.json` |
 | `app/static/` | the interface (HTML, CSS and JavaScript, no build step) |

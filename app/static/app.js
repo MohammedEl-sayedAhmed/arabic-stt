@@ -249,16 +249,19 @@ function jobPercent(j) {
 
 function renderSidebar() {
   const q = $("#jobSearch").value.trim().toLowerCase();
-  const jobs = S.jobs.filter((j) => !q || (j.title || "").toLowerCase().includes(q) || (j.model_title || "").toLowerCase().includes(q));
-  if (!jobs.length) {
+  const hit = (j) => !q || (j.title || "").toLowerCase().includes(q) || (j.model_title || "").toLowerCase().includes(q);
+  const recordings = jobGroups(S.jobs).filter((r) => r.jobs.some(hit));  // a recording once, with its transcripts (compare.js)
+  if (!recordings.length) {
     $("#jobList").innerHTML = `<div class="empty-list">${S.jobs.length ? "No matches" : "Your transcriptions will appear here."}</div>`;
     return;
   }
   const today = new Date().toDateString();
   let group = null;
-  $("#jobList").innerHTML = jobs.map((j) => {
+  $("#jobList").innerHTML = recordings.map((r) => {
+    const j = r.main;
     const g = new Date(j.created).toDateString() === today ? "Today" : "Earlier";
     const head = g !== group ? `<div class="job-group">${(group = g)}</div>` : "";
+    if (r.jobs.length > 1) return head + groupItem(r);
     const activeCls = S.route.name === "job" && S.route.id === j.id ? " active" : "";
     const bar = ACTIVE.has(j.status) ? `<div class="bar"><i style="width:${jobPercent(j).toFixed(1)}%"></i></div>` : "";
     return `${head}<a class="job-item${activeCls}" href="#/job/${j.id}">
@@ -266,6 +269,7 @@ function renderSidebar() {
       <span class="d">${j.kind === "hosted" ? ICON.cloud.replace("<svg", '<svg style="width:13px;height:13px"') : ""}${esc(j.model_title || j.model)}${j.audio_s ? ` · ${clock(j.audio_s)}` : ""}</span>
       ${bar}</a>`;
   }).join("");
+  refreshGroupBar();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -623,6 +627,7 @@ function renderJob() {
       ${S.version != null ? `<button class="pill accent ver-pill" id="versionPill" title="The current version. Show the history">v${S.version}</button>` : ""}
     </div>
     <div class="meta">${meta}</div>
+    ${groupBar(j)}
     <div class="actions">
       <div class="menu-wrap"><button class="btn" data-menu="exportMenu" ${hasLines ? "" : "disabled"}>${ICON.download} Export ${ICON.chevron}</button><div class="menu" id="exportMenu">${exportMenu}</div></div>
       <button class="btn" id="copyBtn" ${hasLines ? "" : "disabled"}>${ICON.copy} Copy text</button>
@@ -1049,7 +1054,7 @@ async function copyText(version) {
 // ---------------------------------------------------------------------------------------------
 const HISTORY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>';
 const CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
-const KIND_LABEL = { "model output": "Model output", edit: "Edit", rename: "Rename", merge: "Merge", restore: "Restore" };
+const KIND_LABEL = { "model output": "Model output", edit: "Edit", rename: "Rename", merge: "Merge", restore: "Restore", combine: "Combined" };
 const EDITBAR = `<div class="editbar"><span>Unsaved changes</span><button class="btn btn-sm" id="discardBtn">Discard</button><button class="btn btn-sm btn-primary" id="saveBtn">Review and save</button></div>`;
 const HIST = { jid: null, versions: [], view: null, editing: null };  // the History dialog
 const REVIEW = { draft: null };  // the edits being reviewed before they are saved
@@ -1812,7 +1817,8 @@ window.addEventListener("beforeunload", (e) => {
 
 function route() {
   const h = location.hash;
-  const m = h.match(/^#\/job\/([\w-]+)$/);
+  const m = h.match(/^#\/job\/([\w-]+)$/), c = h.match(/^#\/compare\/([\w,-]+)$/);
+  if (!leaveCompare(h)) return;  // unsaved picks in the compare view (compare.js)
   if (S.dirty && !(m && S.job && m[1] === S.job.id) && !confirm("Discard your unsaved changes?")) {
     history.replaceState(null, "", `#/job/${S.job.id}`);
     return;
@@ -1824,6 +1830,10 @@ function route() {
     S.route = { name: "job", id: m[1] };
     if (changed) { S.job = null; S.lines = []; S.editing = false; S.search = ""; S.lineSig = ""; stopJobPoll(); renderJob(); }
     loadJob(m[1]);
+  } else if (c) {
+    S.route = { name: "compare", ids: c[1].split(",") };
+    stopJobPoll();
+    renderCompare(S.route.ids);
   } else {
     S.route = { name: "new" };
     renderNew();
