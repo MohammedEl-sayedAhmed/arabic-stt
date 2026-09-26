@@ -259,6 +259,13 @@ was tried first and is not usable for this: it wrote most English terms in Arabi
 | [The app](docs/09-app.md) | using Sedjem, versions, comparing, its settings, API keys, privacy |
 | [Desktop app](docs/10-desktop.md) | running, building and testing on Windows and Linux |
 
+## Name and logo
+
+Sedjem is the ancient Egyptian word for "to hear", written with the sign of an ear. The logo draws that
+ear as the app icon and again as the dot of the j, and ends the name with a typing cursor: sound heard,
+then written down. The idea, the colour and mono versions, how to use them and the SVG and PNG files are
+in [docs/brand](docs/brand/README.md).
+
 ## Thanks
 
 Sedjem stands on other people's work: the
