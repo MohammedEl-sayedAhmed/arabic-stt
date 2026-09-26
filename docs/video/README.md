@@ -8,10 +8,14 @@ differ only in the music:
 - `tafrigh-bright.mp4`: a brighter track in C major, with a soft pad, plucks and a gentle groove.
 
 Both tracks are original, synthesised from nothing but code (`music/tech.py` and `music/bright.py`,
-numpy and soundfile only), so they are published with the project under its licence. They share the
-video's cue points at 120 beats a minute: the drop on the logo at 6 s, the build from 48 s and the end
-card at 54 s; the tech track also stutters at 25.5 s and 33.5 s, where the video glitches. The GIF near
-the top of the main README (`docs/images/tafrigh-preview.gif`) is cut from the video.
+numpy and soundfile only), so they are published with the project under its licence. Both follow the
+video scene by scene at 120 beats a minute: the drop on the logo at 6 s, a layer added with each step, a
+breakdown under the compare scene so its text can be read, the full groove again for the services at
+44 s, the build from 48 s and the end card at 54 s. Small accents land on the screen's moments: each
+transcript line in Step 2, each "Kept" and the merge in the compare scene; the tech track also stutters
+at 25.5 s and 33.5 s, where the video glitches. The scene and accent times are constants at the top of
+each script. The GIF near the top of the main README (`docs/images/tafrigh-preview.gif`) is cut from the
+video.
 
 The video is a web page. `index.html` lays out every scene with the app's own colours, fonts, radii and
 shadows (see `app/static/app.css`), and one paused [GSAP](https://gsap.com) timeline in the same file

@@ -1,13 +1,17 @@
 """The "tech" version of the Tafrigh video track: synthesised from scratch (numpy only), free to publish.
 
-120 BPM, 4/4 (a beat 0.5 s, a bar 2 s), A minor: Am, F, C, G, one chord per bar.
-  0-6 s   intro: a filtered 16th-note sequence fading in, digital bleeps, a riser into the drop
-  6 s     impact (the logo)
-  6-48 s  groove: four-on-the-floor kick, clap, 16th hats, pulsing 8th bass, the sequence with a resonant
-          filter sweeping over 8 bars, bleeps with ping-pong echo, glitch stutters at 25.5 and 33.5 s
-  48-54 s build: snare roll, filter wide open, noise riser, pitch-rising bleeps
-  54-60 s end card: impact, Am(add9) chord, the sequence echoing out, silence at 60 s
-The cue points are the constants below, so the track can follow another cut of the video.
+120 BPM, 4/4 (a beat 0.5 s, a bar 2 s), A minor: Am, F, C, G, one chord per bar. One section per scene:
+  0-6 s    hook: a filtered 16th-note sequence fading in, digital bleeps, a riser into the drop
+  6-10 s   logo: impact, kick and long bass notes under the logo
+  10-18 s  Step 1: claps and eighth hats join, bass on the eighths
+  18-26 s  Step 2: sixteenth hats; a brighter bleep as each transcript line arrives; glitch at 25.5 s
+  26-34 s  Step 3: a lead line and open hats; glitch at 33.5 s
+  34-44 s  compare: a breakdown (half-time kick, no claps, closed filter) so the text can be read, bleeps
+           on each "Kept", small hits on the merge, then a riser back in
+  44-48 s  services: an impact and the full groove again
+  48-54 s  build: snare roll, filter wide open, noise riser, rising bleeps
+  54-60 s  end card: impact, Am(add9) chord, a motif on the URL, silence at 60 s
+The times are the constants below, so the track can follow another cut of the video.
 """
 import sys
 
@@ -18,9 +22,14 @@ SR = 48000
 BEAT = 0.5
 BAR = 2.0
 LENGTH = 60.0
-# cue points, in seconds, matched to the video's scenes (all on bar lines)
-DROP, ARP, BUILD, END = 6.0, 18.0, 48.0, 54.0  # logo, arpeggio in, build, end card
-GLITCHES = (25.5, 33.5)
+# cue points, in seconds: the video's scenes (all on bar lines) and its accents
+SCENES = {"hook": (0, 6), "logo": (6, 10), "step1": (10, 18), "step2": (18, 26), "step3": (26, 34),
+          "compare": (34, 44), "services": (44, 48), "build": (48, 54)}  # then the end card, 54-60
+DROP, BUILD, END = 6.0, 48.0, 54.0
+GLITCHES = (25.5, 33.5)          # the video glitches into Step 3 and into the compare scene
+LINE_HITS = (19.5, 20.5, 21.5, 22.5)  # transcript lines arriving in Step 2
+KEPT_HITS = (39.0, 39.5, 40.0)   # "Kept" in the compare scene
+MERGE_HITS = (41.0, 42.0)        # the columns merging, "Saved as a new version"
 N = int(LENGTH * SR)
 rng = np.random.default_rng(11)
 
@@ -203,59 +212,99 @@ def crush(x, bits=6, hold=6):
     return np.round(y * q) / q
 
 
-# --- arrangement -----------------------------------------------------------------------------------
+# --- arrangement: one section per scene of the video -------------------------------------------------
 seq = np.zeros(N)
 blp = np.zeros(N)
+lead = np.zeros(N)
 low = np.zeros(N)
 pads = np.zeros(N)
 drums = np.zeros(N)
 fx = np.zeros(N)
 duck = np.ones(N)
 
+
+def scene(t):
+    """The name of the scene playing at second t."""
+    for name, (a, b) in SCENES.items():
+        if a <= t < b:
+            return name
+    return "end"
+
+
+# the sequence's filter and level in each scene: closed in the hook, opening step by step, closed again
+# for the compare breakdown so the text can be read, open for the services, wide in the build
+SEQ = {"hook": (None, None), "logo": (900, 0.09), "step1": (1200, 0.10), "step2": (1700, 0.11),
+       "step3": (2300, 0.12), "compare": (700, 0.07), "services": (2200, 0.12), "build": (None, 0.13)}
 PATTERN = [0, 2, 1, 3, 0, 2, 3, 1, 0, 2, 1, 3, 2, 3, 1, 3]  # chord tones for the 16ths
+LEAD = [[76, 74, 72, 69], [77, 76, 72, 69], [76, 72, 71, 67], [74, 71, 67, 71]]  # a quarter-note line per chord
+
 for bar in range(int(LENGTH / BAR)):
     t0 = bar * BAR
     notes, root = CHORDS[bar % 4], ROOTS[bar % 4]
-    if t0 < END:
-        # the sequence: quiet and closed in the intro, then sweeping over 8 bars, wide open in the build
+    name = scene(t0)
+    if name != "end":
         for s in range(16):
             t = t0 + s * BEAT / 4
-            if t0 < DROP:
+            if name == "hook":
                 cutoff, level = 500 + 1200 * (t / DROP), 0.05 + 0.05 * (t / DROP)
-            elif t0 < BUILD:
-                cutoff, level = 900 + 1700 * (0.5 - 0.5 * np.cos(2 * np.pi * (t - DROP) / 16)), 0.12
+            elif name == "build":
+                cutoff, level = 2600 + 1000 * (t - BUILD) / (END - BUILD), SEQ["build"][1]
             else:
-                cutoff, level = 2600 + 900 * (t - BUILD) / (END - BUILD), 0.13
+                base, level = SEQ[name]
+                cutoff = base * (0.85 + 0.3 * (0.5 - 0.5 * np.cos(2 * np.pi * (t - t0) / (2 * BAR))))
             octave = 12 if s in (6, 14) else 0
             accent = 1.25 if s % 4 == 0 else 1.0
             place(seq, seq_note(notes[PATTERN[s]] + octave, cutoff, level * accent), t)
-        place(pads, pad([m - 12 for m in notes[:3]], BAR + 0.6, 900 if t0 < BUILD else 1500), t0)
-    if DROP <= t0 < END:  # bass on the eighths, root and octave
+        warm = 700 if name == "compare" else 900 if t0 < BUILD else 1500
+        place(pads, pad([m - 12 for m in notes[:3]], BAR + 0.6, warm, level=0.07 if name == "compare" else 0.05), t0)
+    # bass: eighths through the steps, services and build; long notes for the logo and the compare breakdown
+    if name in ("step1", "step2", "step3", "services", "build"):
         for e in range(8):
             place(low, bass(root + (12 if e % 4 == 3 else 0)), t0 + e * BEAT / 2)
-    # bleeps: a few per bar on off-sixteenths, chosen from the scale (seeded, so the same each render)
-    if t0 < 30 or t0 >= 30:
-        r = np.random.default_rng(100 + bar)
-        count = 2 if t0 < DROP else 3 if t0 < BUILD else 6 if t0 < END else 0
-        for _ in range(count):
-            s = int(r.choice([1, 3, 5, 7, 9, 11, 13, 15]))
-            m = int(r.choice(SCALE)) + 12 + (int((t0 - BUILD) * 1.5) if t0 >= BUILD else 0)
-            place(blp, bleep(m), t0 + s * BEAT / 4)
+    elif name in ("logo", "compare"):
+        place(low, bass(root, dur=BAR + 0.08, level=0.3), t0)  # legato: each note reaches the next
+    # the lead line over Step 3: the version being saved
+    if name == "step3":
+        for q, m in enumerate(LEAD[bar % 4]):
+            place(lead, seq_note(m, 3000, 0.10, dur=0.45), t0 + q * BEAT)
+    # bleeps: sparse, seeded so every render is the same
+    r = np.random.default_rng(100 + bar)
+    count = {"hook": 2, "logo": 1, "step1": 2, "step2": 1, "step3": 2, "compare": 1, "services": 3, "build": 6}.get(name, 0)
+    for _ in range(count):
+        s = int(r.choice([1, 3, 5, 7, 9, 11, 13, 15]))
+        m = int(r.choice(SCALE)) + 12 + (int((t0 - BUILD) * 1.5) if name == "build" else 0)
+        place(blp, bleep(m), t0 + s * BEAT / 4)
 
-# drums, from the drop to the end card
+# a brighter bleep as each transcript line arrives in Step 2, and on each "Kept" in the compare scene
+for t in LINE_HITS:
+    place(blp, bleep(81, level=0.09), t)
+for t in KEPT_HITS:
+    place(blp, bleep(76, level=0.08), t)
+    place(blp, bleep(83, level=0.06), t + BEAT / 4)
+
+# drums
 for i in range(int(DROP / BEAT), int(END / BEAT)):
     t = i * BEAT
-    place(drums, kick(), t)
-    k = int(t * SR)
-    m = min(N, k + int(0.3 * SR))
-    duck[k:m] = np.minimum(duck[k:m], 0.35 + 0.65 * (np.arange(m - k) / (m - k)) ** 0.7)
-    if i % 2 == 1 and t < BUILD:
+    name = scene(t)
+    beat_in_bar = i % 4
+    four = name in ("logo", "step1", "step2", "step3", "services", "build")
+    half = name == "compare" and t < SCENES["compare"][1] - 2 and beat_in_bar in (0, 2)  # half time, then a gap
+    if four or half:
+        place(drums, kick(0.8 if half else 0.95), t)
+        k = int(t * SR)
+        m = min(N, k + int(0.3 * SR))
+        duck[k:m] = np.minimum(duck[k:m], 0.35 + 0.65 * (np.arange(m - k) / (m - k)) ** 0.7)
+    if name in ("step1", "step2", "step3", "services") and i % 2 == 1:
         place(drums, clap(), t)
-    if t >= DROP + 2:
-        for q, v in ((0.25, 0.035), (0.5, 0.07), (0.75, 0.04)):
-            place(drums, hat(v), t + q * BEAT)
-        if t >= ARP and i % 2 == 1:
-            place(drums, hat(0.05, open_=True), t + 0.5 * BEAT)
+    if name in ("step1", "step2", "step3", "services", "build"):
+        place(drums, hat(0.07), t + 0.5 * BEAT)
+    if name in ("step2", "step3", "services"):
+        place(drums, hat(0.035), t + 0.25 * BEAT)
+        place(drums, hat(0.04), t + 0.75 * BEAT)
+    if name in ("step3", "services") and i % 2 == 1:
+        place(drums, hat(0.05, open_=True), t + 0.5 * BEAT)
+    if name == "compare" and beat_in_bar == 2 and t < SCENES["compare"][1] - 2:
+        place(drums, hat(0.04, open_=True), t + 0.5 * BEAT)
 
 # the build: a roll that doubles in speed
 t = BUILD
@@ -265,30 +314,36 @@ while t < END:
     place(drums, clap(0.08 + 0.2 * frac, tight=True), t)
     t += step
 
-# transitions
+# transitions: into the logo, back out of the compare breakdown, into the end card
 place(fx, riser(DROP - 0.4, 0.13), 0.4)
 place(fx, impact(0.75), DROP)
+place(fx, riser(3.6, 0.12), SCENES["services"][0] - 3.6)
+place(fx, impact(0.55), SCENES["services"][0])
 place(fx, riser(END - BUILD - 0.4, 0.17), BUILD + 0.4)
 place(fx, impact(0.85), END)
+for t in MERGE_HITS:  # the compare columns merging into one, and "Saved as a new version"
+    place(fx, impact(0.25), t)
 end_chord = [45, 52, 57, 60, 64, 71]  # Am(add9)
-end = sum(synth(midi(m), int((LENGTH - END) * SR), np.linspace(2600, 600, int((LENGTH - END) * SR)), harmonics=24, detune=(-8, 0, 8), seed=m)
-          for m in end_chord)
-place(pads, fft_filter(end, lo=120) * env_adsr(int((LENGTH - END) * SR), a=0.02, d=0.6, s=0.7, r=1.2) * 0.07, END)
+n_end = int((LENGTH - END) * SR)
+end = sum(synth(midi(m), n_end, np.linspace(2600, 600, n_end), harmonics=24, detune=(-8, 0, 8), seed=m) for m in end_chord)
+place(pads, fft_filter(end, lo=120) * env_adsr(n_end, a=0.02, d=0.6, s=0.7, r=1.2) * 0.07, END)
 tail = bass(33, dur=LENGTH - END - 0.6, level=0.4)
 tail *= np.linspace(1, 0, len(tail)) ** 2  # a slow fade, not a cut
 place(low, tail, END)
 for k, m in enumerate([69, 72, 76, 81]):
-    place(seq, seq_note(m, 2400, 0.12, dur=0.3), END + k * BEAT / 2)
+    place(seq, seq_note(m, 2400, 0.12, dur=0.3), END + 1.0 + k * BEAT / 2)  # on the URL pill
 
-# glitches: the last beat before 14 s and 22 s stutters in 1/32ths, bit-crushed
-music = seq + blp + pads
+# glitches: the beat before a scene change stutters in 1/32ths, bit-crushed
+music = seq + blp + pads + lead
 for g in GLITCHES:
     a, b = int(g * SR), int((g + BEAT) * SR)
     slice_ = (music + drums)[a:a + int(BEAT / 8 * SR)]
     stutter = np.tile(crush(slice_), 8)[: b - a] * np.linspace(1, 0.4, b - a)
-    for track in (seq, blp, pads, drums, low):
+    for track in (seq, blp, pads, drums, low, lead):
         track[a:b] *= 0.15
     fx[a:b] += stutter * 0.8
+
+seq += lead
 
 # mix: the tonal parts duck under the kick; echoes on the sequence and the bleeps, left and right
 tonal = (seq + pads) * duck + low * (0.55 + 0.45 * duck)
