@@ -44,7 +44,6 @@
     <div class="lang-tags" id="langTags">
       <span class="pill accent">Egyptian Arabic</span>
       <span class="pill cloud">English</span>
-      <span class="pill">in one sentence</span>
     </div>
   </section>
 
@@ -87,7 +86,7 @@
     <div class="copy">
       <div class="kicker" style="color:var(--accent)" id="s1k">Step 1</div>
       <div class="h"><span class="ln"><span>Drop a</span></span><span class="ln"><span>recording.</span></span></div>
-      <div class="sub">Audio or video of a meeting or a call, in any common format.</div>
+      <div class="sub">Any audio or video file.</div>
     </div>
     <div class="right">
       <div class="panel" id="p1">
@@ -120,7 +119,7 @@
     <div class="copy">
       <div class="kicker" style="color:var(--s1)">Step 2</div>
       <div class="h"><span class="ln"><span>Every voice,</span></span><span class="ln"><span>its own name.</span></span></div>
-      <div class="sub">Speakers are told apart by voice, and each line reads in its own direction.</div>
+      <div class="sub">Told apart by voice.</div>
     </div>
     <div class="right">
       <div class="panel" id="p2" style="padding-bottom:30px">
@@ -146,7 +145,7 @@
     <div class="copy">
       <div class="kicker" style="color:var(--s3)">Step 3</div>
       <div class="h"><span class="ln"><span>Fix a line.</span></span><span class="ln"><span>Keep every</span></span><span class="ln"><span>version.</span></span></div>
-      <div class="sub">Review each change before it is saved. Nothing is lost.</div>
+      <div class="sub">Nothing is lost.</div>
     </div>
     <div class="right">
       <div style="position:relative;width:100%;height:100%">
@@ -191,7 +190,7 @@
     <div class="top-copy">
       <div class="kicker" style="color:var(--accent)">Compare</div>
       <div class="h"><span class="ln"><span>Two models. One best transcript.</span></span></div>
-      <div class="sub">Every word that differs is marked. Keep the better line, row by row.</div>
+      <div class="sub">Differences marked. Keep the better line.</div>
     </div>
     <div class="cmp" id="cmp">
       <div class="cmp-grid" id="cmpGrid">
@@ -214,23 +213,23 @@
   </section>
 
   <!-- 44 s: local or hosted -->
-  <section id="choice" class="clip" data-start="43.6" data-duration="6.5" data-track-index="8">
+  <section id="choice" class="clip" data-start="43.6" data-duration="5.5" data-track-index="8">
     <div class="copy">
       <div class="kicker" style="color:var(--cloud)">Your choice</div>
       <div class="h"><span class="ln"><span>Local, or</span></span><span class="ln"><span>the service</span></span><span class="ln"><span>you trust.</span></span></div>
-      <div class="sub">Three models on your computer, or nine hosted services with your own key.</div>
+      <div class="sub">Your recording is uploaded only after you say so.</div>
     </div>
     <div class="right" style="flex-direction:column">
       <div class="tiles" id="tiles"></div>
       <div class="consent" id="consent">
         <div class="cbox"><div class="on" id="cboxOn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></div></div>
-        <div><div class="a">Upload this recording to ElevenLabs</div><div class="b">Your recording is uploaded only after you say so.</div></div>
+        <div><div class="a">Upload this recording to ElevenLabs</div><div class="b">Asked every time.</div></div>
       </div>
     </div>
   </section>
 
-  <!-- 50 s: any graphics card, or none (52 s) -->
-  <section id="gpuS" class="clip" data-start="49.6" data-duration="4.5" data-track-index="10">
+  <!-- 49 s: any graphics card, or none (51 s) -->
+  <section id="gpuS" class="clip" data-start="48.6" data-duration="5.5" data-track-index="10">
     <div class="center-copy" id="gpuCopy">
       <div class="kicker" style="color:var(--accent);margin-bottom:22px">Speed</div>
       <div class="h" id="gpuH"><span class="ln"><span>Runs on any graphics card,</span></span><span class="ln" style="color:var(--accent)"><span>or on none at all.</span></span></div>
@@ -312,19 +311,22 @@
     `<div class="gut r${i}">${row.ts}</div>${cell(row, 0).replace('class="cell', `class="cell r${i}`)}${cell(row, 1).replace('class="cell', `class="cell r${i}`)}`).join(""));
 
   // ---------- choice: the services and models, as the app shows them (brands.js, or a letter tile) ----------
-  const TILES = [
-    ["elevenlabs"], ["googlegemini"], ["deepgram"], ["mistralai"],
-    [null, "OpenAI"], [null, "AssemblyAI"], [null, "Azure"], [null, "Speechmatics"],
-    [null, "Groq"], ["huggingface"], ["nvidia"], ["qwen"],
-  ];
+  // On the computer: Cohere Transcribe (built in) and models added from Hugging Face, such as NVIDIA's and
+  // Qwen's (app/hub.py). Hosted: the nine services, in the README's order.
+  const LOCAL = [[null, "Cohere"], ["huggingface"], ["nvidia"], ["qwen"]];
+  const HOSTED = [["elevenlabs"], [null, "Speechmatics"], ["googlegemini"], ["deepgram"], [null, "AssemblyAI"],
+    [null, "Azure"], [null, "OpenAI"], [null, "Groq"], ["mistralai"]];
   function logoHTML(slug, name, extra = "") {
     if (!slug) return `<div class="logo letter"${extra}>${esc(name[0])}<div class="ring"></div></div>`;
     const b = BRANDS[slug];
-    const plain = contrast(b.hex, "ffffff") < 3 ? " plain" : "";
+    const faintLight = contrast(b.hex, "ffffff") < 3, faintDark = contrast(b.hex, "161a20") < 3;
+    const plain = faintLight && faintDark ? " plain" : faintLight ? " dark" : "";
     return `<div class="logo${plain}" style="--brand:#${b.hex}"${extra}><svg viewBox="0 0 24 24"><path d="${b.path}"/></svg><div class="ring"></div></div>`;
   }
-  $("#tiles").innerHTML = TILES.map(([slug, name]) =>
+  const tiles = (list) => list.map(([slug, name]) =>
     `<div class="tile">${logoHTML(slug, name)}<div class="nm">${esc(name || BRANDS[slug].title)}</div></div>`).join("");
+  $("#tiles").innerHTML = `<div class="tgrp local"><div class="tlabel">On your computer</div><div class="trow">${tiles(LOCAL)}</div></div>` +
+    `<div class="tgrp hosted"><div class="tlabel">Hosted, with your own key</div><div class="trow">${tiles(HOSTED)}</div></div>`;
   $("#gpuRow").innerHTML = [["intel", "Vulkan"], ["amd", "Vulkan"], ["nvidia", "Vulkan and CUDA"]].map(([slug, api]) =>
     `<div class="gpu">${logoHTML(slug)}<div class="nm">${BRANDS[slug].title}</div><div class="api">${api}</div></div>`).join("");
 
@@ -376,6 +378,10 @@
 
   // ---------- the timeline ----------
   function build() {
+    // 2D transforms only: a 3D transform puts an element on its own layer, and Chrome keeps that layer's
+    // text rasterised at the scale it had while moving, which differs between render workers and made a
+    // settled card shimmer from frame to frame
+    gsap.config({ force3D: false });
     const tl = gsap.timeline({ paused: true });
     const E = "expo.out", IN = "power2.in", IO = "power3.inOut";
 
@@ -472,6 +478,8 @@
       { x: 0, y: 0, rotation: 2, duration: 1.5, ease: IO }, 11.5);
     tl.fromTo(file, { opacity: 0 }, { opacity: 1, duration: 0.3 }, 11.5);
     tl.to(file, { rotation: 0, scale: 1, boxShadow: "0 1px 2px rgba(15,23,42,.06)", duration: 0.5, ease: "back.out(2)" }, 13.0);
+    // once it has landed the card has no transform at all, so it is drawn the same way in every frame
+    tl.set(file, { clearProps: "transform" }, 13.55);
     tl.fromTo("#cur1", { x: fx + FX, y: fy + FY, opacity: 0 }, { x: fx, y: fy, duration: 1.5, ease: IO }, 11.5);
     tl.fromTo("#cur1", { opacity: 0 }, { opacity: 1, duration: 0.25 }, 11.5);
     tl.to("#cur1", { x: fx + 150, y: fy + 170, opacity: 0, duration: 0.7, ease: "power2.inOut" }, 13.25);
@@ -573,30 +581,33 @@
     // ---- 44 s: local, or the service you trust ----
     const ch = $("#choice");
     copyIn(ch, 43.95);
-    $$("#tiles .tile").forEach((tile, i) => {
-      const col = i % 4, row = Math.floor(i / 4);
-      const dx = (col - 1.5) * 360 + (rnd() - 0.5) * 260, dy = (row - 1) * 420 + (rnd() - 0.5) * 260 + 120;
+    const flyIn = (tile, t) => {
+      const dx = (rnd() - 0.5) * 900, dy = 260 + rnd() * 300;
       tl.fromTo($(".logo", tile), { x: dx, y: dy, rotation: (rnd() - 0.5) * 70, scale: 0.4, opacity: 0 },
-        { x: 0, y: 0, rotation: 0, scale: 1, opacity: 1, duration: 1.0, ease: E }, 44.5 + i * 0.07);
-    });
-    tl.fromTo("#tiles .nm", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.5, ease: E }, 46.0);
-    tl.fromTo("#consent", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, ease: E }, 46.5);
-    pop("#cboxOn", 47.5, 0.5);
-    tl.fromTo("#tiles .tile:first-child .ring", { opacity: 0, scale: 1.2 }, { opacity: 1, scale: 1, duration: 0.45, ease: "back.out(2)" }, 47.5);
-    copyOut(ch, 49.58);
-    tl.to(["#tiles", "#consent"], { y: -40, opacity: 0, duration: 0.36, ease: IN, stagger: 0.04 }, 49.6);
+        { x: 0, y: 0, rotation: 0, scale: 1, opacity: 1, duration: 1.0, ease: E }, t);
+    };
+    tl.fromTo("#tiles .local .tlabel", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5, ease: E }, 44.5);
+    $$("#tiles .local .tile").forEach((tile, i) => flyIn(tile, 44.5 + i * 0.08));
+    tl.fromTo("#tiles .hosted .tlabel", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5, ease: E }, 45.0);
+    $$("#tiles .hosted .tile").forEach((tile, i) => flyIn(tile, 45.0 + i * 0.06));
+    tl.fromTo("#tiles .nm", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.5, ease: E }, 45.5);
+    tl.fromTo("#consent", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, ease: E }, 46.0);
+    pop("#cboxOn", 47.0, 0.5);
+    tl.fromTo("#tiles .hosted .tile:first-child .ring", { opacity: 0, scale: 1.2 }, { opacity: 1, scale: 1, duration: 0.45, ease: "back.out(2)" }, 47.0);
+    copyOut(ch, 48.58);
+    tl.to(["#tiles", "#consent"], { y: -40, opacity: 0, duration: 0.36, ease: IN, stagger: 0.04 }, 48.6);
 
-    // ---- 50 s: any graphics card; 52 s: or none at all (the music builds from 48 s) ----
+    // ---- 49 s: any graphics card; 51 s: or none at all, held to 53.6 s (the music builds from 48 s) ----
     const gl = $$("#gpuH .ln > span");
-    tl.fromTo("#gpuCopy .kicker", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.6, ease: E }, 49.95);
-    tl.fromTo(gl[0], { yPercent: 112 }, { yPercent: 0, duration: 0.85, ease: E }, 50.0);
+    tl.fromTo("#gpuCopy .kicker", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.6, ease: E }, 48.95);
+    tl.fromTo(gl[0], { yPercent: 112 }, { yPercent: 0, duration: 0.85, ease: E }, 49.0);
     $$("#gpuRow .gpu").forEach((g, i) => {
-      tl.fromTo(g, { opacity: 0, y: 70, scale: 0.6 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "back.out(1.8)" }, 50.5 + i * 0.5);
+      tl.fromTo(g, { opacity: 0, y: 70, scale: 0.6 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "back.out(1.8)" }, 49.5 + i * 0.5);
     });
-    tl.fromTo(gl[1], { yPercent: 112 }, { yPercent: 0, duration: 0.85, ease: E }, 52.0);
-    tl.to("#gpuRow", { x: -300, opacity: 0.4, duration: 0.7, ease: IO }, 51.9);
-    tl.fromTo("#cpu", { opacity: 0, scale: 0.5, y: 40 }, { opacity: 1, scale: 1, y: 0, duration: 0.7, ease: "back.out(1.6)" }, 52.1);
-    tl.to("#cpuLogo", { scale: 1.06, duration: 0.12, yoyo: true, repeat: 1, ease: "power2.out" }, 53.0);
+    tl.to("#gpuRow", { x: -300, opacity: 0.4, duration: 0.7, ease: IO }, 50.9);
+    tl.fromTo(gl[1], { yPercent: 112 }, { yPercent: 0, duration: 0.85, ease: E }, 51.0);
+    tl.fromTo("#cpu", { opacity: 0, scale: 0.5, y: 40 }, { opacity: 1, scale: 1, y: 0, duration: 0.7, ease: "back.out(1.6)" }, 51.1);
+    [52.0, 52.5, 53.0].forEach((t, i) => tl.to("#cpuLogo", { scale: 1.04 + i * 0.02, duration: 0.12, yoyo: true, repeat: 1, ease: "power2.out" }, t));
     tl.to(["#gpuCopy .kicker", ...gl], { opacity: 0, y: -34, duration: 0.34, ease: IN, stagger: 0.03 }, 53.58);
     tl.to(["#gpuRow", "#cpu"], { opacity: 0, y: 40, duration: 0.34, ease: IN }, 53.58);
 

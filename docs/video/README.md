@@ -8,10 +8,14 @@ differ only in the music:
 - `tafrigh-bright.mp4`: a brighter track in C major, with a soft pad, plucks and a gentle groove.
 
 Both tracks are original, synthesised from nothing but code (`music/tech.py` and `music/bright.py`,
-numpy and soundfile only), so they are published with the project under its licence. They share the
-video's cue points at 120 beats a minute: the drop on the logo at 6 s, the build from 48 s and the end
-card at 54 s; the tech track also stutters at 25.5 s and 33.5 s, where the video glitches. The GIF near
-the top of the main README (`docs/images/tafrigh-preview.gif`) is cut from the video.
+numpy and soundfile only), so they are published with the project under its licence. Both follow the
+video scene by scene at 120 beats a minute: the drop on the logo at 6 s, a layer added with each step, a
+breakdown under the compare scene so its text can be read, the full groove again for the services at
+44 s, the build from 48 s and the end card at 54 s. Small accents land on the screen's moments: each
+transcript line in Step 2, each "Kept" and the merge in the compare scene; the tech track also stutters
+at 25.5 s and 33.5 s, where the video glitches. The scene and accent times are constants at the top of
+each script. The GIF near the top of the main README (`docs/images/tafrigh-preview.gif`) is cut from the
+video.
 
 The video is a web page. `index.html` lays out every scene with the app's own colours, fonts, radii and
 shadows (see `app/static/app.css`), and one paused [GSAP](https://gsap.com) timeline in the same file
@@ -51,9 +55,9 @@ in any half second.
 | 18 s | Step 2, Read: lines from Mona, Karim and Omar, one a second, each in its own direction; a stutter at 25.5 s |
 | 26 s | Step 3, Fix: a word Cohere wrote in Arabic letters is retyped in English, reviewed, saved, and the history shows v0 and v1; a stutter at 33.5 s |
 | 34 s | Compare, for 10 s: Cohere Transcribe Arabic (best at Arabic words) beside whisper-medium code-switching (best at keeping English terms in English), the differing words marked, the better row kept in each, merged into one |
-| 44 s | Local or hosted: the services' logos settle into a grid, and the upload needs a tick (the music builds from 48 s) |
-| 50 s | Any graphics card: Intel, AMD and NVIDIA |
-| 52 s | Or none at all: the processor, with Cohere's measured 0.36 times real time on a laptop processor |
+| 44 s | Local or hosted: what runs on the computer (Cohere, and models from Hugging Face such as NVIDIA's and Qwen's) and the nine hosted services settle into a grid in their own colours, and the upload needs a tick at 47 s (the music builds from 48 s) |
+| 49 s | Any graphics card: Intel, AMD and NVIDIA, with Vulkan on each and CUDA on NVIDIA |
+| 51 s | Or none at all: the processor, with Cohere's measured 0.36 times real time on a laptop processor, held to 53.6 s |
 | 54 s | The end card: logo, tagline, licence and the repository link, held to 60 s |
 
 The compare rows follow the measured results in `docs/03-results.md`. Cohere makes the fewest errors in
@@ -69,10 +73,16 @@ Node.js 22 or newer, FFmpeg and Google Chrome are needed. From this folder:
 ```sh
 npm install                 # HyperFrames and GSAP, into node_modules/
 npx hyperframes preview     # opens the studio in the browser, with a scrubbable timeline
-npx hyperframes render --fps 30 --quality delivery --output renders/tafrigh-raw.mp4
+npx hyperframes render --fps 30 --quality delivery --workers 1 --no-browser-gpu --output renders/tafrigh-raw.mp4
 ```
 
-The committed MP4 is that render encoded again, smaller and ready to stream from the start:
+Render with one worker and software drawing, as above. With several workers each draws its own part of
+the video, and text moved or scaled by an animation came out a pixel different at the joins and on
+some frames, which showed as a shimmer. With the graphics card, a faded element sometimes left a ghost
+on the next frame. One software worker takes about three and a half minutes and gives the same
+picture every time.
+
+The MP4 the music is added to is that render encoded again, smaller and ready to stream from the start:
 
 ```sh
 ffmpeg -i renders/tafrigh-raw.mp4 -an -c:v libx264 -preset slow -crf 20 -tune animation \

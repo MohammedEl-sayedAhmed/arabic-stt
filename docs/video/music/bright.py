@@ -1,12 +1,17 @@
 """The bright version of the Tafrigh video track: synthesised from scratch (numpy only), free to publish.
 
 120 BPM, 4/4: a beat is 0.5 s and a bar 2 s. C major, I-V-vi-IV (C, G/B, Am, F), one chord per bar.
-  0-6 s   intro: soft pad and a sparse pluck, the filter opening, a riser into the drop
-  6 s     impact: the logo
-  6-48 s  groove: kick, clap, hats, bass, and from 18 s a 16th-note arpeggio
-  48-54 s build: snare roll, filter up, noise riser
-  54-60 s end card: final C chord, pluck motif, tail fading to silence at 60 s
-The cue points are the constants below, so the track can follow another cut of the video.
+One section per scene:
+  0-6 s    hook: soft pad and a sparse pluck, the filter opening, a riser into the drop
+  6-10 s   logo: impact, a gentle kick and long bass notes
+  10-18 s  Step 1: claps, hats and the bouncing bass
+  18-26 s  Step 2: an eighth-note arpeggio; a bright pluck as each transcript line arrives
+  26-34 s  Step 3: sixteenth arpeggio, open hats
+  34-44 s  compare: a breakdown without drums, warm pad and plucks, accents on each "Kept" and the merge
+  44-48 s  services: an impact and the full groove again
+  48-54 s  build: snare roll, filter up, noise riser
+  54-60 s  end card: final C chord, a motif on the URL, tail fading to silence at 60 s
+The times are the constants below, so the track can follow another cut of the video.
 """
 import sys
 
@@ -18,8 +23,13 @@ BPM = 120
 BEAT = 60 / BPM
 BAR = 4 * BEAT
 LENGTH = 60.0
-# cue points, in seconds, matched to the video's scenes (all on bar lines)
-DROP, ARP, BUILD, END = 6.0, 18.0, 48.0, 54.0  # logo, arpeggio in, build, end card
+# cue points, in seconds: the video's scenes (all on bar lines) and its accents
+SCENES = {"hook": (0, 6), "logo": (6, 10), "step1": (10, 18), "step2": (18, 26), "step3": (26, 34),
+          "compare": (34, 44), "services": (44, 48), "build": (48, 54)}  # then the end card, 54-60
+DROP, BUILD, END = 6.0, 48.0, 54.0
+LINE_HITS = (19.5, 20.5, 21.5, 22.5)  # transcript lines arriving in Step 2
+KEPT_HITS = (39.0, 39.5, 40.0)   # "Kept" in the compare scene
+MERGE_HITS = (41.0, 42.0)        # the columns merging, "Saved as a new version"
 N = int(LENGTH * SR)
 rng = np.random.default_rng(7)
 
@@ -185,64 +195,82 @@ def impact(level=0.8):
     return (boom + air) * level
 
 
-# --- arrangement -----------------------------------------------------------------------------------
+# --- arrangement: one section per scene of the video -------------------------------------------------
 music = np.zeros(N)   # tonal parts, ducked by the kick
 drums = np.zeros(N)
 fx = np.zeros(N)
 duck = np.ones(N)
 
-bars = int(LENGTH / BAR)
-for bar in range(bars):
+
+def scene(t):
+    """The name of the scene playing at second t."""
+    for name, (a, b) in SCENES.items():
+        if a <= t < b:
+            return name
+    return "end"
+
+
+for bar in range(int(LENGTH / BAR)):
     t0 = bar * BAR
     notes, root = chord_at(bar)
-    # pad: filter closed in the intro, open in the groove, wider in the build, warm at the end
-    if t0 < DROP:
+    name = scene(t0)
+    # pad: closed in the hook, open in the steps, soft and warm for the compare breakdown, wider in the build
+    if name == "hook":
         cut = np.linspace(500, 1400, int(BAR * SR + 0.5 * SR))
-    elif t0 < BUILD:
-        cut = 1800
-    elif t0 < END:
+    elif name == "compare":
+        cut = 1200
+    elif name == "build":
         cut = np.linspace(1800 + (t0 - BUILD) * 500, 2300 + (t0 - BUILD) * 500, int(BAR * SR + 0.5 * SR))
     else:
-        cut = 1600
-    s, sig = pad(t0, BAR + 0.5, notes, cut)
-    place(music, sig * (0.8 if t0 < DROP else 1.0), s)
-
-    if t0 < DROP:  # sparse plucks in the intro
-        for k, m in enumerate([notes[1] + 12, notes[2] + 12]):
-            place(music, pluck(midi(m), level=0.14), t0 + 0.5 + k * 1.0)
-    if DROP <= t0 < END:
-        # bass: root on the beat, octave bounce on the off-beat eighths
+        cut = 1800
+    if name != "end":
+        s, sig = pad(t0, BAR + 0.5, notes, cut)
+        place(music, sig * (0.8 if name == "hook" else 1.15 if name == "compare" else 1.0), s)
+    if name in ("hook", "compare"):  # sparse plucks: the hook, and the breakdown under the compare text
+        for k, m in enumerate([notes[1] + 12, notes[2] + 12, notes[3] + 12] if name == "compare" else [notes[1] + 12, notes[2] + 12]):
+            place(music, pluck(midi(m), level=0.13), t0 + 0.5 + k * (0.5 if name == "compare" else 1.0))
+    # bass: long notes under the logo and the compare breakdown, then root and octave bounce in the groove
+    if name in ("logo", "compare"):
+        place(music, bass(midi(root), BAR + 0.08) * 0.8, t0)
+    elif name in ("step1", "step2", "step3", "services", "build"):
         for b in range(4):
             place(music, bass(midi(root), 0.42), t0 + b * BEAT)
-            if t0 >= DROP + 2:
-                place(music, bass(midi(root + 12), 0.2) * 0.6, t0 + b * BEAT + BEAT / 2)
-    if ARP <= t0 < END:
-        # 16th arpeggio over the chord, up two octaves on the last beat of each bar
+            place(music, bass(midi(root + 12), 0.2) * 0.6, t0 + b * BEAT + BEAT / 2)
+    # arpeggio: eighths in Step 2, sixteenths from Step 3, back for the services and the build
+    if name in ("step2", "step3", "services", "build"):
         pattern = [0, 1, 2, 3, 2, 1, 2, 3]
-        for s16 in range(16):
+        sixteenths = name != "step2"
+        for s16 in range(0, 16, 1 if sixteenths else 2):
             m = notes[pattern[s16 % 8]] + 12 + (12 if s16 >= 12 else 0)
             lvl = 0.10 if s16 % 4 else 0.14
-            place(music, pluck(midi(m), dur=0.25, cutoff=2500 + (t0 - ARP) * 120, level=lvl), t0 + s16 * BEAT / 4)
-    if t0 >= END:  # the end: a pluck motif over the last chord
-        for k, m in enumerate([72, 76, 79, 84]):
-            place(music, pluck(midi(m), dur=1.2, cutoff=3000, level=0.16), t0 + k * BEAT * 0.5 + (0 if t0 == END else 99))
+            place(music, pluck(midi(m), dur=0.25, cutoff=2500 + max(0, t0 - 18) * 60, level=lvl), t0 + s16 * BEAT / 4)
 
-# drums in the groove
+# accents: a bright pluck as each transcript line arrives, on each "Kept", and on the merge
+for t in LINE_HITS:
+    place(music, pluck(midi(84), dur=0.4, cutoff=4000, level=0.12), t)
+for t in KEPT_HITS:
+    place(music, pluck(midi(79), dur=0.5, cutoff=3500, level=0.12), t)
+for t in MERGE_HITS:
+    place(fx, impact(0.22), t)
+    place(music, pluck(midi(72), dur=0.8, cutoff=3000, level=0.13), t)
+
+# drums
 for i in range(int(DROP / BEAT), int(END / BEAT)):
     t = i * BEAT
-    if DROP <= t < END:
-        place(drums, kick(0.85 if t < BUILD else 0.9), t)
+    name = scene(t)
+    if name in ("logo", "step1", "step2", "step3", "services", "build"):
+        place(drums, kick(0.8 if name == "logo" else 0.85 if t < BUILD else 0.9), t)
         k = int(t * SR)
         m = min(N, k + int(0.28 * SR))
         duck[k:m] = np.minimum(duck[k:m], 0.45 + 0.55 * (np.arange(m - k) / (m - k)) ** 0.6)
-    if DROP + 2 <= t < BUILD and i % 2 == 1:
+    if name in ("step1", "step2", "step3", "services") and i % 2 == 1:
         place(drums, clap(), t)
-    if DROP + 2 <= t < END:
+    if name in ("step1", "step2", "step3", "services", "build"):
         place(drums, hat(0.08), t + BEAT / 2)
-        if t >= ARP:
-            place(drums, hat(0.04), t + BEAT / 4)
-            place(drums, hat(0.04), t + 3 * BEAT / 4)
-    if BUILD - 2 <= t < BUILD and i % 4 == 3:
+    if name in ("step3", "services"):
+        place(drums, hat(0.04), t + BEAT / 4)
+        place(drums, hat(0.04), t + 3 * BEAT / 4)
+    if name == "step3" and i % 4 == 3:
         place(drums, hat(0.08, open_=True), t + BEAT / 2)
 
 # the build: a snare roll getting faster and louder
@@ -253,14 +281,20 @@ while t < END:
     place(drums, clap(0.10 + 0.22 * frac), t)
     t += step
 
-# transitions
-place(fx, riser(DROP - 0.5, 0.14), 0.5)   # into the logo
+# transitions: into the logo, out of the compare breakdown, into the end card
+place(fx, riser(DROP - 0.5, 0.14), 0.5)
 place(fx, impact(0.75), DROP)
-place(fx, riser(END - BUILD - 0.5, 0.18), BUILD + 0.5)  # into the end card
+place(fx, riser(3.5, 0.13), SCENES["services"][0] - 3.5)
+place(fx, impact(0.5), SCENES["services"][0])
+place(fx, riser(END - BUILD - 0.5, 0.18), BUILD + 0.5)
 place(fx, impact(0.85), END)
 _, final = pad(END, LENGTH - END, [48, 55, 60, 64, 67, 72], np.linspace(2200, 700, int((LENGTH - END) * SR)))
 place(music, final * 1.4, END)
-place(music, bass(midi(36), LENGTH - END - 0.8) * 1.2, END)
+tail = bass(midi(36), LENGTH - END - 0.8) * 1.2
+tail *= np.linspace(1, 0, len(tail)) ** 2  # a slow fade, not a cut
+place(music, tail, END)
+for k, m in enumerate([72, 76, 79, 84]):  # the motif, on the URL pill
+    place(music, pluck(midi(m), dur=1.2, cutoff=3000, level=0.16), END + 1.0 + k * BEAT * 0.5)
 
 mix = music * duck + drums * 0.9 + fx
 mix = reverb(mix, seconds=2.4, mix=0.22)
