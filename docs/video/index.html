@@ -318,10 +318,13 @@
     ["azure"], ["openai"], ["groq"], ["mistralai"]];
   function logoHTML(slug, name, extra = "") {
     if (!slug) return `<div class="logo letter"${extra}>${esc(name[0])}<div class="ring"></div></div>`;
-    // the brand's own logo file (brands.js LOGOS), on a white tile as in the app; Intel and AMD
-    // are Simple Icons glyphs in their brand colour
+    // the brand's own logo file (brands.js LOGOS), on a white tile as in the app. A "fill" logo is either
+    // an app icon with its own margin (ElevenLabs, Speechmatics), which fills the tile, or a wordmark
+    // (Intel, AMD), which spans its width with a little room at the sides
     const own = LOGOS[slug];
-    if (own) return `<div class="logo img${own.fill ? " fill" : ""}"${extra}><img src="assets/logos/${own.file}" alt=""><div class="ring"></div></div>`;
+    const WORDMARKS = ["intel", "amd"];
+    const fill = own && own.fill ? (WORDMARKS.includes(slug) ? " fill wide" : " fill") : "";
+    if (own) return `<div class="logo img${fill}"${extra}><img src="assets/logos/${own.file}" alt=""><div class="ring"></div></div>`;
     const b = BRANDS[slug];
     const faintLight = contrast(b.hex, "ffffff") < 3, faintDark = contrast(b.hex, "161a20") < 3;
     const plain = faintLight && faintDark ? " plain" : faintLight ? " dark" : "";

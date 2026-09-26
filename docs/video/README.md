@@ -31,9 +31,9 @@ Everything shown is made up: the meeting, the names, the lines and the file.
   timeline script.
 - `style.css`: the layout and the app's colour tokens, drawn at about 1.7 times the app's size.
 - `assets/brands.js`: a copy of `app/static/brands.js`, which names the brands and holds the app's
-  logos: each brand's own logo file (`assets/logos/`, copied from `app/static/logos/`, with
-  `SOURCES.md` saying where each came from), and single-colour Simple Icons glyphs (CC0-1.0) for
-  Intel and AMD. `assets/icon.svg` is the app's icon.
+  logos. Every logo in the video is the brand's own file (`assets/logos/`, copied from
+  `app/static/logos/`, with `SOURCES.md` saying where each came from and on what terms), on a white
+  tile as in the app. `assets/icon.svg` is the app's icon.
 - `fonts/`: IBM Plex Sans, IBM Plex Sans Arabic and IBM Plex Mono (the app's fonts), and Patrick Hand
   for the handwritten opening line. All are under the SIL Open Font License, in `OFL-IBM-Plex.txt` and
   `OFL-Patrick-Hand.txt`.
