@@ -315,11 +315,11 @@
   // Qwen's (app/hub.py). Hosted: the nine services, in the README's order.
   const LOCAL = [["cohere"], ["huggingface"], ["nvidia"], ["qwen"]];
   const HOSTED = [["elevenlabs"], ["speechmatics"], ["googlegemini"], ["deepgram"], ["assemblyai"],
-    ["azure"], ["openai"], [null, "Groq"], ["mistralai"]];
+    ["azure"], ["openai"], ["groq"], ["mistralai"]];
   function logoHTML(slug, name, extra = "") {
     if (!slug) return `<div class="logo letter"${extra}>${esc(name[0])}<div class="ring"></div></div>`;
-    // the brand's own logo file (brands.js LOGOS), on a white tile as in the app; Groq has none (its
-    // trademark policy), and NVIDIA, Intel and AMD are Simple Icons glyphs in their brand colour
+    // the brand's own logo file (brands.js LOGOS), on a white tile as in the app; NVIDIA, Intel and AMD
+    // are Simple Icons glyphs in their brand colour
     const own = LOGOS[slug];
     if (own) return `<div class="logo img${own.fill ? " fill" : ""}"${extra}><img src="assets/logos/${own.file}" alt=""><div class="ring"></div></div>`;
     const b = BRANDS[slug];
