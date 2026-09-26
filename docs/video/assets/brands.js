@@ -92,11 +92,11 @@ const BRANDS = {
 // "fill": an app icon with its own margin, drawn to the edges of the tile.
 const LOGOS = {
   googlegemini: { title: "Google Gemini", file: "googlegemini.svg" },  // vector, from LobeHub
-  assemblyai: { title: "AssemblyAI", file: "assemblyai.svg", dark: "assemblyai-dark.svg" },
+  assemblyai: { title: "AssemblyAI", file: "assemblyai.svg" },  // its blue product mark, from LobeHub
   azure: { title: "Azure AI Speech", file: "azure.png" },
   openai: { title: "OpenAI", file: "openai.svg" },
   speechmatics: { title: "Speechmatics", file: "speechmatics.png", fill: true },  // an app icon, with its own margin
-  cohere: { title: "Cohere", file: "cohere.png" },
+  cohere: { title: "Cohere", file: "cohere.svg" },  // vector, from LobeHub
   elevenlabs: { title: "ElevenLabs", file: "elevenlabs.svg", fill: true },
   deepgram: { title: "Deepgram", file: "deepgram.svg" },
   mistralai: { title: "Mistral AI", file: "mistralai.svg", dark: "mistralai.svg" },  // its gradient is made for both
@@ -105,7 +105,17 @@ const LOGOS = {
   meta: { title: "Meta", file: "meta.svg", dark: "meta.svg" },  // the same symbol on Meta's dark lockup
   fedora: { title: "Fedora", file: "fedora.svg" },
   debian: { title: "Debian", file: "debian.svg" },
+  nvidia: { title: "NVIDIA", file: "nvidia.svg" },  // from LobeHub
+  alibabacloud: { title: "Alibaba Cloud", file: "alibabacloud.svg" },  // from LobeHub
   groq: { title: "Groq", file: "groq.svg", dark: "groq-dark.svg" },
+  hp: { title: "HP", file: "hp.svg" },
+  dell: { title: "Dell", file: "dell.svg" },
+  lenovo: { title: "Lenovo", file: "lenovo.svg", fill: true },  // a wordmark: the whole width of the tile
+  huawei: { title: "Huawei", file: "huawei.svg" },
+  kubuntu: { title: "Kubuntu", file: "kubuntu.svg" },
+  ubuntu: { title: "Ubuntu", file: "ubuntu.svg" },
+  windows11: { title: "Windows", file: "windows11.svg" },
+  windows10: { title: "Windows", file: "windows10.svg" },
 };
 const logoSrc = (file) => `/static/logos/${file}`;
 const brandTitle = (slug) => (LOGOS[slug] || BRANDS[slug] || {}).title || slug;
@@ -129,6 +139,9 @@ const BRAND_NAMES = [
   ["samsung", /\bsamsung\b/i],
   ["lg", /\blg\b/i],
   ["ubuntu", /\bubuntu\b/i],
+  ["windows10", /\bwindows 10\b/i],
+  // Windows 11, and any later or unnamed version
+  ["windows11", /\bwindows(?! 10\b)\b/i],
   ["archlinux", /\barch linux\b/i],
   ["linuxmint", /\blinux mint\b/i],
   ["popos", /\bpop!_os\b/i],
