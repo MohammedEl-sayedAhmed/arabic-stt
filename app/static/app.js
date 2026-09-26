@@ -290,11 +290,11 @@ function estimateText(m, seconds, short = false) {
   if (m.kind === "hosted") return short ? "Usually a few minutes, plus the upload" : `${esc(m.service)} usually takes a few minutes, plus the upload`;
   const sp = m.speed || { rtf: m.rtf };
   const slow = S.status.power === "power-saver" && !sp.measured;  // a measured speed already includes it
-  const where = sp.runs_on === "gpu" ? " on the graphics card" : "";
-  if (!seconds) return `About <b>${sp.rtf}×</b> the recording's length here${where}${slow ? " (more in power-saver mode)" : ""}`;
+  const where = sp.runs_on === "gpu" ? " on this computer's graphics card" : " on this computer";
+  if (!seconds) return `About <b>${sp.rtf}×</b> the recording's length${where}${slow ? " (more in power-saver mode)" : ""}`;
   const t = seconds * (sp.rtf || 1) * (slow ? 3.5 : 1);
-  if (short) return `About <b>${human(t)}</b> here${slow ? " (power-saver)" : ""}`;
-  return `About <b>${human(t)}</b> on this computer${where}${sp.measured ? " (measured on earlier runs)" : ""}${slow ? " in power-saver mode. Performance mode (Settings) is about 3–5× faster" : ""}`;
+  if (short) return `About <b>${human(t)}</b> on this computer${slow ? " (power-saver)" : ""}`;
+  return `About <b>${human(t)}</b>${where}${sp.measured ? " (measured on earlier runs)" : ""}${slow ? " in power-saver mode. Performance mode (Settings) is about 3–5× faster" : ""}`;
 }
 
 function speakerHint(m, speakers) {

@@ -88,7 +88,7 @@ class HubInSettings(HubTestCase):
         self.assertEqual(card.locator(".mc-tag").inner_text(), "NVIDIA Parakeet model")
         self.assertEqual(card.locator("li").all_inner_texts(),
                          ["org/asr-gguf", "GGUF, parakeet: asr-Q8_0.gguf", "572 B download", "Licence: Apache-2.0"])
-        self.assertIn("the recording's length here", card.locator(".mc-foot").inner_text())
+        self.assertIn("the recording's length on this computer", card.locator(".mc-foot").inner_text())
 
     def test_remove_from_the_app(self):
         self.forget_later(GGUF)

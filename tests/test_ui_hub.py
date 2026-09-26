@@ -85,11 +85,11 @@ class AddedModelCards(HubTestCase):
         self.assertEqual(card.locator(".mc-tag").inner_text(), "NVIDIA Parakeet model")
         self.assertEqual(card.locator("li").all_inner_texts(),
                          ["org/asr-gguf", "GGUF, parakeet: asr-Q8_0.gguf", "572 B download", "Licence: Apache-2.0"])
-        self.assertIn("the recording's length here", card.locator(".mc-foot").inner_text())
+        self.assertIn("the recording's length on this computer", card.locator(".mc-foot").inner_text())
         card.click()
         self.page.locator(f".model-card[data-model='{GGUF}'][aria-checked='true']").wait_for()
         # a GGUF model runs through transcribe.cpp, so on the demo laptop's Intel graphics
-        self.assertIn("on the graphics card", self.page.locator(".estimate").inner_text())
+        self.assertIn("on this computer's graphics card", self.page.locator(".estimate").inner_text())
         self.assertEqual(self.page.locator(".model-card[data-model='whisper-medium'] .pill:text-is('From Hugging Face')").count(), 0)
 
     def test_download_from_the_card(self):

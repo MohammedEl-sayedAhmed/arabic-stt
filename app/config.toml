@@ -145,7 +145,7 @@ whisper_model = "models/faster-whisper-large-v3"  # gets the Egyptian style hint
 fallback = "large-v3"       # or stock large-v3 from the Hugging Face cache, if it is there
 title = "Whisper large-v3 + hint"
 tagline = "Stock Whisper, slow"
-facts = ["20.8% WER on the public Egyptian set", "English kept: 88%", "Slower than real time here"]
+facts = ["20.8% WER on the public Egyptian set", "English kept: 88%", "Slower than real time on a laptop processor"]
 rtf = 1.8
 prompt = true
 
@@ -366,7 +366,7 @@ kind = "hosted"
 engine = "mistral"
 title = "Mistral Voxtral"
 tagline = "Voxtral Mini Transcribe 2, with speaker labels"
-facts = ["Arabic is one of its 13 languages; not tested here", "Speaker labels; it detects the language itself",
+facts = ["Arabic is one of its 13 languages; not tested by the project", "Speaker labels; it detects the language itself",
          "$0.18/h; free plan limits not published", "May train on your audio unless you opt out"]
 service = "Mistral"
 base_url = "https://api.mistral.ai/v1"

@@ -632,8 +632,12 @@ label.set-row { cursor: pointer; }
 .mc-head .mc-title { margin: 0; }
 .det-model { margin-top: 2px; }
 .logo-tile.plain { color: var(--muted); background: var(--sunken); border-color: var(--border); }
-:root:not([data-theme="dark"]) .logo-tile.plain-light,
-:root[data-theme="dark"] .logo-tile.plain-dark { color: var(--text); background: var(--sunken); border-color: var(--border); }
+/* A logo keeps its own colour in both themes. When that colour is too faint on the page (Hugging Face's
+   yellow or NVIDIA's green on white, ElevenLabs' black on the dark theme), the tile turns the other way:
+   dark behind light logos, light behind dark ones. A colour faint on both gets the text colour. */
+:root:not([data-theme="dark"]) .logo-tile.plain-light:not(.plain-dark) { background: #1d232b; border-color: #1d232b; }
+:root[data-theme="dark"] .logo-tile.plain-dark:not(.plain-light) { background: #f3f5f7; border-color: #f3f5f7; }
+.logo-tile.plain-light.plain-dark { color: var(--text); background: var(--sunken); border-color: var(--border); }
 .job-details .more summary { margin-top: 14px; }
 
 /* ---------- version history, and the review of edits before they are saved ---------- */
