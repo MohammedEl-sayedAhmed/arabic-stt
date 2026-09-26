@@ -2,6 +2,7 @@
 Chromium against a Sedjem server with demo transcripts (see tests/ui_support.py).
 Run: .venv/bin/python -m unittest discover -s tests -p "test_ui*.py" -v
 """
+import os
 import unittest
 
 from ui_support import LINES, UiTestCase
@@ -112,6 +113,7 @@ class TranscriptPage(UiTestCase):
 class SettingsDialog(UiTestCase):
     def test_toasts_show_above_the_open_dialog(self):
         self.open()
+        before = self.api("GET", "/api/status")["json"]["settings"]["threads"]
         self.open_settings("speed")
         threads = self.page.locator("input[data-setting='threads']")
         threads.fill("2")
@@ -124,7 +126,8 @@ class SettingsDialog(UiTestCase):
         state = self.page.evaluate("""() => ({ dialog: document.getElementById('settings').open,
                                               popover: document.getElementById('toasts').matches(':popover-open') })""")
         self.assertEqual(state, {"dialog": True, "popover": True})
-        self.api("POST", "/api/settings", {"threads": 10})
+        # back as it was, within what this machine allows (the default, 10, can be more than a CI runner has)
+        self.api("POST", "/api/settings", {"threads": min(before, os.cpu_count() or 1)})
 
     def test_switches_are_saved(self):
         self.open()

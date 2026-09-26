@@ -1936,6 +1936,12 @@ async function saveKey(id, key, region) {
 }
 
 $$("#settings [data-close]").forEach((b) => (b.onclick = () => $("#settings").close()));
+// What was changed in Settings (a model added or downloaded, a key saved) shows on the page behind at once,
+// without waiting for the next status check.
+$("#settings").addEventListener("close", async () => {
+  await refreshStatus();
+  if (S.route.name === "new") renderNew();
+});
 $("#settingsBtn").onclick = () => openSettings();
 $("#quitBtn").onclick = async () => {
   const active = S.jobs.filter((j) => ACTIVE.has(j.status)).length;

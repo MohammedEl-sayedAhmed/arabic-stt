@@ -89,7 +89,8 @@ class Store:
 
     def list(self):
         jobs = [self.get(p.name) for p in self.root.iterdir() if (p / "job.json").exists()]
-        return sorted((j for j in jobs if j), key=lambda j: j["created"], reverse=True)
+        # newest first; the id (which starts with the time) settles ties, so the order doesn't depend on the folder listing
+        return sorted((j for j in jobs if j), key=lambda j: (j["created"], j["id"]), reverse=True)
 
     def delete(self, jid):
         with self.lock:
