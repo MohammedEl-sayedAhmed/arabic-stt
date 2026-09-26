@@ -1,9 +1,16 @@
 # Results
 
-Everything was measured on one laptop (Intel i5-1245U, CPU only, in the performance power mode
-unless noted) on 24 and 25 September 2026. The generated tables are in
-[results-tables.md](results-tables.md), and the per-clip outputs in `results/*.jsonl`, each with a
-`.meta.json` that records its settings.
+The question is how well each model transcribes Egyptian Arabic–English meetings and calls. The
+evidence comes first from Perle, the public test set closest to those meetings, and from six real
+work meetings; ArzEn's conversations come next, with a caveat about training data. The models that
+were also tried and are not usable for this (R2T2, Qwen3-ASR and Audar) come last in each table.
+
+Everything was measured on 24 and 25 September 2026 on one test laptop: a Lenovo ThinkPad L14 Gen 3
+with a 12th Gen Intel Core i5-1245U (10 cores, 12 threads), 16 GB of RAM and Intel Iris Xe
+integrated graphics, no NVIDIA GPU, running Kubuntu 24.04. The models ran on its CPU in the
+performance power mode unless noted. Speeds on other computers will differ. The generated tables
+are in [results-tables.md](results-tables.md), and the per-clip outputs in `results/*.jsonl`, each
+with a `.meta.json` that records its settings.
 
 ## Method
 
@@ -14,8 +21,8 @@ The public sets were downloaded, never uploaded. The clips used are pinned in `b
 | Set | What | Clips | Notes |
 |---|---|---|---|
 | Perle (`Perle-ai/ASR_Code_Switch`, Egyptian rows) | Egyptian Arabic–English sentences about tech, work and daily life | 40 random (seed 42), 4.3 min, 648 reference words | The closest to the target meetings, and the main public test. Taken from the dataset's only split, *train*, and published in May 2026, so models released later may have trained on it |
-| ArzEn (validation split) | Egyptian Arabic–English conversational interviews | 40 random, 6.5 min (37 contain English words; 3 are Arabic apart from tags like `[HES]`) | Conversational Egyptian. Several Arabic fine-tunes were trained on it (see the caveats) |
 | Real meetings | 10-minute excerpts of 6 real work meetings, with ElevenLabs references | 60 min | The in-domain test, described [below](#real-meetings) |
+| ArzEn (validation split) | Egyptian Arabic–English conversational interviews | 40 random, 6.5 min (37 contain English words; 3 are Arabic apart from tags like `[HES]`) | Conversational Egyptian. Several Arabic fine-tunes were trained on it ([below](#arzen-conversations)) |
 | The test call | a 2-minute 8 kHz call with 2 speakers, no reference | 1 | Judged by reading |
 
 Every public clip was run in three audio conditions: `wav16k` (the original at 16 kHz), `phone`
@@ -60,9 +67,10 @@ Latin letters written together (`الdata` becomes `ال data`); and lowercases.
 | whisper-medium code-switching fine-tune (default) | 18.5% (15–22) | 7.1% | 17.8% | 11% | 90% | 1.08 |
 | Whisper large-v3 + style hint | 20.8% (16–25) | 8.3% | 17.8% | 17% | 88% | 2.15 |
 | Whisper large-v3 *(whole clip)* | 39.7% (34–45) | 29.0% | 15.2% | 76% | 25% | 1.52 |
-| Audar-ASR-V1-Turbo *(whole clip)* | 43.5% (39–49) | 33.2% | 12.9% | 86% | 12% | 0.63 |
-| R2T2 *(whole clip)* | 47.1% (41–52) | 30.1% | 25.1% | 77% | 25% | 0.82 |
-| Qwen3-ASR-1.7B *(whole clip)* | 50.6% (46–55) | 35.0% | 21.8% | 91% | 8% | 0.75 |
+
+![Horizontal bars of the word error rate on the Perle clips at 16 kHz for Cohere, whisper-medium and Whisper large-v3 with the hint, with 95% confidence-interval whiskers, next to bars of the share of English words each kept in Latin script](images/charts/perle-16k.svg)
+
+*The three models Tafrigh runs, from the table: bars are the word error rate, whiskers its 95% confidence interval.*
 
 Paired over the same 40 clips (bootstrap), Cohere minus whisper-medium is −5.1 points (95% CI
 −10.9 to +0.8), and whisper-medium minus large-v3 with the hint is −2.3 (−7.3 to +2.2). With 648
@@ -77,6 +85,21 @@ exactly the same text as on the CPU for all 40 Perle clips, so the same 13.4%, a
 time instead of 0.36 (performance mode). On a 50-second clip in power-saver mode the gap was wider:
 0.14 against 0.60. The Whisper models can't use this GPU: CTranslate2 only runs on NVIDIA GPUs.
 
+![Horizontal bars of processing time divided by audio length on the Perle clips for Cohere on the integrated GPU and on the CPU, whisper-medium and Whisper large-v3, and for the two engines on the meeting excerpts, with a dashed line at real time](images/charts/speed.svg)
+
+*Speed on the test laptop, lower is faster: Cohere on the integrated GPU and on the CPU next to the other two models on the Perle clips, and the meeting excerpts with speaker labels (mean and range).*
+
+### Also tried
+
+These three were measured in the first round, with the whole clip given to the model, and are not
+usable for this: they hear the English words but write most of them in Arabic letters.
+
+| Model | WER (95% CI) | CER | Arabic-word errors | English-word errors | English kept | Speed |
+|---|---|---|---|---|---|---|
+| Audar-ASR-V1-Turbo *(whole clip)* | 43.5% (39–49) | 33.2% | 12.9% | 86% | 12% | 0.63 |
+| R2T2 *(whole clip)* | 47.1% (41–52) | 30.1% | 25.1% | 77% | 25% | 0.82 |
+| Qwen3-ASR-1.7B *(whole clip)* | 50.6% (46–55) | 35.0% | 21.8% | 91% | 8% | 0.75 |
+
 ## Phone audio
 
 | Model | 16 kHz | Through 8 kHz | G.711 telephone | English kept (G.711) |
@@ -84,6 +107,10 @@ time instead of 0.36 (performance mode). On a 50-second clip in power-saver mode
 | Cohere Transcribe Arabic | 13.4% | 14.7% | 15.3% | 72% |
 | whisper-medium code-switching | 18.5% | 17.4% | 18.2% | 87% |
 | Whisper large-v3 + hint | 20.8% | 21.6% | 22.1% | 87% |
+
+![Grouped bars of the word error rate of Cohere, whisper-medium and Whisper large-v3 on the Perle clips at 16 kHz, through 8 kHz and through a G.711 telephone channel](images/charts/phone-audio.svg)
+
+*Each model's three bars are nearly the same length: phone-band audio moves the word error rate by at most about 2 points.*
 
 Phone-band audio and μ-law coding cost these three models at most about 2 WER points, which is
 within the noise. In the whole-clip round, 8 kHz cost 1.2–4.3 points (large-v3 with the hint on
@@ -116,6 +143,10 @@ TitaNet-small relabellings of the same words (`bench/compare_voiceprints.py`).
 | m6 | 5 | 43.3% (41.2%) | 62.0% (60.6%) | 3% / 35% | 37.6% / 38.4% | 12.0% |
 | pooled | | 43.8% (42.1%) | 48.8% (47.3%) | 46% / 57% | 10.9% / 11.7% | 6.5% |
 
+![Paired horizontal bars for each meeting excerpt, m1 to m6 and pooled, of the share of words that differ from ElevenLabs for Cohere and whisper-medium, next to the share of English words each kept in Latin script](images/charts/meetings.svg)
+
+*The strict word error rate against ElevenLabs and the English kept, per excerpt and pooled; the lenient scores and the speaker labels are in the table, and the speaker labels also in [their own chart](04-speaker-labels.md#accuracy-on-real-meetings).*
+
 Pooled values are totals over all excerpts; for English kept, the English words kept in all
 excerpts divided by the English words in all excerpts. The excerpts differ in how much English they
 contain, from 24% of the reference words (m3) down to 6% (m6, which has only 31 English words, so
@@ -135,6 +166,10 @@ still.
 | No speaker labels | 43.1% (41.4%) | 32.7% | 39% | | 0.24 | 3.0 GB |
 | TitaNet-small labels on forced-aligned words (`--align`, experimental) | 43.1% (41.4%) | 32.7% | 39% | 11.9% | 0.43 | 4.8 GB |
 | First voiceprint model (WeSpeaker ResNet34), cut at speaker changes | 47.0% (45.2%) | 42.3% | 45% | 24.6% | 0.29 | 3.0 GB |
+
+![Six small bar charts, one per column of the table, comparing the four Cohere setups: the default, no speaker labels, forced alignment and WeSpeaker voiceprints](images/charts/cohere-variations.svg)
+
+*One small chart per column of the table, with the default in the darker teal; without speaker labels there is no wrong-speaker figure.*
 
 Cutting the audio at speaker changes costs Cohere under a point of WER and raises its errors on
 Arabic words, but on these meetings it kept more English terms in Latin script that way (46% against
@@ -171,6 +206,23 @@ for whisper-medium, against 5.9% for ElevenLabs' raw labels. Over all six, Eleve
 differ from the hand corrections on 6.5% of words, and that comparison favours ElevenLabs, since the
 corrections started from its labels.
 
+## ArzEn conversations
+
+ArzEn's clips are interviews in Egyptian Arabic with English mixed in, closer to a conversation than
+Perle's sentences. The two leading models were almost certainly trained on it, so these numbers
+flatter them: both score far better here than on Perle, while stock Whisper large-v3 with the hint
+goes the other way (see [the caveats](#caveats)).
+
+| Model | WER (95% CI) | CER | Arabic-word errors | English-word errors | English kept | Speed |
+|---|---|---|---|---|---|---|
+| Cohere Transcribe Arabic (Q4, transcribe.cpp) | 6.7% (4–10) | 3.0% | 5.3% | 3% | 96% | 0.31 |
+| whisper-medium code-switching fine-tune (default) | 10.8% (8–13) | 4.7% | 9.0% | 8% | 95% | 0.70 |
+| Whisper large-v3 + style hint | 35.7% (31–41) | 20.2% | 30.2% | 47% | 55% | 1.41 |
+
+Also tried, with the whole clip: Audar at 18.9%, which was almost certainly trained on ArzEn too,
+and Qwen3-ASR and R2T2 at 43.2% and 43.9% at their best settings. Every row is in
+[the result tables](results-tables.md).
+
 ## The test call
 
 The 2-minute call has no reference transcript, so the outputs were read side by side. The files are
@@ -205,25 +257,28 @@ A 16-minute call with 2 speakers:
 
 ## What the numbers say
 
-1. R2T2 is not a fit, and that is now measured rather than inferred from its training data. It is
-   one of the two least accurate models on every test: 47.1% on Perle; 43.9% at its best ArzEn
-   setting, just behind its base model's best of 43.2%; and clearly the worst on the call. It is no
-   better than Qwen3-ASR on Arabic, much worse when left to detect the language (60.1% on ArzEn),
-   writes most English terms in Arabic letters, and the context hint does not help it.
-2. The Arabic-specialised models win by a wide margin. Cohere Transcribe Arabic has the lowest WER,
+1. The Arabic-specialised models win by a wide margin. Cohere Transcribe Arabic has the lowest WER,
    on the public set and on the meetings, by far the fewest errors on Arabic words, and runs about
-   3–4 times faster than real time on this CPU. The whisper-medium fine-tune keeps English terms in
-   English best: 90% on Perle and 57% on the meetings, against Cohere's 77% and 46%.
-3. On real meetings both remain far from ElevenLabs (44–49% of words differ), while their speaker
+   3–4 times faster than real time on the test laptop's CPU. The whisper-medium fine-tune keeps
+   English terms in English best: 90% on Perle and 57% on the meetings, against Cohere's 77% and
+   46%.
+2. On real meetings both remain far from ElevenLabs (44–49% of words differ), while their speaker
    labels come within a few points of ElevenLabs' own on meetings of two or three people (8–9% of
    words on the wrong person against 6%, pooled).
-4. Keeping English in Latin letters is what separates the models. The Qwen3-ASR family (R2T2,
-   Qwen3-ASR and Audar) hears the English words but, on Perle, spells them in Arabic letters. Audar
-   has good Arabic (12.9% errors) but keeps only 12% of English words in Latin script.
-5. A one-sentence style hint fixes stock Whisper large-v3: 39.7% to 22.4% on Perle and 47.4% to
+3. A one-sentence style hint fixes stock Whisper large-v3: 39.7% to 22.4% on Perle and 47.4% to
    33.7% on ArzEn (whole clip, without and with the hint; `results/summary.json`, config
    `ar-prompt-clip`). With the current pipeline it scores 20.8% and 35.7%. That helps where only
    stock Whisper is available, for example hosted Whisper on Groq.
+4. Keeping English in Latin letters is what separates the models. The Qwen3-ASR family that was
+   also tried (R2T2, Qwen3-ASR and Audar) hears the English words but, on Perle, spells them in
+   Arabic letters. Audar has good Arabic (12.9% errors) but keeps only 12% of English words in Latin
+   script.
+5. R2T2, where the project started, is not a fit, and that is now measured rather than inferred
+   from its training data. It is one of the two least accurate models on every test: 47.1% on
+   Perle; 43.9% at its best ArzEn setting, just behind its base model's best of 43.2%; and clearly
+   the worst on the call. It is no better than Qwen3-ASR on Arabic, much worse when left to detect
+   the language (60.1% on ArzEn), writes most English terms in Arabic letters, and the context hint
+   does not help it.
 
 ## Caveats
 
@@ -236,11 +291,12 @@ A 16-minute call with 2 speakers:
   are not.
 - Small samples. With 40 clips per set, differences under about 5 points are mostly within the
   confidence intervals.
-- Speed varies with whatever else the laptop is doing, and power-saver mode is several times
+- Speed varies with whatever else the test laptop is doing, and power-saver mode is several times
   slower. Whisper large-v3's first run on the call (no hint, no speaker labels) took 6.4 times real
   time in power-saver mode, while later performance-mode runs with the hint and speaker labels,
   which is more work, took 1.4–2.4 times. That puts the slowdown at roughly 3–5 times, from a single
   run with different settings.
 - The models were quantized (Q4, Q8, int8). Full-precision versions may be slightly better.
 - ElevenLabs' published 13.1% (Perle paper, Egyptian subset) uses different clips and
-  normalization, so it can't be compared directly with the local numbers here.
+  normalization, so it can't be compared directly with the local models' numbers in the project's
+  tests.

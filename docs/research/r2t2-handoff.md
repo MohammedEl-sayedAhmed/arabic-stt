@@ -1,5 +1,7 @@
 # Handoff: can R2T2 transcribe Arabic + English meetings?
 
+This is the note the project started from, kept as a historical record; the conclusions for the use case are in [the results](../03-results.md) and [the recommendation](../07-recommendation.md).
+
 Written 2026-09-24 by Claude. The previous session stopped at the usage limit, partway through a hands-on test.
 
 ## The question

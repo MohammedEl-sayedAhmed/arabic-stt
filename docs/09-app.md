@@ -1,6 +1,6 @@
 # The app: Tafrigh (تفريغ)
 
-Tafrigh is a local web app for everyday use of the models tested here. You drop in a recording and
+Tafrigh is a local web app for everyday use of the models the project tested. You drop in a recording and
 pick a model, and you get a transcript with speaker labels that you can play back, search, correct
 and export.
 
@@ -54,7 +54,7 @@ All model settings live in [`app/config.toml`](../app/config.toml). Each `[[mode
 |---|---|---|---|
 | whisper-medium code-switching (default) | local | keeping English terms in English (90% on the public set, 57% on the test meetings) | `whisper_model` folder; accepts a vocabulary hint |
 | Cohere Transcribe Arabic | local | Arabic-heavy meetings; the fewest Arabic-word errors; the fastest (about 0.3× real time) | `cohere_model` GGUF path |
-| Whisper large-v3 + hint | local | stock Whisper (slow on this laptop) | `whisper_model = "large-v3"`; gets the Egyptian style hint, and your terms are added to it |
+| Whisper large-v3 + hint | local | stock Whisper (slow on the test laptop) | `whisper_model = "large-v3"`; gets the Egyptian style hint, and your terms are added to it |
 | ElevenLabs Scribe | hosted | minutes people rely on; the best published result for Egyptian–English | `api_model = "scribe_v2"`, `tag_audio_events`, `delete_after`, API key |
 | Speechmatics | hosted | its Arabic–English bilingual pack (`ar_en`); doesn't train on your audio | `language`, `api_model` (enhanced or standard), `speaker_sensitivity`, `base_url` region, `delete_after`, API key |
 

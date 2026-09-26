@@ -112,7 +112,7 @@ for you…"* in 16 s.
 ## What changed to make it cross-platform
 
 - No ffmpeg program is needed. Recordings are converted with PyAV, using the FFmpeg libraries that
-  faster-whisper already ships, which takes about 7 s for 30 minutes of audio here.
+  faster-whisper already ships, which takes about 7 s for 30 minutes of audio on the test laptop.
 - Model runs start in their own process group on Linux, or with `CREATE_NO_WINDOW` on Windows, and
   are stopped the right way on each, so *Cancel* works on both.
 - Text files are UTF-8 everywhere, including the model process's output. Windows would otherwise use
@@ -148,7 +148,7 @@ hand.
 - Code signing. Unsigned installers trigger a Windows SmartScreen warning ("Windows protected your
   PC"; choose *More info*, then *Run anyway*).
 - Updates. There is no auto-update; install a new version over the old one.
-- macOS. pywebview and PyInstaller support it, but it hasn't been built or tested here.
+- macOS. pywebview and PyInstaller support it, but it hasn't been built or tested by the project.
 - Linux packages. There is no AppImage or .deb yet.
 - Windows before 10 may lack WebView2, and the installer doesn't bundle its bootstrapper; Tafrigh
   then opens in a browser window.

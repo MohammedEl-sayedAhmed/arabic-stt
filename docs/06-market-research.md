@@ -67,8 +67,8 @@ covered 19 hosted services. It agrees with the picks above and adds a few points
 
 The evidence on ElevenLabs conflicts. On GigaSpeechBench (arXiv 2606.28884; recordings from the
 wild, one language per clip), Scribe v2 ranks near the bottom for Saudi Arabic, with 33.3 WER
-against 16.8 for Google Chirp 3. Its lead is specifically on code-switched speech, which is the
-case here, but a test on your own audio should decide. The API pricing page lists ElevenLabs' free
+against 16.8 for Google Chirp 3. Its lead is specifically on code-switched speech, which is what
+these meetings are, but a test on your own audio should decide. The API pricing page lists ElevenLabs' free
 API tier as 4 h 30 min a month.
 
 There are newer or cheaper options. OpenAI's `gpt-transcribe` costs $0.27/h, takes several language

@@ -1,6 +1,6 @@
 # Speaker labels
 
-None of the speech-to-text models tested here label speakers, so telling speakers apart
+None of the speech-to-text models in the project's tests label speakers, so telling speakers apart
 (diarization) is a separate step that runs locally, in `speakers.py`.
 
 ## How it works
@@ -61,6 +61,10 @@ relabels the same Whisper words with each voiceprint model, so only the speaker 
 | WeSpeaker ResNet34 (the first default) | 26 MB | 25.7% | 22.9% | 2 of 6 |
 | WeSpeaker ResNet152 | 79 MB | 36.9% | 29.9% | 3 of 6 |
 
+![Paired horizontal bars of the share of words given to the wrong speaker by five voiceprint models, with the true number of speakers given and with it estimated, and a column counting how often the estimate was right](images/charts/voiceprints.svg)
+
+*Words credited to the wrong person with each voiceprint model, given the true number of speakers or estimating it; the right column counts the excerpts where the estimate was right.*
+
 Per excerpt with TitaNet-small and the true count: 4.6% (2 people), 7.8%, 10.4% and 2.6% (3 people
 each), 16.5% (2 people) and 38.4% (5 people).
 
@@ -69,6 +73,10 @@ over the same stretches, and on 5.9% over the five 2–3-person excerpts, where 
 9.0%. That comparison favours ElevenLabs, since the corrections started from its labels. With
 TitaNet, the local labels come within a few points of ElevenLabs on meetings of two or three
 people, and remain weak on larger meetings.
+
+![Paired horizontal bars for each meeting excerpt, m1 to m6, and two pooled rows, of the share of words given to the wrong speaker by TitaNet-small with the true number of speakers and by ElevenLabs' own labels](images/charts/speakers-per-excerpt.svg)
+
+*Per excerpt, TitaNet-small against ElevenLabs' raw labels, both scored against the hand corrections; the ElevenLabs figures per excerpt are in [the results](03-results.md#real-meetings).*
 
 The two voiceprint families trained on VoxCeleb (celebrity interviews) do worst, and the models
 trained with telephone and large multi-speaker data (TitaNet, 3D-Speaker) do best, as the research
@@ -124,7 +132,7 @@ its start, end and speaker, so speaker models can be compared without transcribi
 - The reference labels used for scoring were corrected by hand from ElevenLabs output and are not
   perfect either, especially for short interjections.
 
-## Known upgrades, not tested here
+## Known upgrades, not tested by the project
 
 - pyannote `speaker-diarization-community-1` with `num_speakers`: 26.7% DER on CALLHOME (no
   collar). It needs PyTorch (the CPU build is about 184 MB) and a free Hugging Face token.

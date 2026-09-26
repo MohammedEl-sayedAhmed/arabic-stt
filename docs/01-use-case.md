@@ -9,7 +9,7 @@ The transcript needs timestamps and a label for who is speaking (Speaker 1, Spea
 with speakers told apart by their voices rather than by time slices. This was for personal trials,
 not a commercial product, so it had to be free to try. The recordings are private meetings, so no
 audio was to be uploaded to any outside service without explicit permission. Everything in this
-project ran on the laptop.
+project ran on the test laptop.
 
 ## The test audio
 

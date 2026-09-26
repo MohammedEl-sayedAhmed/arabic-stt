@@ -24,8 +24,8 @@
 
 Egyptian tech teams talk in Arabic sentences full of English words: *deadline*, *sprint*,
 *merge request*. Many speech-to-text models handle this badly. Some write the English words in
-Arabic letters (R2T2 kept only a quarter of them in Latin script, its base model Qwen3-ASR under a
-tenth), others turn Egyptian speech into formal Arabic. Tafrigh (Arabic for writing out a recording) runs models
+Arabic letters (on the Egyptian test set, several kept only 8–25% of them in Latin script), others
+turn Egyptian speech into formal Arabic. Tafrigh (Arabic for writing out a recording) runs models
 that were measured to do better, labels who said what by listening to their voices, and keeps the
 recording on your machine unless you choose a hosted service.
 
@@ -53,11 +53,16 @@ recording on your machine unless you choose a hosted service.
 | ElevenLabs Scribe v2 | ElevenLabs | 13.1% (published) | not measured | not measured |
 | Speechmatics, Arabic–English pack | Speechmatics | not measured | not measured | not measured |
 
+![Bar charts of the word error rate and of the English terms kept in English for Cohere Transcribe Arabic, whisper-medium and Whisper large-v3 with the style hint](docs/images/charts/models.svg)
+
+*The three local models from the table: Cohere makes the fewest errors, whisper-medium keeps the most English terms in English.*
+
 The test set is 40 Egyptian Arabic–English clips from the public
 [Perle](https://huggingface.co/datasets/Perle-ai/ASR_Code_Switch) benchmark. Times were measured on
-a laptop with an Intel Core i5-1245U and no GPU. ElevenLabs' figure comes from
+the project's test laptop, with an Intel Core i5-1245U and no NVIDIA GPU (details in
+[the results](docs/03-results.md)); other computers will differ. ElevenLabs' figure comes from
 [Perle's paper](https://arxiv.org/abs/2605.19069), on its own clips, so it can't be compared
-directly with ours.
+directly with the project's.
 
 Real meetings are much harder than the benchmark. On an hour of real work meetings with two to five
 people, the local models' text differed from ElevenLabs' transcripts on 44% (Cohere) and 49%
@@ -149,11 +154,11 @@ and speeds are in [the command-line notes](docs/05-command-line.md).
 
 ## Background
 
-This started as a narrow question: could R2T2, a new open speech model from NetEase Youdao, replace
-ElevenLabs Scribe for these meetings? Measured on Egyptian speech, it could not. It ran on a CPU, but
-its word error rate on the Perle clips was 47.1% and it wrote most English terms in Arabic letters. The
-search for something better turned up the models Tafrigh uses now. The [project notes](docs/README.md)
-have the whole story:
+Tafrigh came out of a search for speech-to-text models that handle Egyptian Arabic–English meetings
+on an ordinary laptop. Open models were measured on public Egyptian code-switching test sets and on
+real work meetings, and Tafrigh runs the ones that did best. R2T2, the model the search started from,
+was tried first and is not usable for this: it wrote most English terms in Arabic letters. The
+[project notes](docs/README.md) have the whole story:
 
 | | |
 |---|---|

@@ -157,18 +157,22 @@ This was tested with torch 2.14.0 (CPU build), transformers 5.17.0, uroman 1.3.1
 ctc-forced-aligner 0.3.0 at the commit above, on Linux only. The output files get `-aligned` in their
 names, so they sit next to a normal run instead of replacing it.
 
-## Speed and memory on this laptop (performance power mode)
+## Speed and memory on the test laptop (performance power mode)
 
 | Model | Measured | Processing time per minute of audio |
 |---|---|---|
 | Cohere Transcribe Arabic + speaker labels | six 10-minute meeting excerpts: 0.15–0.32× real time (mean 0.26×); the 16-minute call 0.37× (first voiceprint model); 3.0–3.1 GB peak | about 0.3 min |
 | whisper-medium fine-tune + speaker labels | six 10-minute meeting excerpts: 0.30–0.79× real time (mean 0.53×); the 2-minute call 0.57× plain and 0.59× with labels; 2.1–3.3 GB peak. Before the review fixes the 16-minute call ran at 1.80× | about 0.5–0.8 min |
 | Whisper large-v3 + hint | Perle clips 1.4–2.2× (short clips, no speaker labels) | about 1.5–2 min |
-| Qwen3-ASR, R2T2, Audar (llama.cpp, no speaker labels) | Perle clips 0.6–0.8×; the 2-minute call 1.4–1.8× in power-saver mode | about 0.6–0.8 min |
+| Also tried: Qwen3-ASR, R2T2, Audar (llama.cpp, no speaker labels) | Perle clips 0.6–0.8×; the 2-minute call 1.4–1.8× in power-saver mode | about 0.6–0.8 min |
+
+![Horizontal bars of processing time divided by audio length on the Perle clips for Cohere on the integrated GPU and on the CPU, whisper-medium and Whisper large-v3, and for the two engines on the meeting excerpts, with a dashed line at real time](images/charts/speed.svg)
+
+*Processing time divided by audio length on the test laptop: the short Perle clips per model, and the meeting excerpts with speaker labels (mean and range).*
 
 Meeting and call speeds count the whole recording, pauses included. On short clips the fixed cost
 per chunk weighs more (whisper-medium ran at 1.08× on Perle). An 80-minute call therefore takes
-roughly 25 minutes with Cohere and 40–60 minutes with the default on this CPU, and several times
+roughly 25 minutes with Cohere and 40–60 minutes with the default on the test laptop's CPU, and several times
 longer in power-saver mode (Whisper large-v3 ran at 6.4× real time in power-saver mode against
 1.4–2.4× in performance mode, on runs with different settings). A GPU or a hosted service would
 bring that down to minutes.
@@ -179,6 +183,7 @@ bring that down to minutes.
 .venv/bin/python bench/prepare_data.py perle arzen            # public test sets into data/ (pinned samples)
 SET=perle sh bench/run_configs.sh cohere:wav16k:ar whisper:g711:ar large-v3:phone:ar
 .venv/bin/python bench/score.py --tables docs/results-tables.md
+.venv/bin/python docs/charts.py                                  # redraws the charts in the docs
 .venv/bin/python bench/score.py --compare results/A.jsonl results/B.jsonl   # paired WER difference
 ```
 

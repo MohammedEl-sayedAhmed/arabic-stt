@@ -32,7 +32,7 @@
   - Audar Turbo averages **23.17** and Cohere-Arabic **25.87**, against **36.86** for Whisper-v3 ([app.py](https://huggingface.co/spaces/elmresearchcenter/open_universal_arabic_asr_leaderboard/raw/main/app.py)).
   - Cohere reports its own numbers of Egyptian 19.16 and AR-EN code-switching 27.84, against 28.25 and 36.90 for Whisper-v3. It says English stays in Latin script ([blog](https://huggingface.co/blog/CohereLabs/cohere-transcribe-arabic-07-2026-release)).
   - Both have small GGUF downloads.
-- **Cost:** free, and no audio leaves the laptop.
+- **Cost:** free, and no audio leaves your computer.
 - **Risks:**
   - Neither model outputs timestamps, so you must diarize first and transcribe each speaker turn.
   - Cohere's own model card says it "exhibits inconsistent performance on code-switched audio".

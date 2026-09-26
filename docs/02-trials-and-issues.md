@@ -1,5 +1,9 @@
 # Trials and issues
 
+This log starts from the project's first question, whether R2T2 could replace ElevenLabs Scribe; the
+conclusions for the real use case, Egyptian Arabic–English meetings and calls, are in
+[the results](03-results.md) and [the recommendation](07-recommendation.md).
+
 Every experiment in the order it was run, on 24 and 25 September 2026, with what went wrong and what
 was done about it. Numbers are word error rates (WER, lower is better) unless stated otherwise. Full
 tables are in [the results](03-results.md), and [the method](03-results.md#method) explains how they
@@ -10,7 +14,7 @@ were measured.
 1. Review of the handoff note. Its verdict rested mainly on one argument, that R2T2 had no Arabic
    in its training data, and the claim that it needs a GPU had not been checked. The plan was to run
    it on a CPU with llama.cpp and measure.
-2. The laptop. The disk was full (1.5 GB free), there was no NVIDIA GPU, and 4–8 GB of RAM was free.
+2. The test laptop. The disk was full (1.5 GB free), there was no NVIDIA GPU, and 4–8 GB of RAM was free.
    Clearing a package-manager download cache brought the disk to 18 GB free.
 3. Model downloads (R2T2 and Qwen3-ASR, 4.7 GB). The network gave only about 1.2–1.7 MB/s, `curl`
    failed with an HTTP/2 stream CANCEL error, and Hugging Face's `hf_xet` downloader stalled at 0
@@ -172,8 +176,8 @@ were measured.
     non-commercial (CC-BY-NC-4.0). It stays an experimental option (`transcribe.py --align`), not the
     default.
 
-38. The graphics card. transcribe.cpp ships a Vulkan backend, and it found the laptop's integrated Iris
-    Xe. Cohere ran there at 0.15 times real time instead of 0.36 on the Perle clips, with the same text
+38. The graphics card. transcribe.cpp ships a Vulkan backend, and it found the test laptop's
+    integrated Iris Xe. Cohere ran there at 0.15 times real time instead of 0.36 on the Perle clips, with the same text
     for all 40 clips. The app now uses a graphics card when one works: Cohere through Vulkan on any GPU,
     a discrete one first; Whisper on NVIDIA GPUs through CUDA, after a download of NVIDIA's cuBLAS
     (about 600 MB, unpacked from NVIDIA's pip packages). Each is checked on a second of silence, any GPU
