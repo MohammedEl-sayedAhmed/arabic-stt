@@ -60,6 +60,7 @@ const ICON = {
   down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
   chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="m6 9 6 6 6-6"/></svg>',
   bolt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
+  layers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg>',
   gpu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="9" cy="12" r="2.5"/><circle cx="16" cy="12" r="2.5"/><path d="M6 18v2M18 18v2"/></svg>',
   folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
   external: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
@@ -138,7 +139,7 @@ const S = {
 const ACTIVE = new Set(["preparing", "queued", "running"]);
 const model = (id) => (S.status?.models || []).find((m) => m.id === id);
 const spkColor = (sid) => (sid ? `var(--s${((parseInt(sid, 10) - 1) % 8 + 8) % 8 + 1})` : "var(--faint)");
-const spkName = (sid) => (sid == null ? "" : (S.job?.speaker_names || {})[sid] || `Speaker ${sid}`);
+const spkName = (sid) => (sid == null ? "" : shownNames()[sid] || `Speaker ${sid}`);
 // Inside the desktop app's native window: open/save dialogs and the system browser for links.
 const desktopApi = () => (window.pywebview && window.pywebview.api) || null;
 // A line's direction from its mix of scripts rather than its first letter: Egyptian speech often opens
@@ -186,7 +187,8 @@ function downloadBlock(id, d, compact = false) {
   const left = Math.max(0, d.missing - d.partial);
   const error = d.state === "error" ? `<div class="mc-missing">${esc(d.error || "The download failed")}</div>` : "";
   if (d.installed) return compact ? "" : `<span class="pill ok">Downloaded · ${bytes(d.size)}</span>`;
-  return `${error}<button type="button" class="btn btn-sm btn-primary" data-dl="${esc(id)}">${ICON.download} ${d.partial ? "Resume" : "Download"} (${bytes(left)})</button>`;
+  const convert = !left && model(id)?.hub?.kind === "transformers";  // downloaded, not converted yet
+  return `${error}<button type="button" class="btn btn-sm btn-primary" data-dl="${esc(id)}">${ICON.download} ${convert ? "Convert" : `${d.partial ? "Resume" : "Download"} (${bytes(left)})`}</button>`;
 }
 
 async function startDownload(id) {
@@ -288,6 +290,7 @@ function estimateText(m, seconds, short = false) {
 
 function speakerHint(m, speakers) {
   if (speakers === "none") return "One block of text with timestamps, no names.";
+  if (m?.speakers_hint) return esc(m.speakers_hint);
   if (m?.id === "speechmatics") return "Speechmatics works out the number of speakers itself; any choice here other than No labels turns labels on.";
   if (m?.id === "elevenlabs" && speakers !== "auto") return "ElevenLabs treats the number as the most speakers to find.";
   return "Labels Speaker 1, Speaker 2… by voice. Give the real number of people if you know it; auto-detect works well for larger meetings.";
@@ -296,11 +299,14 @@ function speakerHint(m, speakers) {
 function modelCard(m) {
   const f = S.form, sel = f.model === m.id;
   const badges = m.kind === "local"
-    ? `<span class="pill accent">${ICON.laptop} On this computer</span>`
+    ? `<span class="pill accent">${ICON.laptop} On this computer</span>${m.hub ? '<span class="pill">From Hugging Face</span>' : ""}`
     : `<span class="pill cloud">${ICON.cloud} Uploads to ${esc(m.service)}</span>`;
   let state = "";
   if (!m.ready && m.kind === "hosted") state = `<span class="mc-missing">Needs an API key — <button type="button" class="linkish" data-open-settings="${esc(m.id)}">add it</button></span>`;
-  else if (!m.ready && m.download) state = `<span class="mc-missing">Not downloaded yet</span>${downloadBlock(m.id, m.download)}`;
+  else if (!m.ready && m.download) {
+    const unconverted = m.hub?.kind === "transformers" && !m.download.missing;  // downloaded; the conversion is still to do
+    state = `<span class="mc-missing">${unconverted ? "Downloaded, not converted yet" : "Not downloaded yet"}</span>${downloadBlock(m.id, m.download)}`;
+  }
   else if (!m.ready) state = `<span class="mc-missing">${esc(m.reason)}</span>`;
   const foot = m.ready ? `<div class="mc-foot">${estimateText(m, f.seconds, true)}</div>` : `<div class="mc-foot">${state}</div>`;
   return `<div class="model-card${m.ready ? "" : " unavailable"}" role="radio" tabindex="0" aria-checked="${sel && m.ready}" data-model="${esc(m.id)}">
@@ -376,7 +382,7 @@ function renderNew() {
     ${m?.prompt ? `<div class="field">
       <label for="promptInput">Vocabulary <span class="opt">optional</span></label>
       <textarea id="promptInput" dir="auto" rows="2" placeholder="Names and terms, comma-separated: Jira, GitHub, backend, deployment">${esc(f.prompt)}</textarea>
-      <p class="hint">${{ elevenlabs: "Sent as key terms (up to 5 words each). ElevenLabs charges about 20% more for requests with key terms.",
+      <p class="hint">${esc(m.prompt_hint) || { elevenlabs: "Sent as key terms (up to 5 words each). ElevenLabs charges about 20% more for requests with key terms.",
         speechmatics: "Sent as custom vocabulary (up to 6 words per term)." }[m.id] || "Given to Whisper as a hint. Plausible but untested; leave empty if unsure."}</p>
     </div>` : ""}
   </div>
@@ -384,7 +390,7 @@ function renderNew() {
   ${hosted && m.ready ? `<div class="card consent">
     ${ICON.cloud}
     <div>
-      <p><b>This model uploads the recording to ${esc(m.service)}.</b> It leaves this computer and is processed on their servers under their terms. ${m.id === "elevenlabs" ? "ElevenLabs may use it for training unless you opted out (Profile → Data use)." : "Speechmatics does not train on it unless you opted in; the app deletes the job there after fetching the transcript."}</p>
+      <p><b>This model uploads the recording to ${esc(m.service)}.</b> It leaves this computer and is processed on their servers under their terms. ${esc(m.privacy) || (m.id === "elevenlabs" ? "ElevenLabs may use it for training unless you opted out (Profile → Data use)." : "Speechmatics does not train on it unless you opted in; the app deletes the job there after fetching the transcript.")}</p>
       <label><input type="checkbox" id="confirmUpload" ${f.confirm ? "checked" : ""}> Upload this recording to ${esc(m.service)}</label>
     </div>
   </div>` : ""}
@@ -609,6 +615,7 @@ function renderJob() {
   <div class="job-head">
     <div class="title-row">
       <h1 class="job-title" id="jobTitle" contenteditable="plaintext-only" spellcheck="false" dir="${mixDir(j.title || "Untitled")}" data-mixdir title="Click to rename">${esc(j.title || "Untitled")}</h1>
+      ${S.version != null ? `<button class="pill accent ver-pill" id="versionPill" title="The current version. Show the history">v${S.version}</button>` : ""}
     </div>
     <div class="meta">${meta}</div>
     <div class="actions">
@@ -616,6 +623,7 @@ function renderJob() {
       <button class="btn" id="copyBtn" ${hasLines ? "" : "disabled"}>${ICON.copy} Copy text</button>
       <div class="menu-wrap"><button class="btn" data-menu="rerunMenu" ${S.hasAudio ? "" : "disabled"}>${ICON.redo} Run again with ${ICON.chevron}</button><div class="menu" id="rerunMenu">${rerunMenu || '<button disabled>No other model is ready</button>'}</div></div>
       <button class="btn${S.editing ? " btn-primary" : ""}" id="editBtn" ${hasLines && !active ? "" : "disabled"}>${ICON.edit} ${S.editing ? "Done editing" : "Edit"}</button>
+      <button class="btn" id="historyBtn" ${S.version != null ? "" : "disabled"}>${HISTORY_ICON} History</button>
       <span class="spacer"></span>
       <button class="btn btn-ghost btn-danger" id="deleteBtn">${ICON.trash} Delete</button>
     </div>
@@ -632,19 +640,11 @@ function renderJob() {
         ${S.hasAudio ? `<label class="toggle"><input type="checkbox" id="followToggle" ${S.follow ? "checked" : ""}> Follow playback</label>` : ""}
       </div>
       <div class="transcript" id="transcript">${renderLines()}</div>
-      ${S.dirty ? `<div class="editbar"><span>Unsaved changes</span><button class="btn btn-sm" id="discardBtn">Discard</button><button class="btn btn-sm btn-primary" id="saveBtn">Save</button></div>` : ""}
+      ${S.dirty ? EDITBAR : ""}
     </div>
     <div class="side-col">
       ${stats.ids.length ? `<div class="panel"><h3>Speakers</h3>${stats.ids.map((sid) => speakerRow(sid, stats)).join("")}</div>` : ""}
-      <div class="panel"><h3>Details</h3><dl class="kv" style="grid-template-columns: 88px 1fr">
-        <dt>Model</dt><dd>${esc(j.model_title || j.model)}</dd>
-        <dt>Language</dt><dd>${esc({ ar: "Arabic + English", en: "English", auto: "Auto-detect" }[opts.language] || opts.language || "")}${j.detected_language ? ` (${esc(j.detected_language)})` : ""}</dd>
-        <dt>Speakers</dt><dd>${esc(opts.speakers === "none" ? "No labels" : opts.speakers === "auto" ? "Auto-detect" : opts.speakers)}</dd>
-        ${j.device ? `<dt>Ran on</dt><dd>${esc(deviceLabel(j.device))}</dd>` : ""}
-        ${opts.prompt ? `<dt>Vocabulary</dt><dd dir="auto">${esc(opts.prompt)}</dd>` : ""}
-        ${j.source_name ? `<dt>File</dt><dd dir="auto">${esc(j.source_name)}</dd>` : ""}
-        ${S.edited ? `<dt>Edited</dt><dd>yes — exports use your edits</dd>` : ""}
-      </dl></div>
+      ${detailsPanel()}
     </div>
   </div>` : ""}`;
   bindJob();
@@ -656,13 +656,91 @@ function speakerRow(sid, stats) {
   const share = stats.total ? stats.talk[sid] / stats.total * 100 : 0;
   const others = stats.ids.filter((x) => x !== sid);
   return `<div class="spk" style="--c:${spkColor(sid)}">
-    <span class="sw"></span><input type="text" dir="auto" data-name="${esc(sid)}" value="${esc((S.job.speaker_names || {})[sid] || "")}" placeholder="Speaker ${esc(sid)}" aria-label="Name for speaker ${esc(sid)}">
+    <span class="sw"></span><input type="text" dir="auto" data-name="${esc(sid)}" value="${esc(shownNames()[sid] || "")}" placeholder="Speaker ${esc(sid)}" aria-label="Name for speaker ${esc(sid)}">
     <div class="share-bar"><i style="width:${share.toFixed(1)}%"></i></div>
     <div class="share"><span>${human(stats.talk[sid])} · ${Math.round(share)}%</span>${others.length ? `<div class="menu-wrap">
       <button type="button" class="merge-btn" data-menu="merge-${esc(sid)}" aria-haspopup="menu" aria-label="Merge ${esc(spkName(sid))} into another speaker" ${ACTIVE.has(S.job.status) ? "disabled" : ""}>Merge into ${ICON.chevron}</button>
       <div class="menu merge-menu" id="merge-${esc(sid)}" role="menu">${others.map((o) => `<button type="button" role="menuitem" data-merge-from="${esc(sid)}" data-merge-into="${esc(o)}"><span class="sw" style="background:${spkColor(o)}"></span>${esc(spkName(o))}</button>`).join("")}</div>
     </div>` : ""}</div>
   </div>`;
+}
+
+// How the transcript was made (recording, model, run, computer), worded by the server (app/report.py).
+// The main lines show; the rest are under More details. Older transcriptions simply have fewer lines.
+// The lines that name hardware or a system get the vendors' logos (brands.js).
+// The Details panel: where and how fast it ran on top, then the recording, the model and the computer,
+// each with the brand's logo where there is one; every value is under "All details" and in Copy details.
+function detailsPanel() {
+  const groups = S.detailGroups || [];
+  if (!groups.length) return "";
+  const d = S.details;
+  const rows = (more) => groups.map((g) => {
+    const list = g.rows.filter((r) => more === null || r.more === more);
+    return list.length ? `<h4>${esc(g.title)}</h4><dl class="kv">${list.map((r) => `<dt>${esc(r.label)}</dt><dd dir="${mixDir(r.value)}">${esc(r.value)}</dd>`).join("")}</dl>` : "";
+  }).join("");
+  const copy = `<button type="button" class="btn btn-sm" id="copyDetails">${ICON.copy} Copy details</button>`;
+  if (!d || !d.run) {  // an older job: the plain list
+    const more = rows(true);
+    return `<div class="panel job-details"><h3>Details</h3>${rows(false)}
+      ${more ? `<details class="more" id="moreDetails"${S.moreDetails ? " open" : ""}><summary>More details</summary>${more}</details>` : ""}${copy}</div>`;
+  }
+  const rec = d.recording || {}, mod = d.model || {}, run = d.run || {}, pc = d.computer || {};
+  const value = (label) => { for (const g of groups) for (const r of g.rows) if (r.label === label) return r.value; return ""; };
+  const [kind, ...rest] = String(run.device || "").split(":");
+  let device, where, fallback;
+  if (mod.kind === "hosted") { device = mod.service || mod.title; where = "Hosted service"; fallback = ICON.cloud; }
+  else if (rest.length) {
+    device = gpuName(rest.join(":").replace(/\s*\((int8_float16|float16)\)\s*$/, ""));
+    where = `Graphics card · ${{ vulkan: "Vulkan", cuda: "CUDA", metal: "Metal", rocm: "ROCm" }[kind] || kind}`;
+    fallback = ICON.gpu;
+  } else { device = gpuName(pc.cpu) || "Processor"; where = kind.startsWith("cpu (") ? "Processor (the graphics card failed)" : "Processor"; fallback = ICON.cpu; }
+  const stats = [
+    run.rtf != null ? [`${Number(run.rtf).toFixed(2)}×`, "real time"] : null,
+    run.seconds != null ? [human(run.seconds), rec.duration ? `for ${clock(rec.duration)}` : "took"] : null,
+    run.peak_memory_mb ? [bytes(run.peak_memory_mb * 1e6), "memory"] : null,
+  ].filter(Boolean);
+  const audio = value("Audio").split(/,\s*/).filter(Boolean);
+  const recChips = [rec.extension && rec.extension.toUpperCase(), ...audio, rec.size && bytes(rec.size)].filter(Boolean);
+  const quant = /(?:^|[-_.])((?:I?Q\d(?:_[A-Z0-9]+)*)|F16|BF16|F32)(?=\.gguf$)/i.exec(mod.file || "");
+  const engine = { cohere: "transcribe.cpp", gguf: "transcribe.cpp", whisper: "faster-whisper", llama: "llama.cpp" }[mod.engine] || mod.service || "";
+  const modChips = [engine, quant && `GGUF ${quant[1].toUpperCase()}`, mod.api_model].filter(Boolean);
+  const chips = (list) => list.length ? `<div class="chips">${list.map((c) => `<span class="chip" dir="auto">${esc(c)}</span>`).join("")}</div>` : "";
+  // a detail of the computer the app looked for but couldn't read says so, rather than being left out or guessed
+  const recorded = !!run.computer_recorded;
+  const found = (text, what, icon, sub) => text ? line(text, icon, sub)
+    : recorded ? `<div class="det-row">${logoTile("", icon, true)}<div class="det-sub">${esc(what)}: not detected</div></div>` : "";
+  const line = (text, icon, sub) => text ? `<div class="det-row">${logoTile(text, icon, true)}<div><div dir="${mixDir(text)}">${esc(text)}</div>${sub ? `<div class="det-sub">${esc(sub)}</div>` : ""}</div></div>` : "";
+  const maker = pc.manufacturer && typeof brandFor === "function" && brandFor(pc.manufacturer)
+    ? BRANDS[brandFor(pc.manufacturer)].title : pc.manufacturer;  // "LENOVO" -> "Lenovo"
+  const machine = [maker, pc.model].filter(Boolean).join(" ");
+  const os = String(pc.os || "").replace(/\s*\(.*\)\s*$/, "");
+  const said = [value("Language"), value("Speakers") && `Speakers: ${value("Speakers")}`].filter(Boolean).join(" · ");
+  return `<div class="panel job-details fancy"><h3>Details</h3>
+    <div class="det-hero">
+      <div class="det-dev">${logoTile(device, fallback)}<div><div class="det-main" dir="${mixDir(device)}">${esc(device)}</div><div class="det-sub">${esc(where)}</div></div></div>
+      ${stats.length ? `<div class="det-stats">${stats.map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("")}</div>` : ""}
+    </div>
+    ${rec.name ? `<section class="det-sec"><h4>${ICON.wave} Recording</h4><div class="det-main" dir="auto">${esc(rec.name)}</div>${chips(recChips)}</section>` : ""}
+    <section class="det-sec"><h4>${ICON.layers} Model</h4><div class="det-main">${esc(mod.title || S.job.model_title || "")}</div>${chips(modChips)}${said ? `<div class="det-sub">${esc(said)}</div>` : ""}</section>
+    ${recorded || machine || pc.cpu ? `<section class="det-sec"><h4>${ICON.laptop} Computer</h4>
+      ${found(machine, "Computer model", ICON.laptop, "")}${found(gpuName(pc.cpu), "Processor", ICON.cpu, pc.threads ? `${pc.threads} threads${pc.ram_gb ? ` · ${Math.round(pc.ram_gb)} GB RAM` : ""}` : "")}${found(os, "System", ICON.laptop, pc.arch || "")}</section>` : ""}
+    <details class="more" id="moreDetails"${S.moreDetails ? " open" : ""}><summary>All details</summary>${rows(null)}</details>
+    ${copy}</div>`;
+}
+
+// A brand's logo on a tinted tile (brands.js), or the given icon when no brand is named in the text.
+function logoTile(text, icon, small = false) {
+  const slug = typeof brandFor === "function" ? brandFor(text) : null;
+  const b = slug && BRANDS[slug];
+  const cls = `logo-tile${small ? " small" : ""}`;
+  if (!b) return `<span class="${cls} plain">${icon}</span>`;
+  const plain = Object.keys(SURFACES).filter((t) => contrast(b.hex, SURFACES[t]) < 3).map((t) => ` plain-${t}`).join("");
+  return `<span class="${cls}${plain}" style="--brand:#${b.hex}" title="${esc(b.title)}"><svg viewBox="0 0 24 24" role="img" aria-label="${esc(b.title)}"><path d="${b.path}"/></svg></span>`;
+}
+
+function detailsText() {
+  const groups = S.detailGroups.map((g) => [g.title, ...g.rows.map((r) => `${r.label}: ${r.value}`)].join("\n"));
+  return [S.job.title || "Untitled", ...groups].join("\n\n") + "\n";
 }
 
 function highlight(text) {
@@ -707,56 +785,28 @@ function renderLines() {
 function bindJob() {
   const j = S.job;
   const title = $("#jobTitle");
-  title.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); title.blur(); } if (e.key === "Escape") { title.textContent = j.title; title.blur(); } };
+  title.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); title.blur(); } if (e.key === "Escape") { title.textContent = drafting() ? S.draft.title : j.title; title.blur(); } };
   title.onblur = async () => {
     const t = title.textContent.trim();
+    if (drafting()) return draftTitle(title, t);  // saved with the other edits, after the review
     if (t && t !== j.title) {
-      try { await api.patch(`/api/jobs/${j.id}`, { title: t }); S.job.title = t; refreshJobs(); } catch (e) { toast(e.message, "error"); }
+      try { const r = await api.patch(`/api/jobs/${j.id}`, { title: t }); S.job.title = t; S.version = r.version; showVersion(); refreshJobs(); } catch (e) { toast(e.message, "error"); }
     } else title.textContent = j.title;
   };
   $$("[data-menu]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); toggleMenu(b.dataset.menu); }));
   $$("[data-rerun]").forEach((b) => (b.onclick = () => rerun(b.dataset.rerun)));
-  $$("#exportMenu a").forEach((a) => (a.onclick = async (e) => {
-    const fmt = a.dataset.fmt, d = desktopApi();
-    if (d && d.save_export) {  // the native window: its own Save dialog
-      e.preventDefault();
-      closeMenus();
-      try { const saved = await d.save_export(j.id, fmt); if (saved) toast(`Saved ${saved}`); } catch (err) { toast(err.message, "error"); }
-      return;
-    }
-    if (!window.showSaveFilePicker) return;  // other browsers: the link downloads the file
-    e.preventDefault();
-    closeMenus();
-    let handle;
-    try {  // ask first, while the click still counts as the user's action
-      const [description, mime] = EXPORT_TYPES[fmt];
-      handle = await window.showSaveFilePicker({ suggestedName: `${fileSlug(j.title)}.${fmt}`, types: [{ description, accept: { [mime]: [`.${fmt}`] } }] });
-    } catch (err) {
-      if (err.name !== "AbortError") location.href = a.href;  // the picker isn't allowed here: download instead
-      return;
-    }
-    try {
-      const r = await fetch(a.href);
-      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      const out = await handle.createWritable();
-      await out.write(await r.blob());
-      await out.close();
-      toast(`Saved ${handle.name}`);
-    } catch (err) { toast(`Could not save: ${err.message}`, "error"); }
-  }));
+  $$("#exportMenu a").forEach((a) => (a.onclick = (e) => saveExport(e, a)));
   const copy = $("#copyBtn");
-  if (copy) copy.onclick = async () => {
-    try {
-      const r = await fetch(`/api/jobs/${j.id}/export/txt`);
-      await navigator.clipboard.writeText(await r.text());
-      toast("Transcript copied");
-    } catch (e) { toast("Could not copy: " + e.message, "error"); }
+  if (copy) copy.onclick = () => copyText();  // the text only; Copy details has the rest
+  $$("#historyBtn, #versionPill").forEach((b) => (b.onclick = openHistory));
+  const copyDetails = $("#copyDetails");
+  if (copyDetails) copyDetails.onclick = async () => {
+    try { await navigator.clipboard.writeText(detailsText()); toast("Details copied"); } catch (e) { toast("Could not copy: " + e.message, "error"); }
   };
+  const moreDetails = $("#moreDetails");
+  if (moreDetails) moreDetails.ontoggle = () => (S.moreDetails = moreDetails.open);  // stays open across re-renders
   const edit = $("#editBtn");
-  if (edit) edit.onclick = () => {
-    if (S.editing && S.dirty && !confirm("Discard your unsaved changes?")) return;
-    S.editing = !S.editing; S.dirty = false; renderJob();
-  };
+  if (edit) edit.onclick = () => (S.editing && S.dirty ? openReview() : startEditing(!S.editing));  // Done: review first
   const cancel = $("#cancelBtn");
   if (cancel) cancel.onclick = async () => {
     if (!confirm("Stop this transcription?")) return;
@@ -768,8 +818,9 @@ function bindJob() {
   };
   $$("[data-name]").forEach((inp) => {
     const save = async () => {
+      if (drafting()) return draftName(inp);  // saved with the other edits, after the review
       const names = { ...(S.job.speaker_names || {}), [inp.dataset.name]: inp.value.trim() };
-      try { const r = await api.patch(`/api/jobs/${j.id}`, { speaker_names: names }); applyJob(r); renderTranscriptOnly(); } catch (e) { toast(e.message, "error"); }
+      try { const r = await api.patch(`/api/jobs/${j.id}`, { speaker_names: names }); applyJob(r); renderTranscriptOnly(); showVersion(); } catch (e) { toast(e.message, "error"); }
     };
     inp.onchange = save;
     inp.onkeydown = (e) => e.key === "Enter" && inp.blur();
@@ -778,6 +829,7 @@ function bindJob() {
     const from = b.dataset.mergeFrom, into = b.dataset.mergeInto;
     closeMenus();
     if (!confirm(`Merge ${spkName(from)} into ${spkName(into)}? All their lines move over.`)) return;
+    if (drafting()) return draftMerge(from, into);  // part of the edits, saved after the review
     try { const r = await api.patch(`/api/jobs/${j.id}`, { merge: { from, into } }); applyJob(r); renderJob(); toast("Speakers merged"); } catch (e) { toast(e.message, "error"); }
   }));
   const search = $("#lineSearch");
@@ -790,10 +842,7 @@ function bindJob() {
   const follow = $("#followToggle");
   if (follow) follow.onchange = () => (S.follow = follow.checked);
   bindTranscript();
-  const save = $("#saveBtn");
-  if (save) save.onclick = saveEdits;
-  const discard = $("#discardBtn");
-  if (discard) discard.onclick = () => { S.dirty = false; renderJob(); };
+  bindEditbar();
 }
 
 function bindTranscript() {
@@ -822,26 +871,8 @@ function markDirty() {
   if (S.dirty) return;
   S.dirty = true;
   const col = $("#transcript").parentElement;
-  col.insertAdjacentHTML("beforeend", `<div class="editbar"><span>Unsaved changes</span><button class="btn btn-sm" id="discardBtn">Discard</button><button class="btn btn-sm btn-primary" id="saveBtn">Save</button></div>`);
-  $("#saveBtn").onclick = saveEdits;
-  $("#discardBtn").onclick = () => { S.dirty = false; renderJob(); };
-}
-
-async function saveEdits() {
-  const lines = S.lines.map((x, i) => {
-    const el = $(`.line[data-i="${i}"]`);
-    if (!el) return x;
-    const text = el.querySelector(".text").innerText.replace(/\s+/g, " ").trim();
-    const sel = el.querySelector("select[data-line]");
-    return { ...x, text, speaker: sel ? sel.value || null : x.speaker };
-  });
-  try {
-    const r = await api.patch(`/api/jobs/${S.job.id}`, { lines });
-    S.dirty = false;
-    applyJob(r);
-    renderJob();
-    toast("Saved");
-  } catch (e) { toast(e.message, "error"); }
+  col.insertAdjacentHTML("beforeend", EDITBAR);
+  bindEditbar();
 }
 
 async function rerun(modelId) {
@@ -895,6 +926,9 @@ function applyJob(r) {
   S.partial = r.partial;
   S.hasAudio = r.has_audio;
   S.log = r.log || "";
+  S.detailGroups = r.detail_groups || [];
+  S.details = r.details || null;
+  S.version = r.version ?? null;  // the current version in the history (app/history.py)
 }
 
 async function loadJob(id) {
@@ -942,6 +976,334 @@ function startJobPoll(id) {
 function stopJobPoll() {
   clearInterval(S.jobPoll);
   S.jobPoll = null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Export and copy, of the current version or of one picked in History
+// ---------------------------------------------------------------------------------------------
+// The native window's own Save dialog, the file picker in Chrome and Edge, or else the link's download.
+async function saveExport(e, a, version) {
+  const j = S.job, fmt = a.dataset.fmt, d = desktopApi();
+  if (d && d.save_export) {
+    e.preventDefault();
+    closeMenus();
+    try { const saved = await d.save_export(j.id, fmt, version ?? null); if (saved) toast(`Saved ${saved}`); } catch (err) { toast(err.message, "error"); }
+    return;
+  }
+  if (!window.showSaveFilePicker) return;
+  e.preventDefault();
+  closeMenus();
+  let handle;
+  try {  // ask first, while the click still counts as the user's action
+    const [description, mime] = EXPORT_TYPES[fmt];
+    handle = await window.showSaveFilePicker({ suggestedName: `${fileSlug(j.title)}${version == null ? "" : `-v${version}`}.${fmt}`, types: [{ description, accept: { [mime]: [`.${fmt}`] } }] });
+  } catch (err) {
+    if (err.name !== "AbortError") location.href = a.href;  // the picker isn't allowed here: download instead
+    return;
+  }
+  try {
+    const r = await fetch(a.href);
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    const out = await handle.createWritable();
+    await out.write(await r.blob());
+    await out.close();
+    toast(`Saved ${handle.name}`);
+  } catch (err) { toast(`Could not save: ${err.message}`, "error"); }
+}
+
+async function copyText(version) {
+  try {
+    const r = await fetch(`/api/jobs/${S.job.id}/export/txt?details=0${version == null ? "" : `&version=${version}`}`);
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    await navigator.clipboard.writeText(await r.text());
+    toast(version == null ? "Transcript copied" : `Version ${version} copied`);
+  } catch (e) { toast("Could not copy: " + e.message, "error"); }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Versions (app/history.py). Version 1 is the model's output. The edits of one session in edit mode
+// are reviewed as a diff and saved as one version; quick changes outside edit mode are saved at once.
+// ---------------------------------------------------------------------------------------------
+const HISTORY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>';
+const CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+const KIND_LABEL = { "model output": "Model output", edit: "Edit", rename: "Rename", merge: "Merge", restore: "Restore" };
+const EDITBAR = `<div class="editbar"><span>Unsaved changes</span><button class="btn btn-sm" id="discardBtn">Discard</button><button class="btn btn-sm btn-primary" id="saveBtn">Review and save</button></div>`;
+const HIST = { jid: null, versions: [], view: null, editing: null };  // the History dialog
+const REVIEW = { draft: null };  // the edits being reviewed before they are saved
+const latestVersion = () => (HIST.versions.length ? HIST.versions[HIST.versions.length - 1].n : -1);  // (0: the model's output)
+const drafting = () => S.editing && S.draft;
+const diffName = (names, sid) => (sid == null ? "No speaker" : (names || {})[sid] || `Speaker ${sid}`);
+
+// Speaker names as shown: while editing, with the renames made in this session.
+function shownNames() {
+  return (drafting() ? S.draft.names : S.job?.speaker_names) || {};
+}
+
+function startEditing(on) {
+  Object.assign(S, { editing: on, dirty: false, draft: on ? { names: { ...(S.job.speaker_names || {}) }, title: S.job.title } : null });
+  renderJob();
+}
+
+function bindEditbar() {
+  const save = $("#saveBtn");
+  if (!save) return;
+  save.onclick = openReview;
+  $("#discardBtn").onclick = () => confirm("Discard your unsaved edits?") && startEditing(true);
+}
+
+function showVersion() {  // the "v3" next to the title, after a change that doesn't redraw the page
+  const pill = $("#versionPill");
+  if (pill && S.version != null) pill.textContent = `v${S.version}`;
+}
+
+// While editing, a new title, names and merges wait for the review with the edited lines.
+function draftTitle(el, title) {
+  if (!title) el.textContent = S.draft.title;
+  else if (title !== S.draft.title) { S.draft.title = title; markDirty(); }
+}
+function draftName(inp) {
+  const sid = inp.dataset.name, name = inp.value.trim().slice(0, 60);
+  if (name) S.draft.names[sid] = name; else delete S.draft.names[sid];
+  $$(`select[data-line] option[value="${sid}"]`).forEach((o) => (o.textContent = spkName(sid)));
+  $$(`[data-merge-into="${sid}"]`).forEach((b) => (b.lastChild.textContent = spkName(sid)));
+  markDirty();
+}
+function draftMerge(src, dst) {
+  $$("#transcript select[data-line]").forEach((sel) => {
+    if (sel.value === src) { sel.value = dst; sel.closest(".line").style.setProperty("--c", spkColor(dst)); }
+  });
+  markDirty();
+}
+
+function collectDraft() {
+  const lines = S.lines.map((x, i) => {
+    const el = $(`#transcript .line[data-i="${i}"]`);
+    if (!el) return x;
+    const text = el.querySelector(".text").innerText.replace(/\s+/g, " ").trim();
+    const sel = el.querySelector("select[data-line]");
+    return { ...x, text, speaker: sel ? sel.value || null : x.speaker };
+  });
+  return { lines, speaker_names: S.draft.names, title: S.draft.title };
+}
+
+function diffDialog(id, title) {  // the History and review dialogs, made on first use
+  let dlg = document.getElementById(id);
+  if (dlg) return dlg;
+  document.body.insertAdjacentHTML("beforeend", `<dialog id="${id}" class="diff-dlg" aria-labelledby="${id}Title">
+    <div class="dlg-head"><h2 id="${id}Title">${title}</h2><button class="icon-btn" data-close aria-label="Close">${CLOSE_ICON}</button></div>
+    <div class="dlg-body" id="${id}Body"></div></dialog>`);
+  dlg = document.getElementById(id);
+  $("[data-close]", dlg).onclick = () => dlg.close();
+  return dlg;
+}
+window.addEventListener("hashchange", () => $$("dialog.diff-dlg[open]").forEach((d) => d.close()));
+
+// Rows like git diff: removed lines (−) in red, added lines (+) in green, and inside a changed line
+// the words that differ. With only, each change keeps one line around it and the rest is counted.
+function diffRows(ch, only) {
+  const rows = ch.lines, out = [];
+  const near = (i) => rows.slice(Math.max(0, i - 1), i + 2).some((r) => r.op !== "same");
+  const words = (w, side, tag) => w.filter(([op]) => op === "=" || op === side).map(([op, t]) => (op === "=" ? esc(t) : `<${tag}>${esc(t)}</${tag}>`)).join(" ");
+  const row = (kind, sign, x, who, text) => `<div class="drow d-${kind}" style="--c:${spkColor(x.speaker)}"><span class="ts">${clock(x.start)}</span><span class="sign" aria-hidden="true">${sign}</span><div class="who">${who}</div><p class="text" dir="${mixDir(x.text)}">${text}</p></div>`;
+  let skipped = 0;
+  const gap = () => { if (skipped) out.push(`<div class="dsep">${skipped} unchanged line${skipped === 1 ? "" : "s"}</div>`); skipped = 0; };
+  rows.forEach((r, i) => {
+    if (only && !near(i)) { skipped++; return; }
+    gap();
+    const x = r.line, before = ch.names_before, after = ch.names_after;
+    if (r.op === "same") out.push(row("same", "", x, esc(diffName(after, x.speaker)), esc(x.text)));
+    else if (r.op === "added") out.push(row("add", "+", x, esc(diffName(after, x.speaker)), esc(x.text)));
+    else if (r.op === "removed") out.push(row("del", "−", x, esc(diffName(before, x.speaker)), esc(x.text)));
+    else {  // changed: the line as it was, then as it is
+      const o = r.old, moved = o.speaker !== x.speaker, a = esc(diffName(before, o.speaker)), b = esc(diffName(after, x.speaker));
+      out.push(row("del", "−", o, moved ? `<del>${a}</del>` : a, r.words ? words(r.words, "-", "del") : esc(o.text)));
+      out.push(row("add", "+", x, moved ? `<ins>${b}</ins>` : b, r.words ? words(r.words, "+", "ins") : esc(x.text)));
+    }
+  });
+  gap();
+  return out.join("") || `<div class="dsep">No lines</div>`;
+}
+
+// The changes between two versions (history.compare): the counts, a new title and names, the lines.
+function changesHtml(ch, only) {
+  const facts = [
+    ch.title ? `<li>Title: <del dir="${mixDir(ch.title[0])}">${esc(ch.title[0])}</del> → <ins dir="${mixDir(ch.title[1])}">${esc(ch.title[1])}</ins></li>` : "",
+    ...ch.renamed.map((x) => `<li><del dir="${mixDir(x.from)}">${esc(x.from)}</del> → <ins dir="${mixDir(x.to)}">${esc(x.to)}</ins></li>`),
+  ].join("");
+  const lines = ch.lines.some((x) => x.op !== "same");
+  return `<div class="diff-stat">${esc(ch.stat)}</div>
+    ${facts ? `<ul class="diff-facts">${facts}</ul>` : ""}
+    ${lines ? `<label class="toggle diff-only"><input type="checkbox" data-diff-only ${only ? "checked" : ""}> Only the changed lines, with one line around each</label>
+      <div class="diff">${diffRows(ch, only)}</div>` : `<p class="hint">No lines changed.</p>`}`;
+}
+
+function bindDiff(box, ch) {
+  const only = $("[data-diff-only]", box);
+  if (only) only.onchange = () => { $(".diff", box).innerHTML = diffRows(ch, only.checked); };
+}
+
+// ---- reviewing the edits of a session before they are saved -------------------------------------
+function reviewDialog() {
+  const dlg = diffDialog("review", "Review your changes");
+  if (!$("#reviewForm")) {
+    dlg.insertAdjacentHTML("beforeend", `<form class="dlg-foot review-foot" id="reviewForm">
+      <input type="text" id="reviewMsg" maxlength="500" dir="auto" data-mixdir placeholder="Message (optional)" aria-label="Message for this version (optional)">
+      <button type="button" class="btn" id="reviewBack">Back to editing</button>
+      <button type="submit" class="btn btn-primary">Save version</button></form>`);
+    $("#reviewBack").onclick = () => dlg.close();
+    $("#reviewForm").onsubmit = (e) => { e.preventDefault(); saveReviewed($("#reviewMsg").value.trim()); };
+  }
+  return dlg;
+}
+
+async function openReview() {
+  if (!drafting()) return;
+  const draft = collectDraft();
+  let r;
+  try { r = await api.post(`/api/jobs/${S.job.id}/diff`, draft); } catch (e) { toast(e.message, "error"); return; }
+  const ch = r.changes;
+  if (!ch.title && !ch.renamed.length && !ch.lines.some((x) => x.op !== "same")) {
+    startEditing(false);
+    toast("Nothing changed, so no new version");
+    return;
+  }
+  REVIEW.draft = draft;
+  const dlg = reviewDialog();
+  $("#reviewBody").innerHTML = `<p class="hint diff-base">Compared with version ${r.version}, the current one</p>${changesHtml(ch, true)}`;
+  bindDiff($("#reviewBody"), ch);
+  $("#reviewMsg").value = "";
+  dlg.showModal();
+  $("#reviewMsg").focus();
+}
+
+async function saveReviewed(message) {
+  const before = S.version;
+  try {
+    const r = await api.patch(`/api/jobs/${S.job.id}`, { ...REVIEW.draft, message });
+    $("#review").close();
+    Object.assign(S, { editing: false, dirty: false, draft: null });
+    applyJob(r);
+    renderJob();
+    refreshJobs();
+    toast(r.version !== before ? `Saved as version ${r.version}` : "Nothing changed, so no new version");
+  } catch (e) { toast(e.message, "error"); }
+}
+
+// ---- History ------------------------------------------------------------------------------------
+async function openHistory() {
+  if (!S.job || S.version == null) return;
+  const dlg = diffDialog("history", "History");
+  Object.assign(HIST, { jid: S.job.id, view: null, editing: null });
+  $("#historyBody").innerHTML = `<p class="hint">Loading…</p>`;
+  if (!dlg.open) dlg.showModal();
+  await loadVersions();
+}
+
+async function loadVersions() {
+  try { HIST.versions = (await api.get(`/api/jobs/${HIST.jid}/versions`)).versions; } catch (e) { toast(e.message, "error"); return; }
+  HIST.view = null;
+  renderVersions();
+}
+
+function kindPill(v) {
+  return v.kind === "model output" ? `<span class="pill accent">Original</span>` : `<span class="pill">${esc(KIND_LABEL[v.kind] || v.kind)}</span>`;
+}
+
+function versionActions(v, withView) {
+  const menu = `verExport${v.n}`;
+  const links = Object.entries(EXPORT_TYPES).map(([fmt, [label]]) => `<a href="/api/jobs/${HIST.jid}/export/${fmt}?version=${v.n}" data-fmt="${fmt}" data-version="${v.n}" download>${ICON.download} ${label} (.${fmt})</a>`).join("");
+  return `${withView ? `<button class="btn btn-sm" data-ver-view="${v.n}">View</button>` : ""}
+    ${v.n === latestVersion() ? "" : `<button class="btn btn-sm" data-ver-restore="${v.n}">Restore</button>`}
+    <div class="menu-wrap"><button class="btn btn-sm" data-menu="${menu}">${ICON.download} Export ${ICON.chevron}</button><div class="menu" id="${menu}">${links}</div></div>`;
+}
+
+function versionRow(v) {
+  const current = v.n === latestVersion(), editing = HIST.editing === v.n;
+  const message = editing
+    ? `<form class="ver-edit" data-ver-form="${v.n}"><input type="text" maxlength="500" dir="${mixDir(v.message)}" data-mixdir value="${esc(v.message)}" placeholder="Message (optional)" aria-label="Message for version ${v.n}"><button type="submit" class="btn btn-sm btn-primary">Save</button><button type="button" class="btn btn-sm" data-ver-cancel>Cancel</button></form>`
+    : v.message ? `<div class="ver-msg" dir="${mixDir(v.message)}">${esc(v.message)}</div>` : "";
+  return `<div class="ver${current ? " current" : ""}" data-n="${v.n}">
+    <div class="ver-head"><b class="ver-n">v${v.n}</b>${kindPill(v)}${current ? `<span class="pill ok">Current</span>` : ""}<span class="ver-time">${esc(when(v.time))}</span></div>
+    ${message}
+    <div class="ver-sum" dir="${mixDir(v.summary)}">${esc(v.summary || "")}</div>
+    ${editing ? "" : `<div class="ver-actions">${versionActions(v, true)}<button class="btn btn-sm btn-ghost" data-ver-msg="${v.n}">${v.message ? "Edit message" : "Add message"}</button></div>`}
+  </div>`;
+}
+
+function renderVersions() {
+  $("#historyBody").innerHTML = `<p class="hint hist-lead">Each saved change is kept as a version. Restoring an older one saves it again as the newest version, so nothing is lost.</p>
+    <div class="ver-list">${[...HIST.versions].reverse().map(versionRow).join("") || `<p class="hint">No versions yet.</p>`}</div>`;
+  bindHistory();
+}
+
+async function viewVersion(n, against) {
+  try { HIST.view = await api.get(`/api/jobs/${HIST.jid}/versions/${n}${against == null ? "" : `?against=${against}`}`); } catch (e) { toast(e.message, "error"); return; }
+  renderVersionView();
+}
+
+// One version, read-only: its differences from the version before it, or from any other version.
+function renderVersionView() {
+  const r = HIST.view, v = r.version, ch = r.changes;
+  const options = [...HIST.versions].reverse().filter((x) => x.n !== v.n).map((x) => `<option value="${x.n}" ${x.n === r.against ? "selected" : ""}>version ${x.n}${x.n === v.parent ? " (the one before)" : ""}</option>`);
+  if (v.parent == null) options.unshift(`<option value="" ${r.against == null ? "selected" : ""}>nothing</option>`);
+  const plain = { lines: r.lines.map((line) => ({ op: "same", line })), names_after: r.speaker_names };
+  $("#historyBody").innerHTML = `
+    <div class="ver-view-head"><button class="btn btn-sm btn-ghost" id="verBack">← All versions</button><span class="spacer"></span>
+      <button class="btn btn-sm" id="verCopy">${ICON.copy} Copy text</button>${versionActions(v, false)}</div>
+    <div class="ver-head"><b class="ver-title">Version ${v.n}</b>${kindPill(v)}${v.n === latestVersion() ? `<span class="pill ok">Current</span>` : ""}<span class="ver-time">${esc(when(v.time))}</span></div>
+    ${v.message ? `<div class="ver-msg" dir="${mixDir(v.message)}">${esc(v.message)}</div>` : ""}
+    <div class="ver-sum" dir="${mixDir(v.summary)}">${esc(v.summary || "")}</div>
+    ${options.length > (v.parent == null ? 1 : 0) ? `<label class="ver-against">Compare with <select id="verAgainst">${options.join("")}</select></label>` : ""}
+    ${ch ? changesHtml(ch, true) : `<div class="diff">${diffRows(plain, false)}</div>`}`;
+  bindHistory();
+  if (ch) bindDiff($("#historyBody"), ch);
+  const against = $("#verAgainst");
+  if (against) against.onchange = () => viewVersion(v.n, against.value === "" ? null : +against.value);
+}
+
+function fitMenu(id, box) {  // open upwards when the menu would run past the bottom of the dialog
+  const m = document.getElementById(id);
+  m.classList.remove("up");
+  if (m.classList.contains("open") && m.getBoundingClientRect().bottom > box.getBoundingClientRect().bottom) m.classList.add("up");
+}
+
+function bindHistory() {
+  const body = $("#historyBody");
+  $$("[data-ver-view]", body).forEach((b) => (b.onclick = () => viewVersion(+b.dataset.verView)));
+  $$("[data-ver-restore]", body).forEach((b) => (b.onclick = () => restoreVersion(+b.dataset.verRestore)));
+  $$("[data-ver-msg]", body).forEach((b) => (b.onclick = () => { HIST.editing = +b.dataset.verMsg; renderVersions(); }));
+  $$("[data-menu]", body).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); toggleMenu(b.dataset.menu); fitMenu(b.dataset.menu, body); }));
+  $$(".menu a[data-fmt]", body).forEach((a) => (a.onclick = (e) => saveExport(e, a, +a.dataset.version)));
+  const form = $("[data-ver-form]", body);
+  if (form) {
+    const input = $("input", form);
+    form.onsubmit = (e) => { e.preventDefault(); saveMessage(+form.dataset.verForm, input.value); };
+    $("[data-ver-cancel]", form).onclick = () => { HIST.editing = null; renderVersions(); };
+    input.focus();
+  }
+  const back = $("#verBack", body);
+  if (back) back.onclick = () => { HIST.view = null; renderVersions(); };
+  const copy = $("#verCopy", body);
+  if (copy) copy.onclick = () => copyText(HIST.view.version.n);
+}
+
+async function saveMessage(n, message) {
+  try { HIST.versions = (await api.patch(`/api/jobs/${HIST.jid}/versions/${n}`, { message: message.trim() })).versions; } catch (e) { toast(e.message, "error"); return; }
+  HIST.editing = null;
+  renderVersions();
+  toast(message.trim() ? "Message saved" : "Message removed");
+}
+
+async function restoreVersion(n) {
+  const next = latestVersion() + 1, unsaved = S.dirty ? " Your unsaved edits will be discarded." : "";
+  if (!confirm(`Restore version ${n}? The transcript goes back to how it was then, saved as version ${next}. All versions stay in the history.${unsaved}`)) return;
+  try {
+    const r = await api.post(`/api/jobs/${HIST.jid}/versions/${n}/restore`, {});
+    if (S.job && S.job.id === HIST.jid) { Object.assign(S, { editing: false, dirty: false, draft: null }); applyJob(r); renderJob(); }
+    refreshJobs();
+    toast(r.version >= next ? `Version ${n} restored as version ${r.version}` : "Nothing changed: the transcript already matches that version");
+  } catch (e) { toast(e.message, "error"); return; }
+  await loadVersions();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1017,6 +1379,7 @@ function renderSettings(focus) {
       <div class="top"><b>${esc(m.title)}</b>${src}</div>
       <form class="row" data-key-form="${esc(m.id)}"><input type="text" name="username" value="${esc(m.id)}" autocomplete="off" hidden>
         <input type="password" data-key="${esc(m.id)}" placeholder="${m.key_source ? "Replace the key" : "Paste your API key"}" autocomplete="new-password" spellcheck="false">
+        ${m.region != null ? `<input type="text" data-region value="${esc(m.region)}" placeholder="Region, e.g. westeurope" aria-label="${esc(m.service)} region" title="The region of your resource: the key works only there" autocomplete="off" spellcheck="false" style="flex:0 1 11em;min-width:7em">` : ""}
         <button class="btn" type="submit">Save</button>
         ${m.key_source === "app" ? `<button class="btn btn-ghost btn-danger" type="button" data-clear-key="${esc(m.id)}">Remove</button>` : ""}</form>
       <p>${m.key_url ? `Get a key: <a href="${esc(m.key_url)}" target="_blank" rel="noopener noreferrer">${esc(m.key_url.replace(/^https:\/\//, ""))}</a>. ` : ""}${esc((m.facts || []).slice(-1)[0] || "")}.</p>
@@ -1115,7 +1478,7 @@ function renderSettings(focus) {
       </div>
       <p class="hint">Models are kept in <code class="mono">${esc(st.home)}/models</code>. The port, defaults and model list are set in <code class="mono">app/config.toml</code>; your own changes can go in <code class="mono">${esc(st.storage.dir)}/config.toml</code>.</p>
     </section>`;
-  $$("[data-key-form]").forEach((form) => (form.onsubmit = (e) => { e.preventDefault(); saveKey(form.dataset.keyForm, $("[data-key]", form).value); }));
+  $$("[data-key-form]").forEach((form) => (form.onsubmit = (e) => { e.preventDefault(); saveKey(form.dataset.keyForm, $("[data-key]", form).value, $("[data-region]", form)?.value); }));
   $$("[data-clear-key]").forEach((b) => (b.onclick = () => confirm("Remove the saved key?") && saveKey(b.dataset.clearKey, "")));
   $$("[data-power]").forEach((b) => (b.onclick = async () => {
     try { await api.post("/api/power", { profile: b.dataset.power }); await refreshStatus(); renderSettings(); toast(`Power mode: ${b.dataset.power}`); } catch (e) { toast(e.message, "error"); }
@@ -1135,10 +1498,141 @@ function renderSettings(focus) {
   else if (focus && focus !== "power") { const el = $(`[data-key="${focus}"]`); if (el) setTimeout(() => el.focus(), 50); }
 }
 
-// Adding models from Hugging Face (Settings → Models): filled in by the importer.
-function hubBlock() { return ""; }
-function bindHub() {}
-async function forgetModel(_id) {}
+// Adding models from Hugging Face (Settings → Models). The state lives here, not in the dialog, which is
+// rebuilt on every status poll while a download runs; the caret in the link field is put back too.
+const HUB = { url: "", busy: false, found: null, error: "", caret: null, catalogOpen: true, pick: {} };
+const GPU_USE = { any: "Can use any graphics card (Vulkan)", nvidia: "Can use NVIDIA graphics cards only (CUDA)" };
+const quant = (file) => (String(file).match(/[-_.]((?:I?Q\d\w*?)|BF16|F16|F32)\.gguf$/i) || [null, file])[1];
+
+// Recommended models (app/catalog.toml): built in, added, or added here in one click through the importer.
+function catalogBlock() {
+  const list = S.status?.catalog || [];
+  if (!list.length) return "";
+  return `<details id="catalog"${HUB.catalogOpen ? " open" : ""}>
+    <summary class="hint" style="margin:0 0 8px;cursor:pointer"><b>Recommended models</b> for Egyptian Arabic–English meetings and calls</summary>
+    ${list.map(catalogRow).join("")}
+  </details>`;
+}
+
+function catalogRow(c) {
+  const builtin = c.builtin ? model(c.builtin) : null;
+  const file = (c.added && c.added_file) || HUB.pick[c.key] || c.files?.[0]?.file;
+  const size = builtin ? builtin.download?.size : c.files ? c.files.find((f) => f.file === file)?.size : c.size;
+  const pick = c.files?.length > 1 && !c.added && !builtin
+    ? `<select data-catalog-file="${esc(c.key)}" aria-label="File for ${esc(c.name)}">${c.files.map((f) => `<option value="${esc(f.file)}"${f.file === file ? " selected" : ""}>${esc(quant(f.file))} (${bytes(f.size)})</option>`).join("")}</select>` : "";
+  const action = builtin ? `<span class="pill">Built in</span>`
+    : c.added ? `<span class="pill ok">Added${c.added_file && c.files?.length > 1 ? `: ${esc(quant(c.added_file))}` : ""}</span>`
+    : c.problem ? "" : `<button type="button" class="btn btn-sm btn-primary" data-catalog-add="${esc(c.key)}" ${HUB.busy ? "disabled" : ""}>${ICON.download} Add (${bytes(size)})</button>`;
+  const facts = [size ? bytes(size) : "", `Licence: ${esc(c.licence)}`, esc(GPU_USE[c.gpu] || c.gpu)];
+  return `<div class="key-row"><div class="top"><b>${esc(c.name)}</b>${pick}${action}</div>
+    <p style="margin-top:0">${esc(c.good_for)}</p>
+    <p>${esc(c.evidence)}</p>
+    <p>${facts.filter(Boolean).join(" · ")}</p>
+    ${c.problem ? `<p class="mc-missing">${esc(c.problem)}</p>` : ""}
+  </div>`;
+}
+
+function hubBlock() {
+  const h = HUB, input = $("#hubUrl");
+  h.caret = input && document.activeElement === input ? [input.selectionStart, input.selectionEnd] : null;
+  return `${catalogBlock()}<div class="hub">
+    <p class="hint" style="margin:0 0 8px"><b>Add a model from Hugging Face.</b> Paste the link to its page, or its name (org/name). Whisper models for faster-whisper or in Transformers format, and GGUF speech models for transcribe.cpp, can be added.</p>
+    <form class="row" id="hubForm"><input type="text" id="hubUrl" value="${esc(h.url)}" placeholder="https://huggingface.co/org/name" spellcheck="false" autocomplete="off" aria-label="Hugging Face link or model name">
+      <button class="btn" type="submit" ${h.busy ? "disabled" : ""}>${h.busy ? "Checking…" : "Check"}</button></form>
+    ${h.found ? hubFound(h.found) : ""}
+    ${h.error ? `<div class="hub-found error" role="alert">${esc(h.error)}</div>` : ""}
+  </div>`;
+}
+
+function hubFound(f) {
+  const file = f.choices && f.choices.length > 1
+    ? `<select id="hubFile" aria-label="Model file" ${HUB.busy ? "disabled" : ""}>${f.choices.map((c) => `<option value="${esc(c.file)}"${c.file === f.file ? " selected" : ""}>${esc(c.file)} (${bytes(c.size)})</option>`).join("")}</select>`
+    : `<code>${esc(f.file)}</code>`;
+  const action = f.problem ? `<p class="mc-missing" style="margin:0">${esc(f.problem)}</p>`
+    : f.added ? `<span class="pill ok">Already in the app</span>`
+    : `<button type="button" class="btn btn-sm btn-primary" id="hubAdd" ${HUB.busy ? "disabled" : ""}>${ICON.download} Add and download (${bytes(f.size)})</button>`;
+  return `<div class="hub-found"><dl class="kv">
+      <dt>Model</dt><dd><a href="https://huggingface.co/${esc(f.repo)}" target="_blank" rel="noopener noreferrer">${esc(f.repo)}</a></dd>
+      <dt>Kind</dt><dd>${esc(f.label)}</dd>
+      ${f.architecture ? `<dt>Architecture</dt><dd><code>${esc(f.architecture)}</code></dd>` : ""}
+      ${f.file ? `<dt>File</dt><dd>${file}</dd>` : ""}
+      <dt>Size</dt><dd>${bytes(f.size)}${f.kind === "transformers" ? ", then converted on this computer" : ""}</dd>
+      <dt>Licence</dt><dd>${esc(f.licence || "Not stated on the model page")}</dd>
+      <dt>Revision</dt><dd><code>${esc(f.revision.slice(0, 7))}</code></dd>
+    </dl>${action}</div>`;
+}
+
+function bindHub() {
+  const form = $("#hubForm"), input = $("#hubUrl");
+  if (!form) return;
+  input.oninput = () => (HUB.url = input.value);
+  form.onsubmit = (e) => { e.preventDefault(); hubCheck(); };
+  if (HUB.caret) { input.focus(); input.setSelectionRange(...HUB.caret); }
+  const file = $("#hubFile");
+  if (file) file.onchange = () => hubCheck(file.value);
+  const add = $("#hubAdd");
+  if (add) add.onclick = hubAdd;
+  const list = $("#catalog");
+  if (list) list.ontoggle = () => (HUB.catalogOpen = list.open);
+  $$("[data-catalog-file]").forEach((sel) => (sel.onchange = () => { HUB.pick[sel.dataset.catalogFile] = sel.value; rerenderHub(); }));
+  $$("[data-catalog-add]").forEach((b) => (b.onclick = () => catalogAdd(b.dataset.catalogAdd)));
+}
+
+const rerenderHub = () => $("#settings").open && renderSettings();
+
+async function hubCheck(file) {
+  const url = HUB.url.trim();
+  if (!url || HUB.busy) return;
+  Object.assign(HUB, { busy: true, error: "" }, file ? {} : { found: null });
+  rerenderHub();
+  try { HUB.found = await api.post("/api/hub/inspect", file ? { url, file } : { url }); }
+  catch (e) { Object.assign(HUB, { found: null, error: e.message }); }
+  HUB.busy = false;
+  rerenderHub();
+}
+
+// Adds a model and starts its download; returns the error message, if any.
+async function addModel(body, name) {
+  Object.assign(HUB, { busy: true, error: "" });
+  rerenderHub();
+  try {
+    S.status = await api.post("/api/hub/add", body);
+    toast(`Added ${name}. The download has started.`);
+    renderTop(); scheduleStatus();
+    if (S.route.name === "new") renderNew();
+    return null;
+  } catch (e) { return e.message; }
+  finally { HUB.busy = false; }
+}
+
+async function hubAdd() {
+  const f = HUB.found;
+  if (!f || HUB.busy) return;
+  const error = await addModel({ url: HUB.url.trim(), file: f.file || undefined, revision: f.revision }, f.repo);
+  Object.assign(HUB, error ? { error } : { url: "", found: null });
+  rerenderHub();
+}
+
+async function catalogAdd(key) {
+  const c = (S.status?.catalog || []).find((x) => x.key === key);
+  if (!c || HUB.busy) return;
+  const file = c.files ? HUB.pick[key] || c.files[0].file : undefined;
+  const error = await addModel({ url: c.repo, file, revision: c.revision }, c.name);
+  if (error) toast(error, "error");
+  rerenderHub();
+}
+
+async function forgetModel(id) {
+  const m = model(id);
+  if (!confirm(`Remove ${m ? m.title : id} from the app? Its files are deleted from this computer. You can add it again later.`)) return;
+  try {
+    S.status = await api.del(`/api/models/${id}`);
+    if (S.form.model === id) S.form.model = null;
+    renderTop(); refreshDownloadViews();
+    if (S.route.name === "new") renderNew();
+    toast("Removed");
+  } catch (e) { toast(e.message, "error"); }
+}
 
 async function removeDownload(id) {
   if (!confirm("Delete this model's files from this computer? You can download them again later.")) return;
@@ -1146,13 +1640,16 @@ async function removeDownload(id) {
   catch (e) { toast(e.message, "error"); }
 }
 
-async function saveKey(id, key) {
+async function saveKey(id, key, region) {
   key = key.trim();
+  const body = { model: id };
+  if (region !== undefined) body.region = region.trim();
+  if (key || region === undefined) body.key = key;  // with a region field, an empty key box keeps the saved key
   try {
-    await api.post("/api/keys", { model: id, key });
+    await api.post("/api/keys", body);
     await refreshStatus();
     renderSettings();
-    toast(key ? "Key saved" : "Key removed");
+    toast(key ? "Key saved" : region !== undefined ? "Region saved" : "Key removed");
     if (S.route.name === "new") renderNew();
   } catch (e) { toast(e.message, "error"); }
 }

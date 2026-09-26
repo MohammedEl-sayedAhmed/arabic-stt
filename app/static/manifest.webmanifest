@@ -1,7 +1,7 @@
 {
   "name": "Tafrigh — meeting transcription",
   "short_name": "Tafrigh",
-  "description": "Transcribe recordings with speaker labels, on this laptop or with ElevenLabs / Speechmatics.",
+  "description": "Transcripts of Egyptian Arabic–English meetings with speaker labels, made on your own computer or with a hosted service.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

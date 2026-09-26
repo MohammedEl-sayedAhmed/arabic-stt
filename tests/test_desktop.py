@@ -1,11 +1,16 @@
 """Tests for the desktop app's identity on Linux: the application-menu entry that gives the window its icon,
-and the window class of the browser window. No display is needed.
+and the window class of the browser window; and how it picks its port when started again. No display is needed.
 Run: .venv/bin/python -m unittest discover -s tests -v
 """
+import json
 import os
+import socket
 import sys
 import tempfile
+import threading
+import types
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
@@ -35,6 +40,61 @@ class LauncherTests(unittest.TestCase):
         args = popen.call_args.args[0]
         self.assertIn(f"--class={desktop.WM_CLASS}", args)
         self.assertIn("--app=http://127.0.0.1:8765/", args)
+
+
+class PortTests(unittest.TestCase):
+    """Starting the app again: it takes back its port from a copy that was just closed, and finds a copy
+    that is still running even on another port."""
+
+    def free_port(self):
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
+
+    def test_waits_for_the_port_of_a_copy_that_is_closing(self):
+        port = self.free_port()
+        held = socket.socket()
+        held.bind(("127.0.0.1", port))
+        held.listen()
+        threading.Timer(0.5, held.close).start()
+        self.assertEqual(desktop.pick_port(port, wait=5), port)
+
+    def test_takes_another_port_if_the_port_stays_taken(self):
+        port = self.free_port()
+        with socket.socket() as held:
+            held.bind(("127.0.0.1", port))
+            held.listen()
+            other = desktop.pick_port(port, wait=0.3)
+        self.assertNotEqual(other, port)
+        self.assertGreater(other, 0)
+
+    def test_finds_a_running_copy_on_the_port_it_noted(self):
+        class Status(BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = json.dumps({"app": "tafrigh"}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Status)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                cfg = types.SimpleNamespace(storage=Path(d))
+                unused = self.free_port()
+                self.assertIsNone(desktop.running_port(cfg, unused))
+                (Path(d) / "port").write_text(str(server.server_address[1]), encoding="utf-8")
+                self.assertEqual(desktop.running_port(cfg, unused), server.server_address[1])
+                (Path(d) / "port").write_text("not a port", encoding="utf-8")
+                self.assertIsNone(desktop.running_port(cfg, unused))
+        finally:
+            server.shutdown()
+            server.server_close()
 
 
 class IconTests(unittest.TestCase):

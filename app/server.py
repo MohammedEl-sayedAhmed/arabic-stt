@@ -18,8 +18,9 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import __version__, engines
+from . import __version__, engines, hub, report
 from . import transcript as T
+from . import history
 from .config import FROZEN, power_profile, set_power_profile
 from .downloads import Downloads
 from .jobs import ACTIVE, Runner, Store, probe_seconds
@@ -43,7 +44,7 @@ class App:
     def __init__(self, cfg):
         self.cfg = cfg
         self.store = Store(cfg.storage)
-        self.runner = Runner(self.store, cfg)
+        self.runner = Runner(self.store, cfg, gpus=self.gpu_names)
         self.runner.recover()
         self.downloads = Downloads(cfg)
         self.server = None
@@ -65,6 +66,11 @@ class App:
             finally:
                 self.gpu_probing = False
         threading.Thread(target=run, daemon=True, name="tafrigh-gpu").start()
+
+    def gpu_names(self):
+        """The graphics cards the check found, for the job details; None until it has run (or if it failed)."""
+        devices = (getattr(self, "gpu", None) or {}).get("devices")  # jobs may start before __init__ ends
+        return [d.get("name") for d in devices if isinstance(d, dict)] if isinstance(devices, list) else None
 
     def cuda_ready(self):
         items = self.cfg.download_items()
@@ -95,12 +101,14 @@ class App:
 
     def model_info(self, model, jobs=None):
         ready, reason = self.cfg.availability(model)
-        keys = ("id", "kind", "engine", "title", "tagline", "facts", "service", "key_url", "rtf", "prompt", "hub")
+        keys = ("id", "kind", "engine", "title", "tagline", "facts", "service", "key_url", "rtf", "prompt", "hub",
+                "privacy", "prompt_hint", "speakers_hint")
         items = self.cfg.download_items()
         return {**{k: model.get(k) for k in keys}, "ready": ready, "reason": reason,
                 "speed": self.speed(model, self.store.list() if jobs is None else jobs) if model["kind"] == "local" else None,
                 "key_source": self.cfg.key_source(model) if model["kind"] == "hosted" else None,
-                "download": self.downloads.status(model["id"]) if model["id"] in items else None}
+                "download": self.downloads.status(model["id"]) if model["id"] in items else None,
+                "region": self.cfg.region(model) if "region" in model else None}
 
     def used_bytes(self):
         """Disk space of all transcriptions (audio copies, transcripts, logs), counted at most every 30 s."""
@@ -121,6 +129,7 @@ class App:
             "app": "tafrigh", "version": __version__,
             "desktop": self.desktop, "frozen": FROZEN, "home": str(self.cfg.home),
             "models": [self.model_info(m, jobs) for m in self.cfg.models.values()],
+            "catalog": hub.catalog(self.cfg),  # recommended models (app/catalog.toml)
             "voiceprints": self.downloads.status("voiceprints") if "voiceprints" in items else None,
             "cuda": self.downloads.status("cuda") if "cuda" in items else None,
             "gpu": self.gpu, "gpu_probing": self.gpu_probing,
@@ -342,6 +351,9 @@ class Handler(BaseHTTPRequestHandler):
         out = {"job": job, "lines": data["lines"] if data else engines.partial_lines(folder),
                "edited": bool(data and data.get("edited")), "partial": data is None,
                "has_audio": (folder / "audio.flac").exists()}
+        out["details"] = report.details(job, out["lines"], out["edited"])
+        out["detail_groups"] = report.groups(out["details"])  # the same, as the lines the job page shows
+        out["version"] = history.current(self.app.store, jid, self.app.cfg)  # None while it runs
         if job["status"] in ("failed", "interrupted", "cancelled"):
             log = folder / "log.txt"
             out["log"] = log.read_text(encoding="utf-8", errors="replace")[-4000:] if log.exists() else ""
@@ -351,31 +363,51 @@ class Handler(BaseHTTPRequestHandler):
         data = self.app.store.transcript(jid)
         return data["lines"] if data else engines.partial_lines(self.app.store.dir(jid))
 
-    def patch_job(self, _params, jid):
-        job, store = self.job(jid), self.app.store
-        p = self.body_json()
+    def change_from(self, job, p):
+        """What a request asks to change (title, speaker_names, lines, merge: {from, into}), as
+        (change, kind, merge) for history.save."""
+        change, kind, merge = {}, "rename", None
         if "title" in p:
-            store.update(jid, title=str(p["title"]).strip()[:200] or job["title"])
+            change["title"] = str(p["title"]).strip()[:200] or job["title"]
         if "speaker_names" in p:
-            names = {str(k): str(v).strip()[:60] for k, v in (p["speaker_names"] or {}).items()
-                     if str(v).strip() and re.fullmatch(r"\d{1,3}", str(k))}
-            store.update(jid, speaker_names=names)
+            change["speaker_names"] = {str(k): str(v).strip()[:60] for k, v in (p["speaker_names"] or {}).items()
+                                       if str(v).strip() and re.fullmatch(r"\d{1,3}", str(k))}
         if "lines" in p or "merge" in p:
             if job["status"] in ACTIVE:
                 raise ApiError(409, "wait until the transcription has finished")
-            lines = self.lines_of(jid)
+            lines = self.lines_of(job["id"])
             if "lines" in p:
-                lines = clean_lines(p["lines"])
+                lines, kind = clean_lines(p["lines"]), "edit"
             if "merge" in p:
                 src, dst = str(p["merge"].get("from")), str(p["merge"].get("into"))
                 if not (re.fullmatch(r"\d{1,3}", src) and re.fullmatch(r"\d{1,3}", dst)):
                     raise ApiError(400, "speaker ids are numbers")
+                names = change.get("speaker_names", job.get("speaker_names") or {})
+                moved, who = sum(1 for x in lines if x["speaker"] == src), {"speaker_names": names}
+                if "lines" not in p:
+                    kind, merge = "merge", {"from": src, "note": f"{T.speaker_name(who, src)} merged into "
+                                            f"{T.speaker_name(who, dst)} ({moved} line{'' if moved == 1 else 's'})"}
                 lines = [{**x, "speaker": dst if x["speaker"] == src else x["speaker"]} for x in lines]
-                names = dict(store.get(jid).get("speaker_names") or {})
-                names.pop(src, None)
-                store.update(jid, speaker_names=names)
-            store.save_transcript(jid, {"lines": lines, "edited": True, "model": job["model"]})
+                change["speaker_names"] = {k: v for k, v in names.items() if k != src}
+            change["lines"] = lines
+        return change, kind, merge
+
+    def patch_job(self, _params, jid):
+        """A change to the title, speaker names or lines, saved as a new version (app/history.py)."""
+        store = self.app.store
+        p = self.body_json()
+        with store.lock:  # one change at a time, so versions are numbered in the order they are saved
+            change, kind, merge = self.change_from(self.job(jid), p)
+            history.save(store, jid, change, kind, p.get("message"), cfg=self.app.cfg, merge=merge)
         self.get_job({}, jid)
+
+    def diff_job(self, _params, jid):
+        """What a PATCH with the same body would change, without saving it: edits are reviewed first."""
+        change, _, _ = self.change_from(self.job(jid), self.body_json())
+        found = history.preview(self.app.store, jid, change, self.app.cfg)
+        if found is None:
+            raise ApiError(409, "wait until the transcription has finished")
+        self.json(found)
 
     def delete_job(self, _params, jid):
         job = self.job(jid)
@@ -446,25 +478,81 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(chunk)
                 left -= len(chunk)
 
-    def export(self, _params, jid, fmt):
+    def export(self, params, jid, fmt):
         job = self.job(jid)
         if fmt not in T.EXPORTS:
             raise ApiError(404, "unknown format")
         fn, ctype = T.EXPORTS[fmt]
-        body = fn(job, self.lines_of(jid)).encode()
-        name = f"{slug(job.get('title'))}.{fmt}"
+        n = params.get("version")  # text: "0" is the model's output; without it, the current version
+        shown, lines, edited = self.at_version(job, n)
+        details = None if params.get("details") == "0" else report.details(shown, lines, edited)
+        body = fn(shown, lines, details).encode()
+        tag = f"-v{n}" if n else ""
+        name = f"{slug(job.get('title'))}{tag}.{fmt}"
         ascii_name = re.sub(r"[^A-Za-z0-9._-]", "", name)
-        if not re.search(r"[A-Za-z0-9]", ascii_name.rsplit(".", 1)[0]):
-            ascii_name = f"transcript.{fmt}"
+        if not re.search(r"[A-Za-z0-9]", ascii_name.rsplit(".", 1)[0].removesuffix(tag)):
+            ascii_name = f"transcript{tag}.{fmt}"
         disposition = f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{urllib.parse.quote(name)}'
         self.reply(200, body, ctype, {"Content-Disposition": disposition})
+
+    def at_version(self, job, n):
+        """(job, lines, edited by hand) as they are now, or as they were at version n."""
+        if not n:
+            data = self.app.store.transcript(job["id"])
+            return job, self.lines_of(job["id"]), bool(data and data.get("edited"))
+        found = history.at(self.app.store, job["id"], int(n), self.app.cfg) if re.fullmatch(r"[0-9]{1,6}", n) else None
+        if found is None:
+            raise ApiError(404, "no such version")
+        return found
+
+    # ---- version history (app/history.py) ----------------------------------------------------------
+    def versions(self, _params, jid):
+        self.job(jid)
+        self.json({"versions": history.ensure(self.app.store, jid, self.app.cfg) or []})
+
+    def get_version(self, params, jid, n):
+        """Version n and its differences from the version before, or from ?against=m."""
+        self.job(jid)
+        against = params.get("against")
+        if against is not None and not re.fullmatch(r"[0-9]{1,6}", against):
+            raise ApiError(404, "no such version")
+        found = history.version(self.app.store, jid, int(n), self.app.cfg, None if against is None else int(against))
+        if found is None:
+            raise ApiError(404, "no such version")
+        self.json(found)
+
+    def patch_version(self, _params, jid, n):
+        """{"message": ...} adds, changes or clears the message of version n."""
+        self.job(jid)
+        message = self.body_json().get("message")
+        try:
+            versions = history.set_message(self.app.store, jid, int(n), message, self.app.cfg)
+        except KeyError:
+            raise ApiError(404, "no such version")
+        self.json({"versions": versions})
+
+    def restore_version(self, _params, jid, n):
+        """Version n becomes the current one again, saved as a new version (optional {"message": ...})."""
+        self.job(jid)
+        message = self.body_json().get("message")
+        try:
+            history.restore(self.app.store, jid, int(n), message, self.app.cfg)
+        except KeyError:
+            raise ApiError(404, "no such version")
+        self.get_job({}, jid)
 
     def save_key(self, _params):
         p = self.body_json()
         model = self.app.cfg.models.get(p.get("model"))
         if model is None or model["kind"] != "hosted":
             raise ApiError(400, "not a hosted model")
-        self.app.cfg.save_key(model["id"], str(p.get("key") or "").strip())
+        if "region" in p and "region" in model:  # Azure Speech: saved next to the key; empty = the config's
+            region = str(p.get("region") or "").strip().lower()
+            if region and not re.fullmatch(r"[a-z0-9]{2,40}", region):
+                raise ApiError(400, "a region is a name like westeurope")
+            self.app.cfg.save_key(f"{model['id']}:region", region)
+        if "key" in p or "region" not in p:  # a request with only a region keeps the key
+            self.app.cfg.save_key(model["id"], str(p.get("key") or "").strip())
         self.json(self.app.model_info(model))
 
     def power(self, _params):
@@ -533,6 +621,33 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(409, str(e))
         self.json(self.app.status())
 
+    # Models added from Hugging Face (app/hub.py)
+    def hub_inspect(self, _params):
+        p = self.body_json()
+        try:
+            self.json(hub.inspect(self.app.cfg, p.get("url"), p.get("file"), p.get("revision")))
+        except hub.HubError as e:
+            raise ApiError(400, str(e))
+
+    def hub_add(self, _params):
+        p = self.body_json()
+        try:
+            model = hub.add(self.app.cfg, p.get("url"), p.get("file"), p.get("revision"))
+        except hub.HubError as e:
+            raise ApiError(400, str(e))
+        self.download({}, model["id"])  # with the voiceprint model, as from a model card; replies with the status
+
+    def forget_model(self, _params, model_id):
+        if not (self.app.cfg.models.get(model_id) or {}).get("hub"):
+            raise ApiError(404, "no model added from Hugging Face with that id")
+        if any(j["status"] in ACTIVE and j["model"] == model_id for j in self.app.store.list()):
+            raise ApiError(409, "a transcription is using it; wait until it has finished")
+        if (self.app.downloads.jobs.get(model_id) or {}).get("state") == "queued" or self.app.downloads.busy(model_id):
+            raise ApiError(409, "wait until the download has finished or cancel it")
+        self.app.downloads.remove(model_id)
+        hub.forget(self.app.cfg, model_id)
+        self.json(self.app.status())
+
     def quit(self, _params):
         self.json({"bye": True})
         target = self.app.on_quit or self.app.server.shutdown
@@ -569,6 +684,11 @@ ROUTES = [
     ("POST", rf"/api/jobs/{ID}/rerun", Handler.rerun_job),
     ("GET", rf"/api/jobs/{ID}/audio", Handler.audio),
     ("GET", rf"/api/jobs/{ID}/export/(\w+)", Handler.export),
+    ("POST", rf"/api/jobs/{ID}/diff", Handler.diff_job),
+    ("GET", rf"/api/jobs/{ID}/versions", Handler.versions),
+    ("GET", rf"/api/jobs/{ID}/versions/(\d+)", Handler.get_version),
+    ("PATCH", rf"/api/jobs/{ID}/versions/(\d+)", Handler.patch_version),
+    ("POST", rf"/api/jobs/{ID}/versions/(\d+)/restore", Handler.restore_version),
     ("POST", r"/api/keys", Handler.save_key),
     ("POST", r"/api/power", Handler.power),
     ("POST", r"/api/settings", Handler.settings),
@@ -577,6 +697,9 @@ ROUTES = [
     ("POST", r"/api/downloads/([\w-]+)", Handler.download),
     ("POST", r"/api/downloads/([\w-]+)/cancel", Handler.cancel_download),
     ("DELETE", r"/api/downloads/([\w-]+)", Handler.remove_download),
+    ("POST", r"/api/hub/inspect", Handler.hub_inspect),
+    ("POST", r"/api/hub/add", Handler.hub_add),
+    ("DELETE", r"/api/models/(hf-[\w-]+)", Handler.forget_model),
     ("POST", r"/api/quit", Handler.quit),
 ]
 

@@ -25,8 +25,9 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-from . import engines
+from . import engines, report
 from . import transcript as T
+from . import history
 from .config import FROZEN, ROOT, Config
 from .server import make_server, slug
 
@@ -92,15 +93,35 @@ def running_here(port):
         return False
 
 
-def pick_port(preferred):
-    for port in (preferred, 0):
+def running_port(cfg, preferred):
+    """The port of a Tafrigh already running on this data folder: the preferred one, or the one it noted in
+    <storage>/port when that one was taken. None if none is running."""
+    ports = [preferred]
+    try:
+        ports.append(int((cfg.storage / "port").read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        pass
+    return next((p for p in dict.fromkeys(ports) if running_here(p)), None)
+
+
+def pick_port(preferred, wait=3.0):
+    """The preferred port, or any free one if something else keeps it. A Tafrigh that was just closed can hold
+    it for a moment, so it is tried again for up to `wait` seconds."""
+    deadline = time.monotonic() + wait
+    while True:
         with socket.socket() as s:
+            if os.name != "nt":  # as the server binds it: the closed app's lingering connections don't block it
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
-                s.bind(("127.0.0.1", port))
-                return s.getsockname()[1]
+                s.bind(("127.0.0.1", preferred))
+                return preferred
             except OSError:
-                continue
-    raise OSError("no free port")
+                if time.monotonic() >= deadline:
+                    break
+        time.sleep(0.2)
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 
 class Api:
@@ -120,18 +141,26 @@ class Api:
         result = self._window.create_file_dialog(self._dialog("OPEN"), allow_multiple=False, file_types=RECORDINGS)
         return str(result[0]) if result else None
 
-    def save_export(self, job_id, fmt):
+    def save_export(self, job_id, fmt, version=None):
         store = self._app.store
         job = store.get(job_id)
         if job is None or fmt not in T.EXPORTS:
             return None
         data = store.transcript(job_id)
         lines = data["lines"] if data else engines.partial_lines(store.dir(job_id))
-        result = self._window.create_file_dialog(self._dialog("SAVE"), save_filename=f"{slug(job.get('title'))}.{fmt}")
+        edited = bool(data and data.get("edited"))
+        name = f"{slug(job.get('title'))}{'' if version is None else f'-v{int(version)}'}.{fmt}"
+        if version is not None:  # a version picked in History (0 is the model's output)
+            found = history.at(store, job_id, int(version), self._app.cfg)
+            if found is None:
+                return None
+            job, lines, edited = found
+        result = self._window.create_file_dialog(self._dialog("SAVE"), save_filename=name)
         path = result[0] if isinstance(result, (list, tuple)) else result
         if not path:
             return None
-        Path(path).write_text(T.EXPORTS[fmt][0](job, lines), encoding="utf-8")
+        details = report.details(job, lines, edited)  # as the browser download
+        Path(path).write_text(T.EXPORTS[fmt][0](job, lines, details), encoding="utf-8")
         return str(path)
 
     def open_url(self, url):
@@ -253,8 +282,9 @@ def main(argv=None):
         cfg.storage.mkdir(parents=True, exist_ok=True)
         sys.stdout = sys.stderr = open(cfg.storage / "tafrigh.log", "a", encoding="utf-8", buffering=1)
     preferred = args.port or cfg.server["port"]
-    if running_here(preferred):  # already running (e.g. started twice): just show it
-        url = f"http://127.0.0.1:{preferred}/"
+    running = running_port(cfg, preferred)
+    if running:  # already running (e.g. started twice): just show it
+        url = f"http://127.0.0.1:{running}/"
         if args.browser or not native_window(url, None):
             if not app_mode_browser(url, cfg.storage / "browser-profile") and not webbrowser.open(url):
                 show_address(url)
@@ -264,6 +294,11 @@ def main(argv=None):
     app.desktop = True
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     threading.Thread(target=server.serve_forever, daemon=True, name="tafrigh-server").start()
+    port_file = cfg.storage / "port"  # so that starting it again finds this one, whichever port it has
+    try:
+        port_file.write_text(str(server.server_address[1]), encoding="utf-8")
+    except OSError:
+        pass
     stopped = threading.Event()
     try:
         if args.no_window:
@@ -296,6 +331,10 @@ def main(argv=None):
         app.runner.shutdown()
         server.shutdown()
         server.server_close()
+        try:
+            port_file.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":

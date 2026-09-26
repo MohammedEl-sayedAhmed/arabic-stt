@@ -55,8 +55,10 @@ Other models:
 ```
 
 It prints the transcript and saves it in `results/poc/` as `<file>.<model>.speakers.txt`, `.json`
-(start, end, speaker and text for each line) and `.meta.json` (settings, speed, peak memory). With
-Whisper it also writes `.words.json`, with every word's time and speaker. Partial results are
+(start, end, speaker and text for each line) and `.meta.json` (settings, speed, peak memory, start
+and finish times, the input file's format under `source`, and this computer under `machine`: maker
+and model, operating system, processor, threads, memory). With Whisper it also writes
+`.words.json`, with every word's time and speaker. Partial results are
 written after every chunk, so a crash or a kill hours into a long recording keeps what was done.
 Any audio or video format that FFmpeg reads will do.
 
@@ -213,6 +215,7 @@ Their audio, transcripts and results stay in the git-ignored `data/` and `result
 |---|---|
 | `transcribe.py` | the command line: engines, chunking, gap-fill, speaker attribution, checkpoints |
 | `speakers.py` | voice-based speaker separation |
+| `sysinfo.py` | this computer and the input file's format, for the `.meta.json` (the app uses it too) |
 | `align.py` | forced alignment for engines without word times (experimental) |
 | `bench/serve.sh` | starts llama-server (127.0.0.1 only) for r2t2, qwen3asr or audar |
 | `bench/prepare_data.py`, `run_bench.py`, `run_configs.sh`, `score.py` | the public-set benchmark |
