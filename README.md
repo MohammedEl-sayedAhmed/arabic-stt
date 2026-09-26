@@ -117,7 +117,7 @@ VIRTUAL_ENV=.venv uv pip install -r requirements.txt
 
 On Windows, run `app.cmd` after the setup in [the desktop notes](docs/10-desktop.md#run-it).
 
-On first start, open *Settings → Models on this computer* and download whisper-medium (778 MB) or
+On first start, open *Settings → Models* and download whisper-medium (778 MB) or
 Cohere (1.6 GB). The voiceprint model for speaker labels (40 MB) comes with the first one.
 Downloads resume if the connection drops and are checked against pinned checksums.
 

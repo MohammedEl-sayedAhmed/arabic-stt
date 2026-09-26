@@ -1,5 +1,5 @@
-# Recommended models for Egyptian Arabic–English meetings and calls, listed in Settings → Models on this
-# computer above "Add a model from Hugging Face".
+# Recommended models for Egyptian Arabic–English meetings and calls, listed in Settings → Add models →
+# Recommended.
 #
 # builtin = the id of a model in app/config.toml. The other entries are added with the Hugging Face importer
 # (app/hub.py) from the pinned revision, so they download the same checked files for everyone: kind and

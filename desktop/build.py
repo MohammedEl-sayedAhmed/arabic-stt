@@ -5,7 +5,7 @@
   python desktop/build.py --console    with a console, to see errors while debugging
 
 Build on the system you build for (Windows builds on Windows): PyInstaller does not cross-compile.
-The models are not bundled; the app downloads them (Settings → Models on this computer). Needs the
+The models are not bundled; the app downloads them (Settings → Models). Needs the
 packages in requirements.txt and requirements-desktop.txt. The Windows installer is made from the
 result with Inno Setup: iscc desktop/installer.iss
 """

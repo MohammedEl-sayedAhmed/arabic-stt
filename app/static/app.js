@@ -65,6 +65,11 @@ const ICON = {
   folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
   external: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
   lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></svg>',
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l3 3M14 9l2 2"/></svg>',
   play: '<path d="M8 5.5v13a1 1 0 0 0 1.5.9l10-6.5a1 1 0 0 0 0-1.7l-10-6.5A1 1 0 0 0 8 5.5z"/>',
   pause: '<rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/>',
 };
@@ -311,7 +316,7 @@ function modelCard(m) {
   const foot = m.ready ? `<div class="mc-foot">${estimateText(m, f.seconds, true)}</div>` : `<div class="mc-foot">${state}</div>`;
   return `<div class="model-card${m.ready ? "" : " unavailable"}" role="radio" tabindex="0" aria-checked="${sel && m.ready}" data-model="${esc(m.id)}">
     <div class="mc-badges">${badges}</div>
-    <div class="mc-title">${esc(m.title)}</div>
+    <div class="mc-head">${modelTile(m)}<div class="mc-title">${esc(m.title)}</div></div>
     <div class="mc-tag">${esc(m.tagline || "")}</div>
     <ul>${(m.facts || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
     ${foot}
@@ -721,7 +726,7 @@ function detailsPanel() {
       ${stats.length ? `<div class="det-stats">${stats.map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("")}</div>` : ""}
     </div>
     ${rec.name ? `<section class="det-sec"><h4>${ICON.wave} Recording</h4><div class="det-main" dir="auto">${esc(rec.name)}</div>${chips(recChips)}</section>` : ""}
-    <section class="det-sec"><h4>${ICON.layers} Model</h4><div class="det-main">${esc(mod.title || S.job.model_title || "")}</div>${chips(modChips)}${said ? `<div class="det-sub">${esc(said)}</div>` : ""}</section>
+    <section class="det-sec"><h4>${ICON.layers} Model</h4><div class="det-row det-model">${modelTile(model(mod.id) || mod)}<div class="det-main">${esc(mod.title || S.job.model_title || "")}</div></div>${chips(modChips)}${said ? `<div class="det-sub">${esc(said)}</div>` : ""}</section>
     ${recorded || machine || pc.cpu ? `<section class="det-sec"><h4>${ICON.laptop} Computer</h4>
       ${found(machine, "Computer model", ICON.laptop, "")}${found(gpuName(pc.cpu), "Processor", ICON.cpu, pc.threads ? `${pc.threads} threads${pc.ram_gb ? ` · ${Math.round(pc.ram_gb)} GB RAM` : ""}` : "")}${found(os, "System", ICON.laptop, pc.arch || "")}</section>` : ""}
     <details class="more" id="moreDetails"${S.moreDetails ? " open" : ""}><summary>All details</summary>${rows(null)}</details>
@@ -730,8 +735,26 @@ function detailsPanel() {
 
 // A brand's logo on a tinted tile (brands.js), or the given icon when no brand is named in the text.
 function logoTile(text, icon, small = false) {
-  const slug = typeof brandFor === "function" ? brandFor(text) : null;
-  const b = slug && BRANDS[slug];
+  return brandTile(typeof brandFor === "function" ? brandFor(text) : null, icon, small);
+}
+
+// A model's logo: its maker's where Simple Icons has one (NVIDIA, Qwen, Mistral, Google…), else where it
+// comes from: the hosted service's, or Hugging Face's for a model downloaded from there. Hosted services
+// with no logo there get their initial.
+function modelBrand(m) {
+  if (!m || typeof brandsFor !== "function") return null;
+  const org = (m.hub?.repo || "").split("/")[0];
+  return brandsFor([m.service, m.title, org].filter(Boolean).join(" · "))[0] || (m.kind === "hosted" ? null : "huggingface");
+}
+function modelTile(m, small = true) {
+  const slug = modelBrand(m);
+  if (slug || m?.kind !== "hosted") return brandTile(slug, ICON.layers, small);
+  const name = m.title || m.service || "?";
+  return `<span class="logo-tile${small ? " small" : ""} plain mono" title="${esc(name)}" aria-hidden="true">${esc(name.trim()[0].toUpperCase())}</span>`;
+}
+
+function brandTile(slug, icon, small = false) {
+  const b = slug && typeof BRANDS !== "undefined" && BRANDS[slug];
   const cls = `logo-tile${small ? " small" : ""}`;
   if (!b) return `<span class="${cls} plain">${icon}</span>`;
   const plain = Object.keys(SURFACES).filter((t) => contrast(b.hex, SURFACES[t]) < 3).map((t) => ` plain-${t}`).join("");
@@ -1364,42 +1387,112 @@ $("#rate").onchange = (e) => (audio.playbackRate = parseFloat(e.target.value));
 // ---------------------------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------------------------
+// Settings: one tab at a time (Models, Add models, Hosted services, Speed, About), so nothing needs a long
+// scroll; a hosted service's key form opens only for the service being edited.
+const SET = { tab: "models", add: "recommended", openKey: null };
+const SET_TABS = [["models", "laptop", "Models"], ["add", "plus", "Add models"], ["hosted", "cloud", "Hosted services"],
+  ["speed", "bolt", "Speed"], ["about", "info", "About"]];
+
 function openSettings(focus) {
   if (!S.status) return;  // still starting up
+  if (focus === "speed" || focus === "power") SET.tab = "speed";
+  else if (focus && model(focus)?.kind === "hosted") Object.assign(SET, { tab: "hosted", openKey: focus });
   renderSettings(focus);
   $("#settings").showModal();
+}
+
+function setStatus(kind, text, icon = "") {
+  return `<span class="status ${kind}">${icon}${esc(text)}</span>`;
 }
 
 function renderSettings(focus) {
   const st = S.status;
   const hosted = st.models.filter((m) => m.kind === "hosted");
-  const keyRows = hosted.map((m) => {
-    const src = m.key_source === "environment" ? `<span class="pill ok">From the environment</span>` : m.key_source === "app" ? `<span class="pill ok">Saved</span>` : `<span class="pill warn">Not set</span>`;
-    return `<div class="key-row" id="key-${esc(m.id)}">
-      <div class="top"><b>${esc(m.title)}</b>${src}</div>
-      <form class="row" data-key-form="${esc(m.id)}"><input type="text" name="username" value="${esc(m.id)}" autocomplete="off" hidden>
-        <input type="password" data-key="${esc(m.id)}" placeholder="${m.key_source ? "Replace the key" : "Paste your API key"}" autocomplete="new-password" spellcheck="false">
-        ${m.region != null ? `<input type="text" data-region value="${esc(m.region)}" placeholder="Region, e.g. westeurope" aria-label="${esc(m.service)} region" title="The region of your resource: the key works only there" autocomplete="off" spellcheck="false" style="flex:0 1 11em;min-width:7em">` : ""}
-        <button class="btn" type="submit">Save</button>
-        ${m.key_source === "app" ? `<button class="btn btn-ghost btn-danger" type="button" data-clear-key="${esc(m.id)}">Remove</button>` : ""}</form>
-      <p>${m.key_url ? `Get a key: <a href="${esc(m.key_url)}" target="_blank" rel="noopener noreferrer">${esc(m.key_url.replace(/^https:\/\//, ""))}</a>. ` : ""}${esc((m.facts || []).slice(-1)[0] || "")}.</p>
-    </div>`;
-  }).join("");
   const local = st.models.filter((m) => m.kind === "local" && m.download);
-  const items = [...local.map((m) => [m.id, m.title, m.download, m.hub]), ...(st.voiceprints ? [["voiceprints", "Voiceprint model (speaker labels)", st.voiceprints]] : [])];
-  const modelRows = items.map(([id, title, d, hub]) => {
-    const cached = !d.installed && model(id)?.ready;  // found elsewhere, e.g. the Hugging Face cache
-    const pill = d.installed ? `<span class="pill ok">Downloaded</span>` : cached ? `<span class="pill ok">Ready</span>` : `<span class="pill warn">Not downloaded</span>`;
-    const actions = cached && !DL_ACTIVE.has(d.state) ? `<span class="hint" style="margin:0">Uses the copy already in the Hugging Face cache</span>`
-      : downloadBlock(id, d, true) + (d.installed && !DL_ACTIVE.has(d.state) ? `<span class="hint" style="margin:0">${bytes(d.on_disk || d.size)}</span><button type="button" class="btn btn-sm btn-ghost btn-danger" data-dl-remove="${esc(id)}">Delete</button>` : "");
-    const from = hub ? `<div class="hint" style="margin:0 0 6px">From <a href="https://huggingface.co/${esc(hub.repo)}" target="_blank" rel="noopener noreferrer">${esc(hub.repo)}</a> · ${esc(hub.label || hub.kind)}</div>` : "";
-    const forget = hub && !DL_ACTIVE.has(d.state) ? `<button type="button" class="btn btn-sm btn-ghost" data-forget-model="${esc(id)}">Remove from the app</button>` : "";
-    return `<div class="key-row"><div class="top"><b>${esc(title)}</b>${pill}</div>${from}<div class="dl-actions">${actions}${forget}</div></div>`;
-  }).join("");
+  const items = [...local.map((m) => ({ id: m.id, title: m.title, d: m.download, hub: m.hub, m })),
+    ...(st.voiceprints ? [{ id: "voiceprints", title: "Voiceprint model", d: st.voiceprints, note: "Tells the speakers apart by voice" }] : [])];
+  const readyLocal = items.filter((x) => x.d.installed || model(x.id)?.ready).length;
+  const keys = hosted.filter((m) => m.key_source).length;
+  const counts = { models: `${readyLocal} of ${items.length}`, hosted: `${keys} of ${hosted.length}` };
+  if (!SET_TABS.some(([t]) => t === SET.tab)) SET.tab = "models";
 
-  // Speed: graphics card, power mode, threads
-  const set = st.settings || {};
-  const gpu = st.gpu || {};
+  const nav = `<nav class="set-nav" role="tablist" aria-label="Settings sections">${SET_TABS.map(([t, icon, label]) =>
+    `<button type="button" role="tab" id="tab-${t}" data-set-tab="${t}" aria-selected="${SET.tab === t}" aria-controls="set-panel" tabindex="${SET.tab === t ? 0 : -1}">
+      ${ICON[icon]}<span>${label}</span>${counts[t] ? `<small>${counts[t]}</small>` : ""}</button>`).join("")}</nav>`;
+  const panel = { models: modelsPanel, add: addPanel, hosted: hostedPanel, speed: speedPanel, about: aboutPanel }[SET.tab](items, hosted);
+  $("#settingsBody").innerHTML = `<div class="set-layout">${nav}
+    <div class="set-panel" id="set-panel" role="tabpanel" aria-labelledby="tab-${SET.tab}">${panel}</div></div>`;
+  bindSettings(focus);
+}
+
+// Models on this computer: one row each, with a status that says what is there
+function modelsPanel(items) {
+  const rows = items.map(({ id, title, d, hub, m, note }) => {
+    const cached = !d.installed && model(id)?.ready;  // found elsewhere, e.g. the Hugging Face cache
+    const busy = DL_ACTIVE.has(d.state);
+    let status, sub, actions = "";
+    if (busy) { status = ""; sub = "Downloading"; }
+    else if (d.installed) {
+      status = setStatus("ok", "Downloaded", ICON.check);
+      sub = `${bytes(d.on_disk || d.size)} on this computer`;
+      actions = `<button type="button" class="btn btn-sm btn-ghost btn-danger" data-dl-remove="${esc(id)}">Delete</button>`;
+    } else if (cached) {
+      status = setStatus("shared", "Shared copy", ICON.link);
+      sub = "Uses the copy already in the Hugging Face cache, so nothing is downloaded";
+    } else {
+      status = d.state === "error" ? setStatus("error", "Download failed") : setStatus("none", "Not downloaded");
+      sub = `${bytes(d.size)} to download`;
+      actions = downloadBlock(id, d, true);
+    }
+    if (note) sub = `${note} · ${sub}`;
+    const from = hub ? ` · from <a href="https://huggingface.co/${esc(hub.repo)}" target="_blank" rel="noopener noreferrer">${esc(hub.repo)}</a>${hub.label ? ` · ${esc(hub.label)}` : ""}` : "";
+    const forget = hub && !busy ? `<button type="button" class="btn btn-sm btn-ghost" data-forget-model="${esc(id)}">Remove from the app</button>` : "";
+    return `<div class="set-item">
+      <div class="set-item-row">${m ? modelTile(m) : brandTile(null, ICON.users, true)}
+        <div class="set-item-text"><b>${esc(title)}</b><span>${esc(sub)}${from}</span></div>
+        ${status}<div class="set-item-actions">${actions}${forget}</div></div>
+      ${busy ? `<div class="set-item-more">${downloadBlock(id, d, true)}</div>` : ""}</div>`;
+  }).join("");
+  return `<h3>Models on this computer</h3>
+    <div class="set-items">${rows || '<p class="hint">No downloadable models are configured.</p>'}</div>
+    <p class="hint">Downloads resume if the connection drops and are checked against a pinned checksum before use.
+      <button type="button" class="linkish" data-set-tab="add">Find more models</button></p>`;
+}
+
+function addPanel() {
+  const seg = `<div class="segmented" role="group" aria-label="Where from">${[["recommended", "Recommended"], ["hub", "From Hugging Face"]].map(([k, l]) =>
+    `<button type="button" data-set-add="${k}" aria-pressed="${SET.add === k}">${l}</button>`).join("")}</div>`;
+  return `<div class="set-head"><h3>Add models</h3>${seg}</div>
+    ${SET.add === "hub" ? hubBlock() : catalogBlock() || '<p class="hint">No recommended models are listed.</p>'}`;
+}
+
+function hostedPanel(items, hosted) {
+  const rows = hosted.map((m) => {
+    const open = SET.openKey === m.id;
+    const status = m.key_source === "environment" ? setStatus("shared", "From the environment", ICON.check)
+      : m.key_source === "app" ? setStatus("ok", "Key saved", ICON.check) : setStatus("none", "No key");
+    const toggle = `<button type="button" class="btn btn-sm" data-key-toggle="${esc(m.id)}" aria-expanded="${open}">${open ? "Cancel" : m.key_source ? "Change" : `${ICON.key} Add key`}</button>`;
+    const form = open ? `<div class="set-item-more">
+      <form class="row" data-key-form="${esc(m.id)}"><input type="text" name="username" value="${esc(m.id)}" autocomplete="off" hidden>
+        <input type="password" data-key="${esc(m.id)}" placeholder="${m.key_source ? "Replace the key" : "Paste your API key"}" aria-label="${esc(m.service)} API key" autocomplete="new-password" spellcheck="false">
+        ${m.region != null ? `<input type="text" data-region value="${esc(m.region)}" placeholder="Region, e.g. westeurope" aria-label="${esc(m.service)} region" title="The region of your resource: the key works only there" autocomplete="off" spellcheck="false" class="region">` : ""}
+        <button class="btn btn-primary" type="submit">Save</button>
+        ${m.key_source === "app" ? `<button class="btn btn-ghost btn-danger" type="button" data-clear-key="${esc(m.id)}">Remove</button>` : ""}</form>
+      ${m.key_url ? `<p class="hint">Get a key: <a href="${esc(m.key_url)}" target="_blank" rel="noopener noreferrer">${esc(m.key_url.replace(/^https:\/\//, ""))}</a></p>` : ""}
+    </div>` : "";
+    return `<div class="set-item${open ? " open" : ""}" id="key-${esc(m.id)}">
+      <div class="set-item-row">${modelTile(m)}
+        <div class="set-item-text"><b>${esc(m.title)}</b><span>${esc((m.facts || []).slice(-1)[0] || m.service || "")}</span></div>
+        ${status}<div class="set-item-actions">${toggle}</div></div>${form}</div>`;
+  }).join("");
+  return `<h3>Hosted services</h3>
+    <p class="hint">More accurate than the local models on hard recordings, with your own API key. A recording is uploaded only when you pick one of these and confirm.</p>
+    <div class="set-items">${rows}</div>
+    <p class="hint">${ICON.lock.replace("<svg", '<svg style="width:13px;height:13px;vertical-align:-2px"')} Keys are saved in <code class="mono">${esc(S.status.storage.dir)}/secrets.json</code>, readable only by your user, and are sent only to their own service.</p>`;
+}
+
+function speedPanel() {
+  const st = S.status, set = st.settings || {}, gpu = st.gpu || {};
   const devices = gpu.devices || [];
   const best = devices[0];
   const nvidia = (gpu.cuda_devices || 0) > 0;
@@ -1422,21 +1515,14 @@ function renderSettings(focus) {
   const powerRows = p ? `
       <div class="set-row">
         <div class="set-text"><b>Power mode</b><span class="hint">Local models run about 3–5× slower in power-saver mode.</span></div>
-        <div class="seg">${["performance", "balanced", "power-saver"].map((x) => `<button type="button" class="${p === x ? "on" : ""}" data-power="${x}">${x === "performance" ? ICON.bolt + " " : ""}${x[0].toUpperCase() + x.slice(1).replace("-s", "-s")}</button>`).join("")}</div>
+        <div class="seg">${["performance", "balanced", "power-saver"].map((x) => `<button type="button" class="${p === x ? "on" : ""}" data-power="${x}">${x === "performance" ? ICON.bolt + " " : ""}${x[0].toUpperCase() + x.slice(1)}</button>`).join("")}</div>
       </div>
       <label class="set-row">
         <div class="set-text"><b>Performance mode while transcribing</b><span class="hint">Switch to performance while a local model runs, and back to ${esc(p === "performance" ? "the previous mode" : p)} when it's done.</span></div>
         <input type="checkbox" class="switch" data-setting="performance_while_running" ${set.performance_while_running ? "checked" : ""}>
       </label>` : "";
   const threads = set.threads || 10, cores = st.cpu_threads || threads;
-  $("#settingsBody").innerHTML = `
-    <section>
-      <h3>Models on this computer</h3>
-      ${modelRows || '<p class="hint">No downloadable models are configured.</p>'}
-      ${hubBlock()}
-      <p class="hint">Downloads resume if the connection drops and are checked against a pinned checksum before use.</p>
-    </section>
-    <section id="set-speed">
+  return `<section id="set-speed">
       <h3>Speed</h3>
       <div class="set-list">
         <label class="set-row">
@@ -1450,14 +1536,12 @@ function renderSettings(focus) {
           <div class="num"><input type="number" min="1" max="${cores}" value="${Math.min(threads, cores)}" data-setting="threads" aria-label="Processor threads"><span>of ${cores}</span></div>
         </div>
       </div>
-    </section>
-    <section>
-      <h3>API keys for hosted models</h3>
-      ${keyRows}
-      <p class="hint">${ICON.lock.replace("<svg", '<svg style="width:13px;height:13px;vertical-align:-2px"')} Keys are saved in <code class="mono">${esc(st.storage.dir)}/secrets.json</code>, readable only by your user, and are sent only to their own service. A recording is uploaded only when you pick a hosted model and confirm.</p>
-    </section>
-    <section>
-      <h3>About</h3>
+    </section>`;
+}
+
+function aboutPanel() {
+  const st = S.status;
+  return `<h3>About</h3>
       <div class="about">
         <img src="/static/icon.svg" alt="" width="44" height="44">
         <div class="about-text">
@@ -1476,8 +1560,25 @@ function renderSettings(focus) {
           <button type="button" class="btn btn-sm" id="openFolder">${ICON.folder} Open folder</button>
         </div>
       </div>
-      <p class="hint">Models are kept in <code class="mono">${esc(st.home)}/models</code>. The port, defaults and model list are set in <code class="mono">app/config.toml</code>; your own changes can go in <code class="mono">${esc(st.storage.dir)}/config.toml</code>.</p>
-    </section>`;
+      <p class="hint">Models are kept in <code class="mono">${esc(st.home)}/models</code>. The port, defaults and model list are set in <code class="mono">app/config.toml</code>; your own changes can go in <code class="mono">${esc(st.storage.dir)}/config.toml</code>.</p>`;
+}
+
+function bindSettings(focus) {
+  const threads = S.status.settings?.threads || 10, cores = S.status.cpu_threads || threads;
+  $$("[data-set-tab]").forEach((b) => (b.onclick = () => { SET.tab = b.dataset.setTab; renderSettings(); $(`#tab-${SET.tab}`)?.focus(); }));
+  const tabs = $$(".set-nav [role=tab]");
+  tabs.forEach((b, i) => (b.onkeydown = (e) => {
+    const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    tabs[(i + step + tabs.length) % tabs.length].click();
+  }));
+  $$("[data-set-add]").forEach((b) => (b.onclick = () => { SET.add = b.dataset.setAdd; renderSettings(); }));
+  $$("[data-key-toggle]").forEach((b) => (b.onclick = () => {
+    SET.openKey = SET.openKey === b.dataset.keyToggle ? null : b.dataset.keyToggle;
+    renderSettings();
+    if (SET.openKey) $(`[data-key="${SET.openKey}"]`)?.focus();
+  }));
   $$("[data-key-form]").forEach((form) => (form.onsubmit = (e) => { e.preventDefault(); saveKey(form.dataset.keyForm, $("[data-key]", form).value, $("[data-region]", form)?.value); }));
   $$("[data-clear-key]").forEach((b) => (b.onclick = () => confirm("Remove the saved key?") && saveKey(b.dataset.clearKey, "")));
   $$("[data-power]").forEach((b) => (b.onclick = async () => {
@@ -1494,13 +1595,12 @@ function renderSettings(focus) {
   if (open) open.onclick = async () => { try { await api.post("/api/open-folder"); } catch (e) { toast(e.message, "error"); } };
   bindHub();
   $$("[data-forget-model]").forEach((b) => (b.onclick = () => forgetModel(b.dataset.forgetModel)));
-  if (focus === "speed") setTimeout(() => $("#set-speed")?.scrollIntoView({ block: "start" }), 50);
-  else if (focus && focus !== "power") { const el = $(`[data-key="${focus}"]`); if (el) setTimeout(() => el.focus(), 50); }
+  if (focus && focus !== "speed" && focus !== "power") { const el = $(`[data-key="${focus}"]`); if (el) setTimeout(() => el.focus(), 50); }
 }
 
 // Adding models from Hugging Face (Settings → Models). The state lives here, not in the dialog, which is
 // rebuilt on every status poll while a download runs; the caret in the link field is put back too.
-const HUB = { url: "", busy: false, found: null, error: "", caret: null, catalogOpen: true, pick: {} };
+const HUB = { url: "", busy: false, found: null, error: "", caret: null, pick: {} };
 const GPU_USE = { any: "Can use any graphics card (Vulkan)", nvidia: "Can use NVIDIA graphics cards only (CUDA)" };
 const quant = (file) => (String(file).match(/[-_.]((?:I?Q\d\w*?)|BF16|F16|F32)\.gguf$/i) || [null, file])[1];
 
@@ -1508,10 +1608,8 @@ const quant = (file) => (String(file).match(/[-_.]((?:I?Q\d\w*?)|BF16|F16|F32)\.
 function catalogBlock() {
   const list = S.status?.catalog || [];
   if (!list.length) return "";
-  return `<details id="catalog"${HUB.catalogOpen ? " open" : ""}>
-    <summary class="hint" style="margin:0 0 8px;cursor:pointer"><b>Recommended models</b> for Egyptian Arabic–English meetings and calls</summary>
-    ${list.map(catalogRow).join("")}
-  </details>`;
+  return `<div id="catalog"><p class="hint" style="margin-top:0">Chosen for Egyptian Arabic–English meetings and calls. Added ones download like the built-in models.</p>
+    <div class="set-items">${list.map(catalogRow).join("")}</div></div>`;
 }
 
 function catalogRow(c) {
@@ -1520,22 +1618,23 @@ function catalogRow(c) {
   const size = builtin ? builtin.download?.size : c.files ? c.files.find((f) => f.file === file)?.size : c.size;
   const pick = c.files?.length > 1 && !c.added && !builtin
     ? `<select data-catalog-file="${esc(c.key)}" aria-label="File for ${esc(c.name)}">${c.files.map((f) => `<option value="${esc(f.file)}"${f.file === file ? " selected" : ""}>${esc(quant(f.file))} (${bytes(f.size)})</option>`).join("")}</select>` : "";
-  const action = builtin ? `<span class="pill">Built in</span>`
-    : c.added ? `<span class="pill ok">Added${c.added_file && c.files?.length > 1 ? `: ${esc(quant(c.added_file))}` : ""}</span>`
+  const action = builtin ? setStatus("none", "Built in")
+    : c.added ? setStatus("ok", `Added${c.added_file && c.files?.length > 1 ? `: ${quant(c.added_file)}` : ""}`, ICON.check)
     : c.problem ? "" : `<button type="button" class="btn btn-sm btn-primary" data-catalog-add="${esc(c.key)}" ${HUB.busy ? "disabled" : ""}>${ICON.download} Add (${bytes(size)})</button>`;
   const facts = [size ? bytes(size) : "", `Licence: ${esc(c.licence)}`, esc(GPU_USE[c.gpu] || c.gpu)];
-  return `<div class="key-row"><div class="top"><b>${esc(c.name)}</b>${pick}${action}</div>
-    <p style="margin-top:0">${esc(c.good_for)}</p>
-    <p>${esc(c.evidence)}</p>
-    <p>${facts.filter(Boolean).join(" · ")}</p>
-    ${c.problem ? `<p class="mc-missing">${esc(c.problem)}</p>` : ""}
+  const tile = modelTile(builtin || { kind: "local", title: c.name, hub: { repo: c.repo } });
+  return `<div class="set-item catalog-item">
+    <div class="set-item-row">${tile}<div class="set-item-text"><b>${esc(c.name)}</b><span>${esc(c.good_for)}</span></div>
+      <div class="set-item-actions">${pick}${action}</div></div>
+    <div class="set-item-more"><p>${esc(c.evidence)}</p><p>${facts.filter(Boolean).join(" · ")}</p>
+      ${c.problem ? `<p class="mc-missing">${esc(c.problem)}</p>` : ""}</div>
   </div>`;
 }
 
 function hubBlock() {
   const h = HUB, input = $("#hubUrl");
   h.caret = input && document.activeElement === input ? [input.selectionStart, input.selectionEnd] : null;
-  return `${catalogBlock()}<div class="hub">
+  return `<div class="hub">
     <p class="hint" style="margin:0 0 8px"><b>Add a model from Hugging Face.</b> Paste the link to its page, or its name (org/name). Whisper models for faster-whisper or in Transformers format, and GGUF speech models for transcribe.cpp, can be added.</p>
     <form class="row" id="hubForm"><input type="text" id="hubUrl" value="${esc(h.url)}" placeholder="https://huggingface.co/org/name" spellcheck="false" autocomplete="off" aria-label="Hugging Face link or model name">
       <button class="btn" type="submit" ${h.busy ? "disabled" : ""}>${h.busy ? "Checking…" : "Check"}</button></form>
@@ -1563,6 +1662,9 @@ function hubFound(f) {
 }
 
 function bindHub() {
+  // the Recommended list and the link form are separate views of Add models: each is bound when it is shown
+  $$("[data-catalog-file]").forEach((sel) => (sel.onchange = () => { HUB.pick[sel.dataset.catalogFile] = sel.value; rerenderHub(); }));
+  $$("[data-catalog-add]").forEach((b) => (b.onclick = () => catalogAdd(b.dataset.catalogAdd)));
   const form = $("#hubForm"), input = $("#hubUrl");
   if (!form) return;
   input.oninput = () => (HUB.url = input.value);
@@ -1572,10 +1674,6 @@ function bindHub() {
   if (file) file.onchange = () => hubCheck(file.value);
   const add = $("#hubAdd");
   if (add) add.onclick = hubAdd;
-  const list = $("#catalog");
-  if (list) list.ontoggle = () => (HUB.catalogOpen = list.open);
-  $$("[data-catalog-file]").forEach((sel) => (sel.onchange = () => { HUB.pick[sel.dataset.catalogFile] = sel.value; rerenderHub(); }));
-  $$("[data-catalog-add]").forEach((b) => (b.onclick = () => catalogAdd(b.dataset.catalogAdd)));
 }
 
 const rerenderHub = () => $("#settings").open && renderSettings();
@@ -1648,6 +1746,7 @@ async function saveKey(id, key, region) {
   try {
     await api.post("/api/keys", body);
     await refreshStatus();
+    SET.openKey = null;
     renderSettings();
     toast(key ? "Key saved" : region !== undefined ? "Region saved" : "Key removed");
     if (S.route.name === "new") renderNew();

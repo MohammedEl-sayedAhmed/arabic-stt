@@ -1,4 +1,4 @@
-"""Add a model from Hugging Face (Settings → Models on this computer): work out what a repository
+"""Add a model from Hugging Face (Settings → Add models): work out what a repository
 holds, pin its revision and files, and make a model entry that downloads and runs like the built-in ones.
 
 What a repository can hold, read from the Hugging Face API without a login:

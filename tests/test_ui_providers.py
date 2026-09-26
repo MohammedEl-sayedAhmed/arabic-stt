@@ -1,7 +1,7 @@
 """Browser tests of the hosted providers in the interface, in headless Chromium (see tests/ui_support.py):
-the cards, hints and upload consent of the added providers, and that a hosted model starts only after
-the upload is confirmed. The job at the end goes to a local stand-in for Deepgram, so nothing leaves the
-computer.
+the Azure region saved next to its key, the cards, hints and upload consent of the added providers, and
+that a hosted model starts only after the upload is confirmed. The job at the end goes to a local stand-in
+for Deepgram, so nothing leaves the computer.
 Run: .venv/bin/python -m unittest discover -s tests -p "test_ui*.py" -v
 """
 import json
@@ -55,6 +55,18 @@ class DeepgramStandIn(BaseHTTPRequestHandler):
         self.wfile.write(reply)
 
 
+class Ignoring(list):
+    """The page's errors, leaving out the ones a test causes on purpose."""
+
+    def __init__(self, *expected):
+        super().__init__()
+        self.expected = expected
+
+    def append(self, text):
+        if not any(x in text for x in self.expected):
+            super().append(text)
+
+
 class HostedProviders(UiTestCase):
     @classmethod
     def setUpClass(cls):
@@ -92,6 +104,50 @@ class HostedProviders(UiTestCase):
         self.page.reload()  # open() on the same route would only change the hash
         self.page.wait_for_function("() => typeof S !== 'undefined' && S.status")
 
+    def azure(self):
+        m = next(x for x in self.api("GET", "/api/status")["json"]["models"] if x["id"] == "azure")
+        return m["key_source"], m["region"]
+
+    def test_azure_region_is_saved_with_the_key(self):
+        self.errors = Ignoring("status of 400")  # the refused region below is logged by the browser
+        self.addCleanup(self.app.cfg.save_key, "azure", "")
+        self.addCleanup(self.app.cfg.save_key, "azure:region", "")
+        self.open()
+        self.open_settings("hosted")
+        row = self.page.locator("#key-azure")
+        open_row = lambda: row.locator("[data-key-toggle]").click()  # a key row opens only when asked
+        open_row()
+        expect(row.locator("[data-region]")).to_have_value("westeurope")  # the config's default
+        self.page.locator("#key-deepgram [data-key-toggle]").click()
+        expect(self.page.locator("#key-deepgram [data-region]")).to_have_count(0)  # only Azure has a region
+        open_row()
+
+        row.locator("[data-key]").fill("az-test-key")
+        row.locator("[data-region]").fill("NorthEurope")
+        row.locator("button[type=submit]").click()
+        self.page.wait_for_selector(".toast >> text=Key saved")
+        self.assertEqual(self.azure(), ("app", "northeurope"))
+        expect(row.locator(".status")).to_have_text("Key saved")
+        open_row()
+        expect(row.locator("[data-region]")).to_have_value("northeurope")
+
+        row.locator("[data-region]").fill("westus2")  # a region alone keeps the key
+        row.locator("button[type=submit]").click()
+        self.page.wait_for_selector(".toast >> text=Region saved")
+        self.assertEqual(self.azure(), ("app", "westus2"))
+
+        open_row()
+        row.locator("[data-region]").fill("west europe")  # not a region name: refused with the reason
+        row.locator("button[type=submit]").click()
+        self.page.wait_for_selector(".toast.error >> text=a region is a name like westeurope")
+        self.assertEqual(self.azure(), ("app", "westus2"))
+
+        self.page.once("dialog", lambda d: d.accept())  # "Remove the saved key?"
+        row.locator("[data-clear-key]").click()
+        self.page.wait_for_selector(".toast >> text=Key removed")
+        self.assertEqual(self.azure(), (None, "westus2"), "removing the key keeps the region")
+        expect(row.locator(".status")).to_have_text("No key")
+
     def test_cards_hints_and_consent_of_the_added_providers(self):
         self.open()
         providers = self.added()
@@ -104,6 +160,9 @@ class HostedProviders(UiTestCase):
             expect(card.locator(".mc-tag")).to_have_text(m["tagline"])
             expect(card.locator("li")).to_have_text(m["facts"])
             expect(card.locator(".mc-foot")).to_contain_text("Needs an API key")
+        self.page.click(".model-card[data-model='azure'] [data-open-settings]")  # "add it" goes to the key
+        expect(self.page.locator("#settings")).to_have_attribute("open", "")
+        expect(self.page.locator("[data-key='azure']")).to_be_focused()
 
         self.save_keys(*(m["id"] for m in providers))
         for m in providers:  # with a key: picked, it shows its own hints and what the upload means

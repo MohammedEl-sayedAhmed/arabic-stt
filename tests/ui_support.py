@@ -157,6 +157,10 @@ class UiTestCase(unittest.TestCase):
                 return { status: r.status, json: await r.json().catch(() => null) };
             }""", [method, path, body])
 
-    def open_settings(self):
+    def open_settings(self, tab=None):
+        """Open Settings, on one of its tabs: models, add, hosted, speed or about."""
         self.page.click("#settingsBtn")
-        self.page.wait_for_selector("#settings[open] #settingsBody section")
+        self.page.wait_for_selector("#settings[open] .set-panel")
+        if tab:
+            self.page.click(f"#settings [data-set-tab='{tab}']")
+            self.page.wait_for_selector(f"#settings #tab-{tab}[aria-selected='true']")
